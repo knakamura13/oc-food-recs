@@ -13,6 +13,7 @@
 	let leafletMap: any = $state();
 	let markers = new Map<string, any>();
 	let showUnmapped = $state(false);
+	let mapInitialized = $state(false);
 
 	let unmappedRestaurants = $derived(restaurants.filter((r) => r.lat === null || r.lng === null));
 	let mappedRestaurants = $derived(restaurants.filter((r) => r.lat !== null && r.lng !== null));
@@ -34,15 +35,16 @@
 	let clusterGroupRef: any = null;
 	let L: any = null;
 
-	onMount(async () => {
+	async function initMap() {
+		if (mapInitialized || !mapContainer) return;
+		mapInitialized = true;
+
 		const leafletModule = await import('leaflet');
 		L = leafletModule.default || leafletModule;
 		await import('leaflet/dist/leaflet.css');
 		await import('leaflet.markercluster');
 		await import('leaflet.markercluster/dist/MarkerCluster.css');
 		await import('leaflet.markercluster/dist/MarkerCluster.Default.css');
-
-		if (!mapContainer) return;
 
 		leafletMap = L.map(mapContainer).setView([33.7, -117.8], 10);
 
@@ -59,6 +61,27 @@
 		updateMarkers();
 
 		setTimeout(() => leafletMap?.invalidateSize(), 100);
+	}
+
+	onMount(() => {
+		if (!mapContainer) return;
+
+		// On mobile, defer map init until visible; on desktop, init immediately
+		if (window.innerWidth <= 768) {
+			const observer = new IntersectionObserver(
+				(entries) => {
+					if (entries[0].isIntersecting) {
+						initMap();
+						observer.disconnect();
+					}
+				},
+				{ rootMargin: '100px' }
+			);
+			observer.observe(mapContainer);
+			return () => observer.disconnect();
+		} else {
+			initMap();
+		}
 	});
 
 	function updateMarkers() {
