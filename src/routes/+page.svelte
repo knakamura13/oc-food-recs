@@ -138,7 +138,7 @@
 <SearchBar restaurants={allRestaurants} {cuisineNames} {cityNames} />
 <FilterBar restaurants={allRestaurants} />
 
-<main class="split-view">
+<main class="split-view" aria-label="Restaurant map and list">
 	<div class="map-side">
 		<Map restaurants={filteredRestaurants} />
 	</div>
@@ -161,6 +161,11 @@
 
 	:global(*) {
 		box-sizing: border-box;
+	}
+
+	:global(*:focus-visible) {
+		outline: 2px solid #ff4500;
+		outline-offset: 2px;
 	}
 
 	.split-view {

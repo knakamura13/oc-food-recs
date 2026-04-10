@@ -103,7 +103,7 @@
 
 <div class="search-container">
 	<div class="search-wrapper">
-		<svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+		<svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
 			<circle cx="11" cy="11" r="8" />
 			<path d="M21 21l-4.35-4.35" />
 		</svg>
@@ -116,10 +116,17 @@
 			onkeydown={handleKeydown}
 			onfocus={() => (showDropdown = true)}
 			onblur={() => setTimeout(() => (showDropdown = false), 200)}
+			role="combobox"
+			aria-expanded={showDropdown && results.length > 0}
+			aria-controls="search-listbox"
+			aria-activedescendant={highlightIndex >= 0 ? `search-option-${highlightIndex}` : undefined}
+			aria-autocomplete="list"
+			aria-label="Search restaurants, cuisines, or cities"
 		/>
 		{#if appState.searchQuery}
 			<button
 				class="clear-btn"
+				aria-label="Clear search"
 				onclick={() => {
 					appState.searchQuery = '';
 					showDropdown = false;
@@ -132,9 +139,10 @@
 	</div>
 
 	{#if showDropdown && results.length > 0}
-		<ul class="dropdown">
+		<ul class="dropdown" id="search-listbox" role="listbox" aria-label="Search results">
 			{#each results as result, i}
 				<li
+					id="search-option-{i}"
 					class:highlighted={i === highlightIndex}
 					onmousedown={() => selectResult(result.item)}
 					onmouseenter={() => (highlightIndex = i)}
@@ -180,7 +188,7 @@
 		transform: translateY(-50%);
 		width: 18px;
 		height: 18px;
-		color: #999;
+		color: #767676;
 		pointer-events: none;
 	}
 
@@ -207,7 +215,7 @@
 		background: none;
 		border: none;
 		font-size: 1.3rem;
-		color: #999;
+		color: #767676;
 		cursor: pointer;
 		padding: 0 4px;
 		line-height: 1;

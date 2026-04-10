@@ -11,7 +11,7 @@
 			This site is an interactive explorer built from that thread.
 			Every restaurant, upvote, and endorsement below comes directly from the community.
 		</span>
-		<button class="read-more" class:hidden={expanded} onclick={() => (expanded = true)}>
+		<button class="read-more" class:hidden={expanded} onclick={() => (expanded = true)} aria-expanded={expanded}>
 			More&hellip;
 		</button>
 	</p>
@@ -57,13 +57,13 @@
 
 	.attribution {
 		font-size: 0.75rem;
-		color: #aaa;
+		color: #767676;
 		margin-top: 0.25rem;
 	}
 
 	.attribution a {
 		font-size: 0.75rem;
-		color: #aaa;
+		color: #767676;
 		text-decoration: underline;
 	}
 
