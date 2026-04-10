@@ -8,6 +8,7 @@
 	import FilterBar from '$lib/components/FilterBar.svelte';
 	import Map from '$lib/components/Map.svelte';
 	import RestaurantList from '$lib/components/RestaurantList.svelte';
+	import BackToTop from '$lib/components/BackToTop.svelte';
 
 	const allRestaurants: Restaurant[] = data.restaurants as Restaurant[];
 
@@ -145,6 +146,8 @@
 		<RestaurantList restaurants={filteredRestaurants} />
 	</div>
 </main>
+
+<BackToTop />
 
 <style>
 	:global(body) {
