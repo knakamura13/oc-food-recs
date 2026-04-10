@@ -133,7 +133,13 @@
 						</div>
 					</div>
 					<div class="row-stats">
-						<span class="stat score">{restaurant.aggregate_score} <small>pts</small></span>
+						<span class="stat score">
+							{restaurant.aggregate_score} <small>pts</small>
+							<span class="info-tip" role="button" tabindex="0" aria-label="Score explanation">
+								<span class="info-icon">i</span>
+								<span class="info-tooltip">Total Reddit upvotes across all comments that recommended this restaurant.</span>
+							</span>
+						</span>
 						<span class="stat">{restaurant.endorsements.length} <small>endorse</small></span>
 						<span class="stat">{restaurant.mention_count} <small>mentions</small></span>
 					</div>
@@ -348,6 +354,55 @@
 	.stat.score {
 		color: #ff4500;
 		font-weight: 700;
+		position: relative;
+	}
+
+	.info-tip {
+		position: relative;
+		display: inline-flex;
+		align-items: center;
+		margin-left: 2px;
+		vertical-align: middle;
+	}
+
+	.info-icon {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 14px;
+		height: 14px;
+		border-radius: 50%;
+		border: 1px solid #ccc;
+		font-size: 0.6rem;
+		font-weight: 700;
+		font-style: italic;
+		color: #999;
+		cursor: help;
+		line-height: 1;
+	}
+
+	.info-tooltip {
+		display: none;
+		position: absolute;
+		bottom: calc(100% + 6px);
+		right: -8px;
+		width: 200px;
+		padding: 6px 8px;
+		background: #333;
+		color: #fff;
+		font-size: 0.72rem;
+		font-weight: 400;
+		font-style: normal;
+		line-height: 1.4;
+		border-radius: 6px;
+		white-space: normal;
+		z-index: 100;
+		pointer-events: none;
+	}
+
+	.info-tip:hover .info-tooltip,
+	.info-tip:focus .info-tooltip {
+		display: block;
 	}
 
 	.stat small {
