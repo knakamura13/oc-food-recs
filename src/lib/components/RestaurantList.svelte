@@ -80,6 +80,10 @@
 
 	function showOnMap(restaurant: Restaurant) {
 		appState.mapTarget = restaurant;
+		const mapEl = document.querySelector('.map-container');
+		if (mapEl) {
+			mapEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+		}
 	}
 
 	function groupEndorsements(restaurant: Restaurant) {
@@ -209,16 +213,13 @@
 							</div>
 						{/if}
 
-						<div class="drawer-actions">
-							{#if restaurant.lat && restaurant.lng}
+						{#if restaurant.lat && restaurant.lng}
+							<div class="drawer-actions">
 								<button class="map-link" onclick={() => showOnMap(restaurant)}>
 									Show on map
 								</button>
-							{/if}
-							<button class="close-btn" onclick={() => (appState.selectedRestaurantSlug = null)}>
-								Close
-							</button>
-						</div>
+							</div>
+						{/if}
 					</div>
 				{/if}
 			</div>
@@ -526,29 +527,19 @@
 		margin-top: 0.5rem;
 	}
 
-	.map-link,
-	.close-btn {
+	.map-link {
 		font-size: 0.8rem;
 		padding: 4px 12px;
 		border-radius: 4px;
 		cursor: pointer;
-		border: 1px solid #ddd;
+		border: 1px solid #ff4500;
 		background: #fff;
-		color: #555;
-	}
-
-	.map-link {
 		color: #ff4500;
-		border-color: #ff4500;
 	}
 
 	.map-link:hover {
 		background: #ff4500;
 		color: #fff;
-	}
-
-	.close-btn:hover {
-		background: #f5f5f5;
 	}
 
 	@media (max-width: 768px) {
