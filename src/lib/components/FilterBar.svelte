@@ -335,12 +335,13 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 3px;
-		padding: 2px 8px;
+		padding: 3px 10px;
 		border-radius: 12px;
 		font-size: 0.75rem;
 		cursor: pointer;
 		border: none;
 		font-weight: 500;
+		transition: opacity 0.15s ease, transform 0.1s ease;
 	}
 
 	.cuisine-pill {
@@ -354,6 +355,10 @@
 	}
 
 	.pill:hover {
-		opacity: 0.7;
+		opacity: 0.8;
+	}
+
+	.pill:active {
+		transform: scale(0.95);
 	}
 </style>

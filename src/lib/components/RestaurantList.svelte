@@ -119,6 +119,13 @@
 	</div>
 
 	<div class="list-scroll">
+		{#if sorted.length === 0}
+			<div class="empty-state">
+				<span class="empty-icon">&#x1F50D;</span>
+				<p class="empty-title">No restaurants found</p>
+				<p class="empty-hint">Try adjusting your filters or search terms</p>
+			</div>
+		{/if}
 		{#each sorted as restaurant (restaurant.name)}
 			{@const slug = slugify(restaurant.name)}
 			{@const isOpen = appState.selectedRestaurantSlug === slug}
@@ -252,18 +259,29 @@
 
 	.sort-btn {
 		font-size: 0.8rem;
-		padding: 3px 10px;
+		padding: 4px 12px;
 		border: 1px solid #ddd;
-		border-radius: 4px;
+		border-radius: 5px;
 		background: #fff;
 		cursor: pointer;
 		color: #555;
+		transition: all 0.15s ease;
+		font-weight: 500;
+	}
+
+	.sort-btn:hover {
+		border-color: #ff4500;
+		color: #ff4500;
 	}
 
 	.sort-btn.active {
 		background: #ff4500;
 		color: #fff;
 		border-color: #ff4500;
+	}
+
+	.sort-btn:active {
+		transform: scale(0.96);
 	}
 
 	.sort-arrow {
@@ -284,6 +302,7 @@
 
 	.row {
 		border-bottom: 1px solid #f0f0f0;
+		transition: background-color 0.15s ease;
 	}
 
 	.row.expanded {
@@ -300,10 +319,15 @@
 		cursor: pointer;
 		text-align: left;
 		gap: 0.75rem;
+		transition: background-color 0.15s ease;
 	}
 
 	.row-header:hover {
-		background: #fafafa;
+		background: #f8f5f2;
+	}
+
+	.row-header:active {
+		background: #f0ebe6;
 	}
 
 	.row-main {
@@ -327,8 +351,9 @@
 
 	.tag {
 		font-size: 0.72rem;
-		padding: 1px 6px;
-		border-radius: 3px;
+		padding: 2px 7px;
+		border-radius: 4px;
+		letter-spacing: 0.01em;
 	}
 
 	.cuisine-tag {
@@ -416,12 +441,16 @@
 	.chevron {
 		font-size: 1.3rem;
 		color: #ccc;
-		transition: transform 0.2s;
+		transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 		flex-shrink: 0;
 	}
 
 	.chevron.open {
 		transform: rotate(90deg);
+	}
+
+	.row-header:hover .chevron {
+		color: #ff4500;
 	}
 
 	.drawer {
@@ -432,9 +461,10 @@
 	.primary-comment {
 		background: #fff;
 		border: 1px solid #eee;
-		border-radius: 6px;
+		border-radius: 8px;
 		padding: 0.75rem;
 		margin-bottom: 0.75rem;
+		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
 	}
 
 	.comment-header {
@@ -530,17 +560,52 @@
 
 	.map-link {
 		font-size: 0.8rem;
-		padding: 4px 12px;
-		border-radius: 4px;
+		padding: 5px 14px;
+		border-radius: 6px;
 		cursor: pointer;
 		border: 1px solid #ff4500;
 		background: #fff;
 		color: #ff4500;
+		transition: all 0.15s ease;
+		font-weight: 500;
 	}
 
 	.map-link:hover {
 		background: #ff4500;
 		color: #fff;
+		box-shadow: 0 2px 4px rgba(255, 69, 0, 0.2);
+	}
+
+	.map-link:active {
+		transform: scale(0.97);
+	}
+
+	.empty-state {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		padding: 3rem 1.5rem;
+		text-align: center;
+	}
+
+	.empty-icon {
+		font-size: 2.5rem;
+		margin-bottom: 0.75rem;
+		opacity: 0.7;
+	}
+
+	.empty-title {
+		font-size: 1rem;
+		font-weight: 600;
+		color: #555;
+		margin: 0 0 0.25rem;
+	}
+
+	.empty-hint {
+		font-size: 0.85rem;
+		color: #767676;
+		margin: 0;
 	}
 
 	@media (max-width: 768px) {
