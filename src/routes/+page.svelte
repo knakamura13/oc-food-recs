@@ -131,7 +131,10 @@
 		name="description"
 		content="Explore 289 community-recommended mom and pop restaurants in Orange County, CA — curated from a Reddit thread with 735 responses."
 	/>
-	<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+	<meta name="theme-color" content="#ff4500" />
+	<link rel="dns-prefetch" href="https://a.tile.openstreetmap.org" />
+	<link rel="dns-prefetch" href="https://b.tile.openstreetmap.org" />
+	<link rel="dns-prefetch" href="https://c.tile.openstreetmap.org" />
 </svelte:head>
 
 <Hero />
