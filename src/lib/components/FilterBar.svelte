@@ -71,13 +71,16 @@
 	);
 </script>
 
-<div class="filter-bar">
+<nav class="filter-bar" aria-label="Restaurant filters">
 	<div class="filter-controls">
 		<!-- Cuisine dropdown -->
 		<div class="dropdown-wrapper">
 			<button
 				class="dropdown-trigger"
 				class:has-active={appState.activeCuisines.length > 0}
+				aria-expanded={showCuisineDropdown}
+				aria-haspopup="listbox"
+				aria-controls={showCuisineDropdown ? 'cuisine-listbox' : undefined}
 				onclick={() => {
 					showCuisineDropdown = !showCuisineDropdown;
 					showCityDropdown = false;
@@ -87,11 +90,11 @@
 				{#if appState.activeCuisines.length > 0}
 					<span class="badge">{appState.activeCuisines.length}</span>
 				{/if}
-				<span class="arrow" class:open={showCuisineDropdown}>&#9662;</span>
+				<span class="arrow" aria-hidden="true" class:open={showCuisineDropdown}>&#9662;</span>
 			</button>
 
 			{#if showCuisineDropdown}
-				<div class="dropdown-panel" role="listbox">
+				<div class="dropdown-panel" id="cuisine-listbox" role="listbox" aria-label="Filter by cuisine">
 					{#each cuisineCounts as { name, count }}
 						<button
 							class="dropdown-item"
@@ -100,9 +103,9 @@
 							role="option"
 							aria-selected={appState.activeCuisines.includes(name)}
 						>
-							<span class="item-check">{appState.activeCuisines.includes(name) ? '\u2713' : ''}</span>
+							<span class="item-check" aria-hidden="true">{appState.activeCuisines.includes(name) ? '\u2713' : ''}</span>
 							<span class="item-name">{name}</span>
-							<span class="item-count">{count}</span>
+							<span class="item-count">({count})</span>
 						</button>
 					{/each}
 				</div>
@@ -114,6 +117,9 @@
 			<button
 				class="dropdown-trigger"
 				class:has-active={appState.activeCities.length > 0}
+				aria-expanded={showCityDropdown}
+				aria-haspopup="listbox"
+				aria-controls={showCityDropdown ? 'city-listbox' : undefined}
 				onclick={() => {
 					showCityDropdown = !showCityDropdown;
 					showCuisineDropdown = false;
@@ -123,11 +129,11 @@
 				{#if appState.activeCities.length > 0}
 					<span class="badge">{appState.activeCities.length}</span>
 				{/if}
-				<span class="arrow" class:open={showCityDropdown}>&#9662;</span>
+				<span class="arrow" aria-hidden="true" class:open={showCityDropdown}>&#9662;</span>
 			</button>
 
 			{#if showCityDropdown}
-				<div class="dropdown-panel" role="listbox">
+				<div class="dropdown-panel" id="city-listbox" role="listbox" aria-label="Filter by city">
 					{#each cityCounts as { name, count }}
 						<button
 							class="dropdown-item"
@@ -136,9 +142,9 @@
 							role="option"
 							aria-selected={appState.activeCities.includes(name)}
 						>
-							<span class="item-check">{appState.activeCities.includes(name) ? '\u2713' : ''}</span>
+							<span class="item-check" aria-hidden="true">{appState.activeCities.includes(name) ? '\u2713' : ''}</span>
 							<span class="item-name">{name}</span>
-							<span class="item-count">{count}</span>
+							<span class="item-count">({count})</span>
 						</button>
 					{/each}
 				</div>
@@ -154,24 +160,30 @@
 	{#if hasActiveFilters}
 		<div class="active-pills">
 			{#each appState.activeCuisines as cuisine}
-				<button class="pill cuisine-pill" onclick={() => toggleCuisine(cuisine)}>
+				<button class="pill cuisine-pill" onclick={() => toggleCuisine(cuisine)} aria-label="Remove {cuisine} filter">
 					{cuisine} &times;
 				</button>
 			{/each}
 			{#each appState.activeCities as city}
-				<button class="pill city-pill" onclick={() => toggleCity(city)}>
+				<button class="pill city-pill" onclick={() => toggleCity(city)} aria-label="Remove {city} filter">
 					{city} &times;
 				</button>
 			{/each}
 		</div>
 	{/if}
-</div>
+</nav>
 
-<!-- Click-away listener -->
+<!-- Click-away & keyboard listeners -->
 <svelte:window
 	onclick={(e) => {
 		const target = e.target as HTMLElement;
 		if (!target.closest('.dropdown-wrapper')) {
+			showCuisineDropdown = false;
+			showCityDropdown = false;
+		}
+	}}
+	onkeydown={(e) => {
+		if (e.key === 'Escape') {
 			showCuisineDropdown = false;
 			showCityDropdown = false;
 		}
@@ -292,7 +304,7 @@
 
 	.item-count {
 		font-size: 0.75rem;
-		color: #999;
+		color: #767676;
 	}
 
 	.clear-filters {

@@ -100,13 +100,14 @@
 </script>
 
 <div class="restaurant-list">
-	<div class="sort-bar">
-		<span class="sort-label">Sort by:</span>
+	<div class="sort-bar" role="toolbar" aria-label="Sort options">
+		<span class="sort-label" id="sort-label">Sort by:</span>
 		{#each sortOptions as opt}
 			<button
 				class="sort-btn"
 				class:active={appState.sortKey === opt.key}
 				onclick={() => cycleSort(opt.key)}
+				aria-pressed={appState.sortKey === opt.key}
 			>
 				{opt.label}
 				{#if appState.sortKey === opt.key}
@@ -114,7 +115,7 @@
 				{/if}
 			</button>
 		{/each}
-		<span class="result-count">{restaurants.length} restaurants</span>
+		<span class="result-count" aria-live="polite">{restaurants.length} restaurants</span>
 	</div>
 
 	<div class="list-scroll">
@@ -124,7 +125,7 @@
 			{@const groups = groupEndorsements(restaurant)}
 
 			<div class="row" class:expanded={isOpen} id="restaurant-{slug}">
-				<button class="row-header" onclick={() => toggleRow(restaurant)}>
+				<button class="row-header" onclick={() => toggleRow(restaurant)} aria-expanded={isOpen} aria-controls={isOpen ? `drawer-${slug}` : undefined}>
 					<div class="row-main">
 						<span class="row-name">{restaurant.name}</span>
 						<div class="row-tags">
@@ -141,19 +142,19 @@
 						<span class="stat">{restaurant.endorsements.length} <small>endorse</small></span>
 						<span class="stat">{restaurant.mention_count} <small>mentions</small></span>
 					</div>
-					<span class="chevron" class:open={isOpen}>&rsaquo;</span>
+					<span class="chevron" aria-hidden="true" class:open={isOpen}>&rsaquo;</span>
 				</button>
 
 				{#if isOpen}
-					<div class="drawer" transition:slide={{ duration: 200 }}>
+					<div class="drawer" id="drawer-{slug}" role="region" aria-label="{restaurant.name} details" transition:slide={{ duration: 200 }}>
 						<div class="primary-comment">
 							<div class="comment-header">
 								<span class="comment-author">u/{restaurant.primary_comment.author}</span>
 								<span class="comment-score">
 									{restaurant.primary_comment.score} points
-									<span class="info-tip" role="button" tabindex="0" aria-label="Score explanation">
-										<span class="info-icon">i</span>
-										<span class="info-tooltip">Total Reddit upvotes across all comments that recommended this restaurant.</span>
+									<span class="info-tip" tabindex="0" aria-label="Score info">
+										<span class="info-icon" aria-hidden="true">i</span>
+										<span class="info-tooltip" role="tooltip">Total Reddit upvotes across all comments that recommended this restaurant.</span>
 									</span>
 								</span>
 							</div>
@@ -170,7 +171,7 @@
 
 						{#if groups.dish_rec.length > 0}
 							<div class="endorsement-section">
-								<h4>What to Order</h4>
+								<h3>What to Order</h3>
 								{#each groups.dish_rec as e}
 									<div class="endorsement-card">
 										<div class="endorsement-meta">
@@ -185,7 +186,7 @@
 
 						{#if groups.personal_story.length > 0}
 							<div class="endorsement-section">
-								<h4>Community Stories</h4>
+								<h3>Community Stories</h3>
 								{#each groups.personal_story as e}
 									<div class="endorsement-card">
 										<div class="endorsement-meta">
@@ -200,7 +201,7 @@
 
 						{#if groups.endorsement.length > 0}
 							<div class="endorsement-section">
-								<h4>Community Love</h4>
+								<h3>Community Love</h3>
 								{#each groups.endorsement as e}
 									<div class="endorsement-card">
 										<div class="endorsement-meta">
@@ -246,7 +247,7 @@
 
 	.sort-label {
 		font-size: 0.8rem;
-		color: #999;
+		color: #767676;
 	}
 
 	.sort-btn {
@@ -273,7 +274,7 @@
 	.result-count {
 		margin-left: auto;
 		font-size: 0.78rem;
-		color: #999;
+		color: #767676;
 	}
 
 	.list-scroll {
@@ -377,7 +378,7 @@
 		font-size: 0.6rem;
 		font-weight: 700;
 		font-style: italic;
-		color: #999;
+		color: #767676;
 		cursor: help;
 		line-height: 1;
 	}
@@ -409,7 +410,7 @@
 	.stat small {
 		font-size: 0.7rem;
 		font-weight: 400;
-		color: #999;
+		color: #767676;
 	}
 
 	.chevron {
@@ -479,7 +480,7 @@
 		margin-bottom: 0.75rem;
 	}
 
-	.endorsement-section h4 {
+	.endorsement-section h3 {
 		font-size: 0.82rem;
 		color: #888;
 		text-transform: uppercase;
@@ -511,7 +512,7 @@
 
 	.endorsement-score {
 		font-size: 0.75rem;
-		color: #999;
+		color: #767676;
 	}
 
 	.endorsement-card p {

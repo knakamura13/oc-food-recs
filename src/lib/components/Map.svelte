@@ -136,12 +136,12 @@
 </script>
 
 <div class="map-panel">
-	<div class="map-container" bind:this={mapContainer}></div>
+	<div class="map-container" bind:this={mapContainer} role="application" aria-label="Map of restaurants in Orange County"></div>
 
 	{#if unmappedRestaurants.length > 0}
-		<button class="unmapped-toggle" onclick={() => (showUnmapped = !showUnmapped)}>
+		<button class="unmapped-toggle" onclick={() => (showUnmapped = !showUnmapped)} aria-expanded={showUnmapped}>
 			{showUnmapped ? 'Hide' : 'Show'} {unmappedRestaurants.length} unmapped restaurants
-			<span class="arrow" class:open={showUnmapped}>&rsaquo;</span>
+			<span class="arrow" aria-hidden="true" class:open={showUnmapped}>&rsaquo;</span>
 		</button>
 
 		{#if showUnmapped}
