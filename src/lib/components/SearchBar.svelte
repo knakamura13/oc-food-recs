@@ -171,8 +171,8 @@
 		z-index: 1100;
 		background: #fff;
 		padding: 0.75rem 1rem;
-		border-bottom: 1px solid #e0e0e0;
-		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+		border-bottom: 1px solid #e8e8e8;
+		box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
 	}
 
 	.search-wrapper {
@@ -196,15 +196,16 @@
 		width: 100%;
 		padding: 0.65rem 2.5rem 0.65rem 2.5rem;
 		border: 2px solid #e0e0e0;
-		border-radius: 8px;
+		border-radius: 10px;
 		font-size: 0.95rem;
 		outline: none;
-		transition: border-color 0.15s;
+		transition: border-color 0.15s ease, box-shadow 0.15s ease;
 		box-sizing: border-box;
 	}
 
 	input:focus {
 		border-color: #ff4500;
+		box-shadow: 0 0 0 3px rgba(255, 69, 0, 0.1);
 	}
 
 	.clear-btn {

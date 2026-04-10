@@ -31,10 +31,11 @@
 
 	h1 {
 		font-size: 1.5rem;
-		font-weight: 700;
+		font-weight: 800;
 		margin: 0 0 0.5rem;
 		line-height: 1.3;
 		color: #1a1a2e;
+		letter-spacing: -0.02em;
 	}
 
 	p {

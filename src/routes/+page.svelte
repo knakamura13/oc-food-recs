@@ -153,13 +153,19 @@
 <BackToTop />
 
 <style>
+	:global(html) {
+		scroll-behavior: smooth;
+	}
+
 	:global(body) {
 		margin: 0;
 		font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
 			sans-serif;
 		color: #333;
-		background: #fff;
+		background: #fafafa;
 		-webkit-font-smoothing: antialiased;
+		-moz-osx-font-smoothing: grayscale;
+		line-height: 1.5;
 	}
 
 	:global(*) {
@@ -189,9 +195,11 @@
 	.list-side {
 		flex: 1;
 		min-width: 0;
-		border: 1px solid #eee;
-		border-radius: 8px;
+		border: 1px solid #e8e8e8;
+		border-radius: 10px;
 		overflow: hidden;
+		background: #fff;
+		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.06);
 	}
 
 	@media (max-width: 768px) {

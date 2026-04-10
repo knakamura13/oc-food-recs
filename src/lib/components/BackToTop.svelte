@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { fade } from 'svelte/transition';
 
 	let visible = $state(false);
 
@@ -17,7 +18,7 @@
 </script>
 
 {#if visible}
-	<button class="back-to-top" onclick={scrollToTop} aria-label="Back to top">
+	<button class="back-to-top" onclick={scrollToTop} aria-label="Back to top" transition:fade={{ duration: 200 }}>
 		<svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
 			<!-- Hand-drawn squiggly upward arrow -->
 			<path
@@ -73,6 +74,11 @@
 		color: #fff;
 		transform: translateY(-2px);
 		box-shadow: 0 4px 14px rgba(255, 69, 0, 0.3);
+	}
+
+	.back-to-top:active {
+		transform: translateY(0);
+		box-shadow: 0 1px 4px rgba(255, 69, 0, 0.2);
 	}
 
 	.back-to-top svg {
