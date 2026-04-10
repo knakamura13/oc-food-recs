@@ -133,13 +133,7 @@
 						</div>
 					</div>
 					<div class="row-stats">
-						<span class="stat score">
-							{restaurant.aggregate_score} <small>pts</small>
-							<span class="info-tip" role="button" tabindex="0" aria-label="Score explanation">
-								<span class="info-icon">i</span>
-								<span class="info-tooltip">Total Reddit upvotes across all comments that recommended this restaurant.</span>
-							</span>
-						</span>
+						<span class="stat score">{restaurant.aggregate_score} <small>pts</small></span>
 						<span class="stat">{restaurant.endorsements.length} <small>endorse</small></span>
 						<span class="stat">{restaurant.mention_count} <small>mentions</small></span>
 					</div>
@@ -151,7 +145,13 @@
 						<div class="primary-comment">
 							<div class="comment-header">
 								<span class="comment-author">u/{restaurant.primary_comment.author}</span>
-								<span class="comment-score">{restaurant.primary_comment.score} points</span>
+								<span class="comment-score">
+									{restaurant.primary_comment.score} points
+									<span class="info-tip" role="button" tabindex="0" aria-label="Score explanation">
+										<span class="info-icon">i</span>
+										<span class="info-tooltip">Total Reddit upvotes across all comments that recommended this restaurant.</span>
+									</span>
+								</span>
 							</div>
 							<p class="comment-body">{restaurant.primary_comment.body}</p>
 							<a
