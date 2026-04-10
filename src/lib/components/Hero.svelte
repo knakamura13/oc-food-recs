@@ -18,6 +18,7 @@
 	<a href="https://www.reddit.com/r/orangecounty/comments/1sb0qo7/" target="_blank" rel="noopener">
 		View the original Reddit thread &rarr;
 	</a>
+	<p class="attribution">Built with SvelteKit, hosted on <a href="https://railway.com?referralCode=QCz9lp" target="_blank" rel="noopener">Railway</a></p>
 </section>
 
 <style>
@@ -52,6 +53,22 @@
 
 	a:hover {
 		text-decoration: underline;
+	}
+
+	.attribution {
+		font-size: 0.75rem;
+		color: #aaa;
+		margin-top: 0.25rem;
+	}
+
+	.attribution a {
+		font-size: 0.75rem;
+		color: #aaa;
+		text-decoration: underline;
+	}
+
+	.attribution a:hover {
+		color: #ff4500;
 	}
 
 	.full-text {
