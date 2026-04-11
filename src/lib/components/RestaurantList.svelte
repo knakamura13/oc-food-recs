@@ -86,6 +86,11 @@
 		}
 	}
 
+	function googleMapsUrl(restaurant: Restaurant): string {
+		const query = restaurant.name + ' ' + (restaurant.location || 'Orange County') + ' CA';
+		return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(query);
+	}
+
 	function groupEndorsements(restaurant: Restaurant) {
 		const groups = {
 			dish_rec: [] as typeof restaurant.endorsements,
@@ -221,13 +226,26 @@
 							</div>
 						{/if}
 
-						{#if restaurant.lat && restaurant.lng}
-							<div class="drawer-actions">
+						<div class="drawer-actions">
+							{#if restaurant.lat && restaurant.lng}
 								<button class="map-link" onclick={() => showOnMap(restaurant)}>
 									Show on map
 								</button>
-							</div>
-						{/if}
+							{/if}
+							<a
+								class="maps-link"
+								href={googleMapsUrl(restaurant)}
+								target="_blank"
+								rel="noopener"
+								aria-label="Open {restaurant.name} in Google Maps"
+							>
+								<svg class="maps-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+									<path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
+									<circle cx="12" cy="9" r="2.5"/>
+								</svg>
+								Google Maps
+							</a>
+						</div>
 					</div>
 				{/if}
 			</div>
@@ -578,6 +596,37 @@
 
 	.map-link:active {
 		transform: scale(0.97);
+	}
+
+	.maps-link {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		font-size: 0.8rem;
+		padding: 5px 14px;
+		border-radius: 6px;
+		border: 1px solid #4285f4;
+		background: #fff;
+		color: #4285f4;
+		text-decoration: none;
+		transition: all 0.15s ease;
+		font-weight: 500;
+	}
+
+	.maps-link:hover {
+		background: #4285f4;
+		color: #fff;
+		box-shadow: 0 2px 4px rgba(66, 133, 244, 0.2);
+	}
+
+	.maps-link:active {
+		transform: scale(0.97);
+	}
+
+	.maps-icon {
+		width: 14px;
+		height: 14px;
+		flex-shrink: 0;
 	}
 
 	.empty-state {
