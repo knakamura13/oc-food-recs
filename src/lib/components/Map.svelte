@@ -202,17 +202,17 @@
 		width: 100%;
 		padding: 0.5rem 0.75rem;
 		border: none;
-		background: #f5f5f5;
+		background: #f0ebe3;
 		font-size: 0.82rem;
-		color: #666;
+		color: #5d4e37;
 		cursor: pointer;
-		border-top: 1px solid #eee;
+		border-top: 1px solid #e8e0d6;
 		margin-top: 4px;
 		border-radius: 0 0 8px 8px;
 	}
 
 	.unmapped-toggle:hover {
-		background: #eee;
+		background: #e8e0d6;
 	}
 
 	.arrow {
@@ -227,10 +227,10 @@
 	.unmapped-list {
 		max-height: 200px;
 		overflow-y: auto;
-		border: 1px solid #eee;
+		border: 1px solid #e8e0d6;
 		border-top: 0;
 		border-radius: 0 0 8px 8px;
-		background: #fafafa;
+		background: #faf7f2;
 	}
 
 	.unmapped-item {
@@ -247,11 +247,11 @@
 	}
 
 	.unmapped-item:hover {
-		background: #fff3ed;
+		background: #fff0eb;
 	}
 
 	.unmapped-name {
-		color: #333;
+		color: #3e2c23;
 	}
 
 	.unmapped-score {
