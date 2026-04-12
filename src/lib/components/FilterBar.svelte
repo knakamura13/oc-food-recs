@@ -193,8 +193,8 @@
 <style>
 	.filter-bar {
 		padding: 0.5rem 1rem;
-		border-bottom: 1px solid #eee;
-		background: #fafafa;
+		border-bottom: 1px solid #e8e0d6;
+		background: #faf7f2;
 	}
 
 	.filter-controls {
@@ -214,12 +214,12 @@
 		align-items: center;
 		gap: 4px;
 		padding: 6px 12px;
-		border: 1px solid #ddd;
+		border: 1px solid #d4c8bb;
 		border-radius: 6px;
-		background: #fff;
+		background: #fffcf8;
 		font-size: 0.85rem;
 		cursor: pointer;
-		color: #555;
+		color: #5d4e37;
 		font-weight: 500;
 		transition: all 0.15s;
 	}
@@ -230,7 +230,7 @@
 	}
 
 	.dropdown-trigger.has-active {
-		background: #fff3ed;
+		background: #fff0eb;
 		border-color: #ff4500;
 		color: #ff4500;
 	}
@@ -260,10 +260,10 @@
 		min-width: 220px;
 		max-height: 320px;
 		overflow-y: auto;
-		background: #fff;
-		border: 1px solid #e0e0e0;
+		background: #fffcf8;
+		border: 1px solid #e0d6cc;
 		border-radius: 8px;
-		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+		box-shadow: 0 4px 16px rgba(62, 44, 35, 0.1);
 		z-index: 1100;
 		padding: 4px 0;
 	}
@@ -279,15 +279,15 @@
 		font-size: 0.84rem;
 		text-align: left;
 		gap: 6px;
-		color: #333;
+		color: #3e2c23;
 	}
 
 	.dropdown-item:hover {
-		background: #fafafa;
+		background: #faf7f2;
 	}
 
 	.dropdown-item.active {
-		background: #fff3ed;
+		background: #fff0eb;
 		color: #ff4500;
 	}
 
@@ -304,7 +304,7 @@
 
 	.item-count {
 		font-size: 0.75rem;
-		color: #767676;
+		color: #7a6e63;
 	}
 
 	.clear-filters {
@@ -345,13 +345,13 @@
 	}
 
 	.cuisine-pill {
-		background: #e8f5e9;
-		color: #2e7d32;
+		background: #f0ebe3;
+		color: #5d4e37;
 	}
 
 	.city-pill {
-		background: #e3f2fd;
-		color: #1565c0;
+		background: #fce8e0;
+		color: #b5543a;
 	}
 
 	.pill:hover {

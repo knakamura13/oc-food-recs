@@ -265,24 +265,24 @@
 		align-items: center;
 		gap: 0.5rem;
 		padding: 0.5rem 0.75rem;
-		border-bottom: 1px solid #eee;
-		background: #fafafa;
+		border-bottom: 1px solid #e8e0d6;
+		background: #faf7f2;
 		flex-shrink: 0;
 	}
 
 	.sort-label {
 		font-size: 0.8rem;
-		color: #767676;
+		color: #7a6e63;
 	}
 
 	.sort-btn {
 		font-size: 0.8rem;
 		padding: 4px 12px;
-		border: 1px solid #ddd;
+		border: 1px solid #d4c8bb;
 		border-radius: 5px;
-		background: #fff;
+		background: #fffcf8;
 		cursor: pointer;
-		color: #555;
+		color: #5d4e37;
 		transition: all 0.15s ease;
 		font-weight: 500;
 	}
@@ -310,7 +310,7 @@
 	.result-count {
 		margin-left: auto;
 		font-size: 0.78rem;
-		color: #767676;
+		color: #7a6e63;
 	}
 
 	.list-scroll {
@@ -319,12 +319,14 @@
 	}
 
 	.row {
-		border-bottom: 1px solid #f0f0f0;
-		transition: background-color 0.15s ease;
+		border-bottom: 1px solid #efe8e0;
+		border-left: 3px solid transparent;
+		transition: background-color 0.15s ease, border-left-color 0.18s ease-in-out;
 	}
 
 	.row.expanded {
-		background: #fffbf8;
+		background: #faf7f2;
+		border-left-color: #ff4500;
 	}
 
 	.row-header {
@@ -341,11 +343,11 @@
 	}
 
 	.row-header:hover {
-		background: #f8f5f2;
+		background: rgba(62, 44, 35, 0.02);
 	}
 
-	.row-header:active {
-		background: #f0ebe6;
+	.row:hover {
+		border-left-color: #ff4500;
 	}
 
 	.row-main {
@@ -354,9 +356,10 @@
 	}
 
 	.row-name {
-		font-weight: 600;
-		font-size: 0.92rem;
-		color: #1a1a2e;
+		font-family: 'DM Serif Display', Georgia, serif;
+		font-weight: 400;
+		font-size: 1rem;
+		color: #3e2c23;
 		display: block;
 	}
 
@@ -375,13 +378,13 @@
 	}
 
 	.cuisine-tag {
-		background: #e8f5e9;
-		color: #2e7d32;
+		background: #f0ebe3;
+		color: #5d4e37;
 	}
 
 	.location-tag {
-		background: #e3f2fd;
-		color: #1565c0;
+		background: #fce8e0;
+		color: #b5543a;
 	}
 
 	.row-stats {
@@ -392,7 +395,7 @@
 
 	.stat {
 		font-size: 0.82rem;
-		color: #555;
+		color: #5d4e37;
 		white-space: nowrap;
 	}
 
@@ -417,11 +420,11 @@
 		width: 14px;
 		height: 14px;
 		border-radius: 50%;
-		border: 1px solid #ccc;
+		border: 1px solid #d4c8bb;
 		font-size: 0.6rem;
 		font-weight: 700;
 		font-style: italic;
-		color: #767676;
+		color: #7a6e63;
 		cursor: help;
 		line-height: 1;
 	}
@@ -453,12 +456,12 @@
 	.stat small {
 		font-size: 0.7rem;
 		font-weight: 400;
-		color: #767676;
+		color: #7a6e63;
 	}
 
 	.chevron {
 		font-size: 1.3rem;
-		color: #ccc;
+		color: #d4c8bb;
 		transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 		flex-shrink: 0;
 	}
@@ -473,16 +476,17 @@
 
 	.drawer {
 		padding: 0.75rem 1rem 1rem;
-		border-top: 1px solid #f0e0d0;
+		border-top: 1px solid #e8e0d6;
 	}
 
 	.primary-comment {
-		background: #fff;
-		border: 1px solid #eee;
-		border-radius: 8px;
-		padding: 0.75rem;
+		background: #fffcf8;
+		border: none;
+		border-left: 3px solid #ff4500;
+		border-radius: 0 8px 8px 0;
+		padding: 0.75rem 0.75rem 0.75rem 1rem;
 		margin-bottom: 0.75rem;
-		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+		box-shadow: 0 1px 3px rgba(62, 44, 35, 0.04);
 	}
 
 	.comment-header {
@@ -493,9 +497,11 @@
 	}
 
 	.comment-author {
-		font-size: 0.82rem;
-		font-weight: 600;
-		color: #1565c0;
+		font-size: 0.72rem;
+		font-weight: 500;
+		color: #7a6e63;
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
 	}
 
 	.comment-score {
@@ -505,9 +511,11 @@
 	}
 
 	.comment-body {
-		font-size: 0.88rem;
+		font-family: 'DM Serif Display', Georgia, serif;
+		font-size: 1rem;
+		font-style: italic;
 		line-height: 1.5;
-		color: #333;
+		color: #3e2c23;
 		margin: 0;
 		white-space: pre-wrap;
 	}
@@ -517,11 +525,14 @@
 		margin-top: 0.4rem;
 		font-size: 0.78rem;
 		color: #ff4500;
-		text-decoration: none;
+		text-decoration: underline;
+		text-decoration-thickness: 1px;
+		text-underline-offset: 2px;
+		transition: text-decoration-thickness 0.15s ease;
 	}
 
 	.permalink:hover {
-		text-decoration: underline;
+		text-decoration-thickness: 2px;
 	}
 
 	.endorsement-section {
@@ -529,19 +540,21 @@
 	}
 
 	.endorsement-section h3 {
-		font-size: 0.82rem;
-		color: #888;
+		font-family: 'DM Sans', sans-serif;
+		font-size: 0.72rem;
+		color: #7a6e63;
 		text-transform: uppercase;
-		letter-spacing: 0.5px;
+		letter-spacing: 0.08em;
+		font-weight: 600;
 		margin: 0 0 0.4rem;
 		padding-bottom: 0.2rem;
-		border-bottom: 1px solid #eee;
+		border-bottom: 1px solid #e8e0d6;
 	}
 
 	.endorsement-card {
-		background: #fff;
-		border: 1px solid #f0f0f0;
-		border-radius: 4px;
+		background: #fffcf8;
+		border: 1px solid #efe8e0;
+		border-radius: 6px;
 		padding: 0.5rem 0.65rem;
 		margin-bottom: 0.35rem;
 	}
@@ -553,20 +566,23 @@
 	}
 
 	.endorsement-author {
-		font-size: 0.78rem;
-		color: #1565c0;
+		font-size: 0.72rem;
+		color: #7a6e63;
 		font-weight: 500;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
 	}
 
 	.endorsement-score {
 		font-size: 0.75rem;
-		color: #767676;
+		color: #ff4500;
+		font-weight: 600;
 	}
 
 	.endorsement-card p {
 		font-size: 0.85rem;
-		line-height: 1.45;
-		color: #444;
+		line-height: 1.5;
+		color: #3e2c23;
 		margin: 0;
 	}
 
@@ -582,7 +598,7 @@
 		border-radius: 6px;
 		cursor: pointer;
 		border: 1px solid #ff4500;
-		background: #fff;
+		background: #fffcf8;
 		color: #ff4500;
 		transition: all 0.15s ease;
 		font-weight: 500;
@@ -591,7 +607,7 @@
 	.map-link:hover {
 		background: #ff4500;
 		color: #fff;
-		box-shadow: 0 2px 4px rgba(255, 69, 0, 0.2);
+		box-shadow: 0 2px 6px rgba(255, 69, 0, 0.15);
 	}
 
 	.map-link:active {
@@ -605,18 +621,19 @@
 		font-size: 0.8rem;
 		padding: 5px 14px;
 		border-radius: 6px;
-		border: 1px solid #4285f4;
-		background: #fff;
-		color: #4285f4;
+		border: 1px solid #d4c8bb;
+		background: #fffcf8;
+		color: #5d4e37;
 		text-decoration: none;
 		transition: all 0.15s ease;
 		font-weight: 500;
 	}
 
 	.maps-link:hover {
-		background: #4285f4;
-		color: #fff;
-		box-shadow: 0 2px 4px rgba(66, 133, 244, 0.2);
+		border-color: #5d4e37;
+		background: #5d4e37;
+		color: #fffcf8;
+		box-shadow: 0 2px 6px rgba(62, 44, 35, 0.12);
 	}
 
 	.maps-link:active {
@@ -645,15 +662,16 @@
 	}
 
 	.empty-title {
-		font-size: 1rem;
-		font-weight: 600;
-		color: #555;
+		font-family: 'DM Serif Display', Georgia, serif;
+		font-size: 1.1rem;
+		font-weight: 400;
+		color: #3e2c23;
 		margin: 0 0 0.25rem;
 	}
 
 	.empty-hint {
 		font-size: 0.85rem;
-		color: #767676;
+		color: #7a6e63;
 		margin: 0;
 	}
 
