@@ -159,13 +159,13 @@
 
 	:global(body) {
 		margin: 0;
-		font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
-			sans-serif;
-		color: #333;
-		background: #fafafa;
+		font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue',
+			Arial, sans-serif;
+		color: #3e2c23;
+		background: #faf7f2;
 		-webkit-font-smoothing: antialiased;
 		-moz-osx-font-smoothing: grayscale;
-		line-height: 1.5;
+		line-height: 1.55;
 	}
 
 	:global(*) {
@@ -195,11 +195,11 @@
 	.list-side {
 		flex: 1;
 		min-width: 0;
-		border: 1px solid #e8e8e8;
+		border: 1px solid #e8e0d6;
 		border-radius: 10px;
 		overflow: hidden;
-		background: #fff;
-		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.06);
+		background: #fffcf8;
+		box-shadow: 0 1px 4px rgba(62, 44, 35, 0.06);
 	}
 
 	@media (max-width: 768px) {
