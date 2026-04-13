@@ -26,6 +26,8 @@
 	let prevCuisines = $state('');
 	let prevCities = $state('');
 
+	let mapExpanded = $state(false);
+
 	let filteredRestaurants = $derived.by(() => {
 		let result = allRestaurants;
 
@@ -133,18 +135,39 @@
 	<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 </svelte:head>
 
-<Hero />
-<SearchBar restaurants={allRestaurants} {cuisineNames} {cityNames} />
-<FilterBar restaurants={allRestaurants} />
+<section class="hero-section">
+	<Hero />
+</section>
 
-<main class="split-view">
-	<div class="map-side">
-		<Map restaurants={filteredRestaurants} />
+<div class="app-trap">
+	<div class="controls-bar">
+		<SearchBar restaurants={allRestaurants} {cuisineNames} {cityNames} />
+		<FilterBar restaurants={allRestaurants} />
 	</div>
-	<div class="list-side">
-		<RestaurantList restaurants={filteredRestaurants} />
+	<div class="content-area">
+		<div
+			class="map-pane"
+			class:portal-expanded={mapExpanded}
+			onclick={() => { if (!mapExpanded) mapExpanded = true; }}
+		>
+			<Map restaurants={filteredRestaurants} {mapExpanded} />
+			{#if mapExpanded}
+				<button
+					class="map-close-btn"
+					onclick={(e) => { e.stopPropagation(); mapExpanded = false; }}
+					aria-label="Close map"
+				>&times;</button>
+			{/if}
+		</div>
+		<div class="list-pane">
+			<RestaurantList restaurants={filteredRestaurants} />
+		</div>
 	</div>
-</main>
+</div>
+
+{#if mapExpanded}
+	<div class="portal-backdrop" onclick={() => (mapExpanded = false)} role="presentation"></div>
+{/if}
 
 <style>
 	:global(body) {
@@ -160,47 +183,159 @@
 		box-sizing: border-box;
 	}
 
-	.split-view {
+	/* Hero parallax fade — CSS scroll-driven, no JS */
+	@supports (animation-timeline: scroll()) {
+		.hero-section {
+			animation: hero-fade linear both;
+			animation-timeline: scroll(root);
+			animation-range: 0 80%;
+		}
+	}
+
+	@keyframes hero-fade {
+		from {
+			opacity: 1;
+			transform: translateY(0);
+		}
+		to {
+			opacity: 0;
+			transform: translateY(-24px);
+		}
+	}
+
+	/* Sticky trap — locks to top once hero scrolls past */
+	.app-trap {
+		position: sticky;
+		top: 0;
+		height: 100dvh;
 		display: flex;
-		height: calc(100vh - 220px);
-		min-height: 500px;
-		padding: 0.5rem;
-		gap: 0.5rem;
-		max-width: 1400px;
-		margin: 0 auto 40vh;
+		flex-direction: column;
+		background: #fff;
+		z-index: 10;
 	}
 
-	.map-side {
-		flex: 1;
-		min-width: 0;
+	/* Controls bar — no overflow set so dropdowns escape freely into the viewport */
+	.controls-bar {
+		flex-shrink: 0;
+		position: relative;
+		z-index: 1200; /* above map portal (1050) and backdrop (1040) */
 	}
 
-	.list-side {
+	/* Content area clips its children (map + list) but NOT the controls-bar sibling */
+	.content-area {
 		flex: 1;
-		min-width: 0;
-		border: 1px solid #eee;
-		border-radius: 8px;
+		display: flex;
+		min-height: 0;
 		overflow: hidden;
 	}
 
-	@media (max-width: 768px) {
-		.split-view {
-			flex-direction: column;
-			height: auto;
-			padding: 0.25rem;
-			gap: 0.25rem;
-		}
-
-		.map-side {
-			height: 200px;
-			min-height: 200px;
+	/* ── Desktop: CSS :has() hover morph (≥ 1024px) ─────────────────────── */
+	@media (min-width: 1024px) {
+		.map-pane {
+			flex-basis: 25%;
 			flex-shrink: 0;
+			position: relative;
+			overflow: hidden;
+			min-width: 0;
+			transition: flex-basis 0.4s ease;
 		}
 
-		.list-side {
-			height: auto;
+		.list-pane {
+			flex: 1;
+			min-width: 0;
+			position: relative;
+			z-index: 1;
+			margin-left: -48px; /* overlap the map — gives a layered depth effect */
+			box-shadow: -8px 0 32px rgba(0, 0, 0, 0.18);
+			overflow-y: auto;
+			overscroll-behavior: contain;
+			background: #fff;
+			border-radius: 12px 0 0 0;
+			transition: flex-basis 0.4s ease, margin-left 0.4s ease, box-shadow 0.4s ease;
+		}
+
+		/* Hover: map expands to 1/3, list retreats, layered depth collapses to flat */
+		.content-area:has(.map-pane:hover) .map-pane {
+			flex-basis: 33.33%;
+		}
+
+		.content-area:has(.map-pane:hover) .list-pane {
+			flex-basis: 66.67%;
+			margin-left: 0;
+			box-shadow: none;
+		}
+	}
+
+	/* ── Mobile: map-pane IS the circular FAB portal (< 1024px) ─────────── */
+	@media (max-width: 1023px) {
+		.map-pane {
+			position: fixed;
+			bottom: 24px;
+			right: 24px;
+			width: 80px;
+			height: 80px;
+			border-radius: 50%;
+			border: 4px solid white;
+			box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+			z-index: 1000;
+			cursor: pointer;
+			overflow: hidden;
+			transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+		}
+
+		.map-pane.portal-expanded {
+			width: calc(100vw - 32px);
+			height: calc(100dvh - 120px);
+			bottom: 16px;
+			right: 16px;
+			border-radius: 16px;
+			cursor: default;
+			z-index: 1050;
+		}
+
+		.list-pane {
+			width: 100%;
+			overflow-y: auto;
+			overscroll-behavior: contain;
+		}
+
+		.portal-backdrop {
+			position: fixed;
+			inset: 0;
+			z-index: 1040;
+			background: rgba(0, 0, 0, 0.4);
+			backdrop-filter: blur(4px);
+			-webkit-backdrop-filter: blur(4px);
+		}
+
+		.map-close-btn {
+			position: absolute;
+			top: 12px;
+			right: 12px;
+			width: 36px;
+			height: 36px;
+			border-radius: 50%;
 			border: none;
-			overflow: visible;
+			background: rgba(255, 255, 255, 0.92);
+			font-size: 1.4rem;
+			line-height: 1;
+			cursor: pointer;
+			z-index: 1060;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+		}
+	}
+
+	/* Hide mobile-only elements on desktop */
+	@media (min-width: 1024px) {
+		.map-close-btn {
+			display: none;
+		}
+
+		.portal-backdrop {
+			display: none;
 		}
 	}
 </style>
