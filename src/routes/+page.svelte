@@ -152,7 +152,9 @@
 		<div
 			class="map-pane"
 			class:portal-expanded={mapExpanded}
-			onclick={() => { if (!mapExpanded) mapExpanded = true; }}
+			onpointerdown={() => { if (!mapExpanded) mapExpanded = true; }}
+			role="button"
+			tabindex="0"
 		>
 			<Map restaurants={filteredRestaurants} {mapExpanded} />
 			{#if mapExpanded}
