@@ -156,7 +156,16 @@
 			role="button"
 			tabindex="0"
 		>
-			<Map restaurants={filteredRestaurants} {mapExpanded} />
+			{#if mapExpanded}
+				<div
+					class="portal-backdrop"
+					onclick={() => (mapExpanded = false)}
+					role="presentation"
+				></div>
+			{/if}
+			<div class="map-interactive-layer">
+				<Map restaurants={filteredRestaurants} {mapExpanded} />
+			</div>
 			{#if mapExpanded}
 				<button
 					class="map-close-btn"
@@ -170,10 +179,6 @@
 		</div>
 	</div>
 </div>
-
-{#if mapExpanded}
-	<div class="portal-backdrop" onclick={() => (mapExpanded = false)} role="presentation"></div>
-{/if}
 
 <BackToTop />
 
@@ -245,28 +250,70 @@
 		flex: 1;
 		display: flex;
 		min-height: 0;
+		position: relative;
+		isolation: isolate;
 		overflow: hidden;
 	}
 
 	/* ── Desktop: CSS :has() hover morph (≥ 1024px) ─────────────────────── */
 	@media (min-width: 1024px) {
+		:global(html) {
+			height: 100%;
+			overflow: hidden;
+		}
+
+		:global(body) {
+			height: 100%;
+			display: flex;
+			flex-direction: column;
+			overflow: hidden;
+		}
+
+		.hero-section {
+			flex-shrink: 0;
+		}
+
+		.app-trap {
+			position: relative;
+			top: auto;
+			height: auto;
+			min-height: 0;
+			flex: 1;
+			overflow: hidden;
+		}
+
+		.controls-bar {
+			overflow: visible;
+		}
+
+		.content-area {
+			align-items: stretch;
+		}
+
 		.map-pane {
 			flex-basis: 25%;
 			flex-shrink: 0;
+			display: flex;
+			flex-direction: column;
 			position: relative;
+			z-index: 0;
 			overflow: hidden;
+			height: 100%;
+			min-height: 0;
 			min-width: 0;
 			transition: flex-basis 0.4s ease;
 		}
 
 		.list-pane {
 			flex: 1;
+			height: 100%;
 			min-width: 0;
 			position: relative;
-			z-index: 1;
+			z-index: 2;
+			isolation: isolate;
 			margin-left: -48px; /* overlap the map — gives a layered depth effect */
 			box-shadow: -8px 0 32px rgba(0, 0, 0, 0.18);
-			overflow-y: auto;
+			overflow: hidden;
 			overscroll-behavior: contain;
 			background: #fff;
 			border-radius: 12px 0 0 0;
@@ -283,6 +330,15 @@
 			margin-left: 0;
 			box-shadow: none;
 		}
+
+		.map-interactive-layer {
+			flex: 1;
+			min-height: 0;
+			display: flex;
+			flex-direction: column;
+			position: relative;
+			z-index: 0;
+		}
 	}
 
 	/* ── Mobile: map-pane IS the circular FAB portal (< 1024px) ─────────── */
@@ -296,20 +352,19 @@
 			border-radius: 50%;
 			border: 4px solid white;
 			box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
-			z-index: 1111;
+			z-index: 1300;
 			cursor: pointer;
 			overflow: hidden;
 			transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 		}
 
 		.map-pane.portal-expanded {
-			width: calc(100vw - 32px);
-			height: calc(100dvh - 120px);
-			bottom: 16px;
-			right: 16px;
+			inset: 16px;
+			width: auto;
+			height: auto;
 			border-radius: 16px;
 			cursor: default;
-			z-index: 1120;
+			z-index: 1400;
 		}
 
 		.list-pane {
@@ -318,13 +373,24 @@
 			overscroll-behavior: contain;
 		}
 
+		/* Lives inside .map-pane so it stacks under the map (sibling .app-trap was 1100, so a
+		   global-sibling backdrop at 1110 painted over the entire trap including the map). */
 		.portal-backdrop {
 			position: fixed;
 			inset: 0;
-			z-index: 1110;
+			z-index: 0;
 			background: rgba(0, 0, 0, 0.4);
 			backdrop-filter: blur(4px);
 			-webkit-backdrop-filter: blur(4px);
+		}
+
+		.map-interactive-layer {
+			position: absolute;
+			inset: 0;
+			z-index: 1;
+			min-height: 0;
+			display: flex;
+			flex-direction: column;
 		}
 
 		.map-close-btn {
@@ -339,7 +405,7 @@
 			font-size: 1.4rem;
 			line-height: 1;
 			cursor: pointer;
-			z-index: 1060;
+			z-index: 2;
 			display: flex;
 			align-items: center;
 			justify-content: center;
@@ -348,11 +414,22 @@
 
 		/* When map expands on mobile, push controls and list behind the map */
 		@media (max-width: 1023px) {
+			.app-trap:has(.map-pane.portal-expanded) {
+				overflow: visible;
+			}
+			.app-trap:has(.map-pane.portal-expanded) .content-area {
+				overflow: visible;
+			}
 			.app-trap:has(.map-pane.portal-expanded) .controls-bar {
-				z-index: 1020;
+				z-index: 1;
+			}
+			.app-trap:has(.map-pane.portal-expanded) :global(.search-container),
+			.app-trap:has(.map-pane.portal-expanded) :global(.filter-bar),
+			.app-trap:has(.map-pane.portal-expanded) :global(.dropdown-panel) {
+				z-index: 1 !important;
 			}
 			.app-trap:has(.map-pane.portal-expanded) .list-pane {
-				z-index: 1005;
+				z-index: 1;
 			}
 		}
 	}
