@@ -294,7 +294,7 @@
 			border-radius: 50%;
 			border: 4px solid white;
 			box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
-			z-index: 1000;
+			z-index: 1111;
 			cursor: pointer;
 			overflow: hidden;
 			transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
@@ -307,7 +307,7 @@
 			right: 16px;
 			border-radius: 16px;
 			cursor: default;
-			z-index: 1050;
+			z-index: 1120;
 		}
 
 		.list-pane {
