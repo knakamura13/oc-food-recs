@@ -228,7 +228,7 @@
 		display: flex;
 		flex-direction: column;
 		background: #fff;
-		z-index: 10;
+		z-index: 1100;
 	}
 
 	/* Controls bar — no overflow set so dropdowns escape freely into the viewport */
@@ -319,7 +319,7 @@
 		.portal-backdrop {
 			position: fixed;
 			inset: 0;
-			z-index: 1040;
+			z-index: 1110;
 			background: rgba(0, 0, 0, 0.4);
 			backdrop-filter: blur(4px);
 			-webkit-backdrop-filter: blur(4px);
@@ -342,6 +342,16 @@
 			align-items: center;
 			justify-content: center;
 			box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+		}
+
+		/* When map expands on mobile, push controls and list behind the map */
+		@media (max-width: 1023px) {
+			.app-trap:has(.map-pane.portal-expanded) .controls-bar {
+				z-index: 1020;
+			}
+			.app-trap:has(.map-pane.portal-expanded) .list-pane {
+				z-index: 1005;
+			}
 		}
 	}
 
