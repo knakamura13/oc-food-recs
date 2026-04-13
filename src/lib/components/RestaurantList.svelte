@@ -258,6 +258,7 @@
 		display: flex;
 		flex-direction: column;
 		height: 100%;
+		min-height: 0;
 	}
 
 	.sort-bar {
@@ -315,7 +316,9 @@
 
 	.list-scroll {
 		flex: 1;
+		min-height: 0;
 		overflow-y: auto;
+		overscroll-behavior: contain;
 	}
 
 	.row {

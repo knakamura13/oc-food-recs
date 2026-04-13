@@ -198,13 +198,14 @@
 		display: flex;
 		flex-direction: column;
 		height: 100%;
-		min-height: 400px;
+		min-height: 0;
 		position: relative;
+		overflow: hidden;
 	}
 
 	.map-container {
-		flex: 1;
-		min-height: 350px;
+		flex: 1 1 auto;
+		min-height: 0;
 		border-radius: 8px;
 		overflow: hidden;
 	}
@@ -229,6 +230,7 @@
 		align-items: center;
 		justify-content: space-between;
 		width: 100%;
+		flex-shrink: 0;
 		padding: 0.5rem 0.75rem;
 		border: none;
 		background: #f0ebe3;
@@ -254,6 +256,7 @@
 	}
 
 	.unmapped-list {
+		flex-shrink: 0;
 		max-height: 200px;
 		overflow-y: auto;
 		border: 1px solid #e8e0d6;
@@ -290,16 +293,16 @@
 	}
 
 	@media (max-width: 1023px) {
-		/* Force map to full viewport size so Leaflet initializes at a useful
-		   resolution. The parent .map-pane clips it to circle/rect via overflow:hidden. */
 		.map-panel {
-			min-height: unset;
-			width: 100vw;
-			height: 70vh;
+			min-height: 0;
+			overflow: visible;
+			width: 100%;
+			height: 100%;
 		}
 
 		.map-container {
-			min-height: unset;
+			width: 100%;
+			min-height: 0;
 			height: 100%;
 			flex: 1;
 		}
@@ -310,6 +313,12 @@
 
 		.unmapped-list {
 			display: none;
+		}
+	}
+
+	@media (min-width: 1024px) {
+		.unmapped-list {
+			max-height: min(240px, 35%);
 		}
 	}
 </style>
