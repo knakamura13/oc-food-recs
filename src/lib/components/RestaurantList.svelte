@@ -80,6 +80,15 @@
 
 	function showOnMap(restaurant: Restaurant) {
 		appState.mapTarget = restaurant;
+		const mapEl = document.querySelector('.map-container');
+		if (mapEl) {
+			mapEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+		}
+	}
+
+	function googleMapsUrl(restaurant: Restaurant): string {
+		const query = restaurant.name + ' ' + (restaurant.location || 'Orange County') + ' CA';
+		return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(query);
 	}
 
 	function groupEndorsements(restaurant: Restaurant) {
@@ -96,13 +105,14 @@
 </script>
 
 <div class="restaurant-list">
-	<div class="sort-bar">
-		<span class="sort-label">Sort by:</span>
+	<div class="sort-bar" role="toolbar" aria-label="Sort options">
+		<span class="sort-label" id="sort-label">Sort by:</span>
 		{#each sortOptions as opt}
 			<button
 				class="sort-btn"
 				class:active={appState.sortKey === opt.key}
 				onclick={() => cycleSort(opt.key)}
+				aria-pressed={appState.sortKey === opt.key}
 			>
 				{opt.label}
 				{#if appState.sortKey === opt.key}
@@ -110,17 +120,24 @@
 				{/if}
 			</button>
 		{/each}
-		<span class="result-count">{restaurants.length} restaurants</span>
+		<span class="result-count" aria-live="polite">{restaurants.length} restaurants</span>
 	</div>
 
 	<div class="list-scroll">
+		{#if sorted.length === 0}
+			<div class="empty-state">
+				<span class="empty-icon">&#x1F50D;</span>
+				<p class="empty-title">No restaurants found</p>
+				<p class="empty-hint">Try adjusting your filters or search terms</p>
+			</div>
+		{/if}
 		{#each sorted as restaurant (restaurant.name)}
 			{@const slug = slugify(restaurant.name)}
 			{@const isOpen = appState.selectedRestaurantSlug === slug}
 			{@const groups = groupEndorsements(restaurant)}
 
 			<div class="row" class:expanded={isOpen} id="restaurant-{slug}">
-				<button class="row-header" onclick={() => toggleRow(restaurant)}>
+				<button class="row-header" onclick={() => toggleRow(restaurant)} aria-expanded={isOpen} aria-controls={isOpen ? `drawer-${slug}` : undefined}>
 					<div class="row-main">
 						<span class="row-name">{restaurant.name}</span>
 						<div class="row-tags">
@@ -133,25 +150,25 @@
 						</div>
 					</div>
 					<div class="row-stats">
-						<span class="stat score">
-							{restaurant.aggregate_score} <small>pts</small>
-							<span class="info-tip" role="button" tabindex="0" aria-label="Score explanation">
-								<span class="info-icon">i</span>
-								<span class="info-tooltip">Total Reddit upvotes across all comments that recommended this restaurant.</span>
-							</span>
-						</span>
+						<span class="stat score">{restaurant.aggregate_score} <small>pts</small></span>
 						<span class="stat">{restaurant.endorsements.length} <small>endorse</small></span>
 						<span class="stat">{restaurant.mention_count} <small>mentions</small></span>
 					</div>
-					<span class="chevron" class:open={isOpen}>&rsaquo;</span>
+					<span class="chevron" aria-hidden="true" class:open={isOpen}>&rsaquo;</span>
 				</button>
 
 				{#if isOpen}
-					<div class="drawer" transition:slide={{ duration: 200 }}>
+					<div class="drawer" id="drawer-{slug}" role="region" aria-label="{restaurant.name} details" transition:slide={{ duration: 200 }}>
 						<div class="primary-comment">
 							<div class="comment-header">
 								<span class="comment-author">u/{restaurant.primary_comment.author}</span>
-								<span class="comment-score">{restaurant.primary_comment.score} points</span>
+								<span class="comment-score">
+									{restaurant.primary_comment.score} points
+									<span class="info-tip" tabindex="0" aria-label="Score info">
+										<span class="info-icon" aria-hidden="true">i</span>
+										<span class="info-tooltip" role="tooltip">Total Reddit upvotes across all comments that recommended this restaurant.</span>
+									</span>
+								</span>
 							</div>
 							<p class="comment-body">{restaurant.primary_comment.body}</p>
 							<a
@@ -166,7 +183,7 @@
 
 						{#if groups.dish_rec.length > 0}
 							<div class="endorsement-section">
-								<h4>What to Order</h4>
+								<h3>What to Order</h3>
 								{#each groups.dish_rec as e}
 									<div class="endorsement-card">
 										<div class="endorsement-meta">
@@ -181,7 +198,7 @@
 
 						{#if groups.personal_story.length > 0}
 							<div class="endorsement-section">
-								<h4>Community Stories</h4>
+								<h3>Community Stories</h3>
 								{#each groups.personal_story as e}
 									<div class="endorsement-card">
 										<div class="endorsement-meta">
@@ -196,7 +213,7 @@
 
 						{#if groups.endorsement.length > 0}
 							<div class="endorsement-section">
-								<h4>Community Love</h4>
+								<h3>Community Love</h3>
 								{#each groups.endorsement as e}
 									<div class="endorsement-card">
 										<div class="endorsement-meta">
@@ -215,9 +232,19 @@
 									Show on map
 								</button>
 							{/if}
-							<button class="close-btn" onclick={() => (appState.selectedRestaurantSlug = null)}>
-								Close
-							</button>
+							<a
+								class="maps-link"
+								href={googleMapsUrl(restaurant)}
+								target="_blank"
+								rel="noopener"
+								aria-label="Open {restaurant.name} in Google Maps"
+							>
+								<svg class="maps-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+									<path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
+									<circle cx="12" cy="9" r="2.5"/>
+								</svg>
+								Google Maps
+							</a>
 						</div>
 					</div>
 				{/if}
@@ -238,30 +265,41 @@
 		align-items: center;
 		gap: 0.5rem;
 		padding: 0.5rem 0.75rem;
-		border-bottom: 1px solid #eee;
-		background: #fafafa;
+		border-bottom: 1px solid #e8e0d6;
+		background: #faf7f2;
 		flex-shrink: 0;
 	}
 
 	.sort-label {
 		font-size: 0.8rem;
-		color: #999;
+		color: #7a6e63;
 	}
 
 	.sort-btn {
 		font-size: 0.8rem;
-		padding: 3px 10px;
-		border: 1px solid #ddd;
-		border-radius: 4px;
-		background: #fff;
+		padding: 4px 12px;
+		border: 1px solid #d4c8bb;
+		border-radius: 5px;
+		background: #fffcf8;
 		cursor: pointer;
-		color: #555;
+		color: #5d4e37;
+		transition: all 0.15s ease;
+		font-weight: 500;
+	}
+
+	.sort-btn:hover {
+		border-color: #ff4500;
+		color: #ff4500;
 	}
 
 	.sort-btn.active {
 		background: #ff4500;
 		color: #fff;
 		border-color: #ff4500;
+	}
+
+	.sort-btn:active {
+		transform: scale(0.96);
 	}
 
 	.sort-arrow {
@@ -272,7 +310,7 @@
 	.result-count {
 		margin-left: auto;
 		font-size: 0.78rem;
-		color: #999;
+		color: #7a6e63;
 	}
 
 	.list-scroll {
@@ -281,11 +319,14 @@
 	}
 
 	.row {
-		border-bottom: 1px solid #f0f0f0;
+		border-bottom: 1px solid #efe8e0;
+		border-left: 3px solid transparent;
+		transition: background-color 0.15s ease, border-left-color 0.18s ease-in-out;
 	}
 
 	.row.expanded {
-		background: #fffbf8;
+		background: #faf7f2;
+		border-left-color: #ff4500;
 	}
 
 	.row-header {
@@ -298,10 +339,15 @@
 		cursor: pointer;
 		text-align: left;
 		gap: 0.75rem;
+		transition: background-color 0.15s ease;
 	}
 
 	.row-header:hover {
-		background: #fafafa;
+		background: rgba(62, 44, 35, 0.02);
+	}
+
+	.row:hover {
+		border-left-color: #ff4500;
 	}
 
 	.row-main {
@@ -310,9 +356,10 @@
 	}
 
 	.row-name {
-		font-weight: 600;
-		font-size: 0.92rem;
-		color: #1a1a2e;
+		font-family: 'DM Serif Display', Georgia, serif;
+		font-weight: 400;
+		font-size: 1rem;
+		color: #3e2c23;
 		display: block;
 	}
 
@@ -325,18 +372,19 @@
 
 	.tag {
 		font-size: 0.72rem;
-		padding: 1px 6px;
-		border-radius: 3px;
+		padding: 2px 7px;
+		border-radius: 4px;
+		letter-spacing: 0.01em;
 	}
 
 	.cuisine-tag {
-		background: #e8f5e9;
-		color: #2e7d32;
+		background: #f0ebe3;
+		color: #5d4e37;
 	}
 
 	.location-tag {
-		background: #e3f2fd;
-		color: #1565c0;
+		background: #fce8e0;
+		color: #b5543a;
 	}
 
 	.row-stats {
@@ -347,7 +395,7 @@
 
 	.stat {
 		font-size: 0.82rem;
-		color: #555;
+		color: #5d4e37;
 		white-space: nowrap;
 	}
 
@@ -372,11 +420,11 @@
 		width: 14px;
 		height: 14px;
 		border-radius: 50%;
-		border: 1px solid #ccc;
+		border: 1px solid #d4c8bb;
 		font-size: 0.6rem;
 		font-weight: 700;
 		font-style: italic;
-		color: #999;
+		color: #7a6e63;
 		cursor: help;
 		line-height: 1;
 	}
@@ -408,13 +456,13 @@
 	.stat small {
 		font-size: 0.7rem;
 		font-weight: 400;
-		color: #999;
+		color: #7a6e63;
 	}
 
 	.chevron {
 		font-size: 1.3rem;
-		color: #ccc;
-		transition: transform 0.2s;
+		color: #d4c8bb;
+		transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 		flex-shrink: 0;
 	}
 
@@ -422,17 +470,23 @@
 		transform: rotate(90deg);
 	}
 
+	.row-header:hover .chevron {
+		color: #ff4500;
+	}
+
 	.drawer {
 		padding: 0.75rem 1rem 1rem;
-		border-top: 1px solid #f0e0d0;
+		border-top: 1px solid #e8e0d6;
 	}
 
 	.primary-comment {
-		background: #fff;
-		border: 1px solid #eee;
-		border-radius: 6px;
-		padding: 0.75rem;
+		background: #fffcf8;
+		border: none;
+		border-left: 3px solid #ff4500;
+		border-radius: 0 8px 8px 0;
+		padding: 0.75rem 0.75rem 0.75rem 1rem;
 		margin-bottom: 0.75rem;
+		box-shadow: 0 1px 3px rgba(62, 44, 35, 0.04);
 	}
 
 	.comment-header {
@@ -443,9 +497,11 @@
 	}
 
 	.comment-author {
-		font-size: 0.82rem;
-		font-weight: 600;
-		color: #1565c0;
+		font-size: 0.72rem;
+		font-weight: 500;
+		color: #7a6e63;
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
 	}
 
 	.comment-score {
@@ -455,9 +511,11 @@
 	}
 
 	.comment-body {
-		font-size: 0.88rem;
+		font-family: 'DM Serif Display', Georgia, serif;
+		font-size: 1rem;
+		font-style: italic;
 		line-height: 1.5;
-		color: #333;
+		color: #3e2c23;
 		margin: 0;
 		white-space: pre-wrap;
 	}
@@ -467,31 +525,36 @@
 		margin-top: 0.4rem;
 		font-size: 0.78rem;
 		color: #ff4500;
-		text-decoration: none;
+		text-decoration: underline;
+		text-decoration-thickness: 1px;
+		text-underline-offset: 2px;
+		transition: text-decoration-thickness 0.15s ease;
 	}
 
 	.permalink:hover {
-		text-decoration: underline;
+		text-decoration-thickness: 2px;
 	}
 
 	.endorsement-section {
 		margin-bottom: 0.75rem;
 	}
 
-	.endorsement-section h4 {
-		font-size: 0.82rem;
-		color: #888;
+	.endorsement-section h3 {
+		font-family: 'DM Sans', sans-serif;
+		font-size: 0.72rem;
+		color: #7a6e63;
 		text-transform: uppercase;
-		letter-spacing: 0.5px;
+		letter-spacing: 0.08em;
+		font-weight: 600;
 		margin: 0 0 0.4rem;
 		padding-bottom: 0.2rem;
-		border-bottom: 1px solid #eee;
+		border-bottom: 1px solid #e8e0d6;
 	}
 
 	.endorsement-card {
-		background: #fff;
-		border: 1px solid #f0f0f0;
-		border-radius: 4px;
+		background: #fffcf8;
+		border: 1px solid #efe8e0;
+		border-radius: 6px;
 		padding: 0.5rem 0.65rem;
 		margin-bottom: 0.35rem;
 	}
@@ -503,20 +566,23 @@
 	}
 
 	.endorsement-author {
-		font-size: 0.78rem;
-		color: #1565c0;
+		font-size: 0.72rem;
+		color: #7a6e63;
 		font-weight: 500;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
 	}
 
 	.endorsement-score {
 		font-size: 0.75rem;
-		color: #999;
+		color: #ff4500;
+		font-weight: 600;
 	}
 
 	.endorsement-card p {
 		font-size: 0.85rem;
-		line-height: 1.45;
-		color: #444;
+		line-height: 1.5;
+		color: #3e2c23;
 		margin: 0;
 	}
 
@@ -526,29 +592,87 @@
 		margin-top: 0.5rem;
 	}
 
-	.map-link,
-	.close-btn {
-		font-size: 0.8rem;
-		padding: 4px 12px;
-		border-radius: 4px;
-		cursor: pointer;
-		border: 1px solid #ddd;
-		background: #fff;
-		color: #555;
-	}
-
 	.map-link {
+		font-size: 0.8rem;
+		padding: 5px 14px;
+		border-radius: 6px;
+		cursor: pointer;
+		border: 1px solid #ff4500;
+		background: #fffcf8;
 		color: #ff4500;
-		border-color: #ff4500;
+		transition: all 0.15s ease;
+		font-weight: 500;
 	}
 
 	.map-link:hover {
 		background: #ff4500;
 		color: #fff;
+		box-shadow: 0 2px 6px rgba(255, 69, 0, 0.15);
 	}
 
-	.close-btn:hover {
-		background: #f5f5f5;
+	.map-link:active {
+		transform: scale(0.97);
+	}
+
+	.maps-link {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		font-size: 0.8rem;
+		padding: 5px 14px;
+		border-radius: 6px;
+		border: 1px solid #d4c8bb;
+		background: #fffcf8;
+		color: #5d4e37;
+		text-decoration: none;
+		transition: all 0.15s ease;
+		font-weight: 500;
+	}
+
+	.maps-link:hover {
+		border-color: #5d4e37;
+		background: #5d4e37;
+		color: #fffcf8;
+		box-shadow: 0 2px 6px rgba(62, 44, 35, 0.12);
+	}
+
+	.maps-link:active {
+		transform: scale(0.97);
+	}
+
+	.maps-icon {
+		width: 14px;
+		height: 14px;
+		flex-shrink: 0;
+	}
+
+	.empty-state {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		padding: 3rem 1.5rem;
+		text-align: center;
+	}
+
+	.empty-icon {
+		font-size: 2.5rem;
+		margin-bottom: 0.75rem;
+		opacity: 0.7;
+	}
+
+	.empty-title {
+		font-family: 'DM Serif Display', Georgia, serif;
+		font-size: 1.1rem;
+		font-weight: 400;
+		color: #3e2c23;
+		margin: 0 0 0.25rem;
+	}
+
+	.empty-hint {
+		font-size: 0.85rem;
+		color: #7a6e63;
+		margin: 0;
 	}
 
 	@media (max-width: 768px) {

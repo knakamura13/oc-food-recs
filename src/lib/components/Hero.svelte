@@ -11,13 +11,14 @@
 			This site is an interactive explorer built from that thread.
 			Every restaurant, upvote, and endorsement below comes directly from the community.
 		</span>
-		<button class="read-more" class:hidden={expanded} onclick={() => (expanded = true)}>
+		<button class="read-more" class:hidden={expanded} onclick={() => (expanded = true)} aria-expanded={expanded}>
 			More&hellip;
 		</button>
 	</p>
 	<a href="https://www.reddit.com/r/orangecounty/comments/1sb0qo7/" target="_blank" rel="noopener">
 		View the original Reddit thread &rarr;
 	</a>
+	<p class="attribution">Built with SvelteKit, hosted on <a href="https://railway.com?referralCode=QCz9lp" target="_blank" rel="noopener">Railway</a></p>
 </section>
 
 <style>
@@ -29,16 +30,18 @@
 	}
 
 	h1 {
-		font-size: 1.5rem;
-		font-weight: 700;
+		font-family: 'DM Serif Display', Georgia, serif;
+		font-size: 1.75rem;
+		font-weight: 400;
 		margin: 0 0 0.5rem;
-		line-height: 1.3;
-		color: #1a1a2e;
+		line-height: 1.15;
+		color: #3e2c23;
+		letter-spacing: -0.01em;
 	}
 
 	p {
 		font-size: 0.95rem;
-		color: #555;
+		color: #7a6e63;
 		line-height: 1.6;
 		margin: 0 0 0.5rem;
 	}
@@ -46,12 +49,31 @@
 	a {
 		font-size: 0.9rem;
 		color: #ff4500;
-		text-decoration: none;
+		text-decoration: underline;
+		text-decoration-thickness: 1px;
+		text-underline-offset: 2px;
 		font-weight: 500;
+		transition: text-decoration-thickness 0.15s ease;
 	}
 
 	a:hover {
+		text-decoration-thickness: 2px;
+	}
+
+	.attribution {
+		font-size: 0.75rem;
+		color: #7a6e63;
+		margin-top: 0.25rem;
+	}
+
+	.attribution a {
+		font-size: 0.75rem;
+		color: #7a6e63;
 		text-decoration: underline;
+	}
+
+	.attribution a:hover {
+		color: #ff4500;
 	}
 
 	.full-text {
@@ -72,7 +94,7 @@
 		}
 
 		h1 {
-			font-size: 1.15rem;
+			font-size: 1.25rem;
 			margin: 0 0 0.3rem;
 		}
 
