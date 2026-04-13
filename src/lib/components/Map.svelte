@@ -5,9 +5,10 @@
 
 	interface Props {
 		restaurants: Restaurant[];
+		mapExpanded: boolean;
 	}
 
-	let { restaurants }: Props = $props();
+	let { restaurants, mapExpanded = false }: Props = $props();
 
 	let mapContainer: HTMLDivElement | undefined = $state();
 	let leafletMap: any = $state();
@@ -47,7 +48,7 @@
 		leafletMap = L.map(mapContainer).setView([33.7, -117.8], 10);
 
 		// Disable scroll-wheel zoom on mobile to prevent scroll trapping
-		if (window.innerWidth <= 768) {
+		if (window.innerWidth <= 1023) {
 			leafletMap.scrollWheelZoom.disable();
 		}
 
@@ -129,6 +130,15 @@
 		}
 	});
 
+	// Invalidate map size when portal expands/collapses
+	$effect(() => {
+		const _ = mapExpanded; // reactive tracking
+		if (leafletMap) {
+			setTimeout(() => leafletMap.invalidateSize(true), 50);
+			setTimeout(() => leafletMap.invalidateSize(true), 450); // after transition ends
+		}
+	});
+
 	function scrollToRestaurant(r: Restaurant) {
 		appState.selectedRestaurantSlug = slugify(r.name);
 		appState.listScrollTarget = r;
@@ -137,6 +147,9 @@
 
 <div class="map-panel">
 	<div class="map-container" bind:this={mapContainer}></div>
+	{#if !mapExpanded}
+		<div class="map-click-blocker" aria-hidden="true"></div>
+	{/if}
 
 	{#if unmappedRestaurants.length > 0}
 		<button class="unmapped-toggle" onclick={() => (showUnmapped = !showUnmapped)}>
@@ -163,6 +176,7 @@
 		flex-direction: column;
 		height: 100%;
 		min-height: 400px;
+		position: relative;
 	}
 
 	.map-container {
@@ -170,6 +184,21 @@
 		min-height: 350px;
 		border-radius: 8px;
 		overflow: hidden;
+	}
+
+	/* Transparent overlay that sits above Leaflet panes to intercept
+	   the expand tap before Leaflet's own click handlers fire */
+	.map-click-blocker {
+		position: absolute;
+		inset: 0;
+		z-index: 500; /* above Leaflet panes (~400) */
+		cursor: pointer;
+	}
+
+	@media (min-width: 1024px) {
+		.map-click-blocker {
+			display: none;
+		}
 	}
 
 	.unmapped-toggle {
@@ -237,16 +266,19 @@
 		font-size: 0.78rem;
 	}
 
-	@media (max-width: 768px) {
+	@media (max-width: 1023px) {
+		/* Force map to full viewport size so Leaflet initializes at a useful
+		   resolution. The parent .map-pane clips it to circle/rect via overflow:hidden. */
 		.map-panel {
 			min-height: unset;
-			height: 200px;
+			width: 100vw;
+			height: 70vh;
 		}
 
 		.map-container {
 			min-height: unset;
-			height: 200px;
-			flex: none;
+			height: 100%;
+			flex: 1;
 		}
 
 		.unmapped-toggle {
