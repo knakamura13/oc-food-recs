@@ -14,6 +14,7 @@
 	let leafletMap: any = $state();
 	let markers = new Map<string, any>();
 	let showUnmapped = $state(false);
+	let mapInitialized = $state(false);
 
 	let unmappedRestaurants = $derived(restaurants.filter((r) => r.lat === null || r.lng === null));
 	let mappedRestaurants = $derived(restaurants.filter((r) => r.lat !== null && r.lng !== null));
@@ -35,15 +36,16 @@
 	let clusterGroupRef: any = null;
 	let L: any = null;
 
-	onMount(async () => {
+	async function initMap() {
+		if (mapInitialized || !mapContainer) return;
+		mapInitialized = true;
+
 		const leafletModule = await import('leaflet');
 		L = leafletModule.default || leafletModule;
 		await import('leaflet/dist/leaflet.css');
 		await import('leaflet.markercluster');
 		await import('leaflet.markercluster/dist/MarkerCluster.css');
 		await import('leaflet.markercluster/dist/MarkerCluster.Default.css');
-
-		if (!mapContainer) return;
 
 		leafletMap = L.map(mapContainer).setView([33.7, -117.8], 10);
 
@@ -60,6 +62,27 @@
 		updateMarkers();
 
 		setTimeout(() => leafletMap?.invalidateSize(), 100);
+	}
+
+	onMount(() => {
+		if (!mapContainer) return;
+
+		// On mobile, defer map init until visible; on desktop, init immediately
+		if (window.innerWidth <= 768) {
+			const observer = new IntersectionObserver(
+				(entries) => {
+					if (entries[0].isIntersecting) {
+						initMap();
+						observer.disconnect();
+					}
+				},
+				{ rootMargin: '100px' }
+			);
+			observer.observe(mapContainer);
+			return () => observer.disconnect();
+		} else {
+			initMap();
+		}
 	});
 
 	function updateMarkers() {
@@ -146,15 +169,15 @@
 </script>
 
 <div class="map-panel">
-	<div class="map-container" bind:this={mapContainer}></div>
+	<div class="map-container" bind:this={mapContainer} role="application" aria-label="Map of restaurants in Orange County"></div>
 	{#if !mapExpanded}
 		<div class="map-click-blocker" aria-hidden="true"></div>
 	{/if}
 
 	{#if unmappedRestaurants.length > 0}
-		<button class="unmapped-toggle" onclick={() => (showUnmapped = !showUnmapped)}>
+		<button class="unmapped-toggle" onclick={() => (showUnmapped = !showUnmapped)} aria-expanded={showUnmapped}>
 			{showUnmapped ? 'Hide' : 'Show'} {unmappedRestaurants.length} unmapped restaurants
-			<span class="arrow" class:open={showUnmapped}>&rsaquo;</span>
+			<span class="arrow" aria-hidden="true" class:open={showUnmapped}>&rsaquo;</span>
 		</button>
 
 		{#if showUnmapped}
@@ -208,17 +231,17 @@
 		width: 100%;
 		padding: 0.5rem 0.75rem;
 		border: none;
-		background: #f5f5f5;
+		background: #f0ebe3;
 		font-size: 0.82rem;
-		color: #666;
+		color: #5d4e37;
 		cursor: pointer;
-		border-top: 1px solid #eee;
+		border-top: 1px solid #e8e0d6;
 		margin-top: 4px;
 		border-radius: 0 0 8px 8px;
 	}
 
 	.unmapped-toggle:hover {
-		background: #eee;
+		background: #e8e0d6;
 	}
 
 	.arrow {
@@ -233,10 +256,10 @@
 	.unmapped-list {
 		max-height: 200px;
 		overflow-y: auto;
-		border: 1px solid #eee;
+		border: 1px solid #e8e0d6;
 		border-top: 0;
 		border-radius: 0 0 8px 8px;
-		background: #fafafa;
+		background: #faf7f2;
 	}
 
 	.unmapped-item {
@@ -253,11 +276,11 @@
 	}
 
 	.unmapped-item:hover {
-		background: #fff3ed;
+		background: #fff0eb;
 	}
 
 	.unmapped-name {
-		color: #333;
+		color: #3e2c23;
 	}
 
 	.unmapped-score {

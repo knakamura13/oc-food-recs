@@ -8,6 +8,7 @@
 	import FilterBar from '$lib/components/FilterBar.svelte';
 	import Map from '$lib/components/Map.svelte';
 	import RestaurantList from '$lib/components/RestaurantList.svelte';
+	import BackToTop from '$lib/components/BackToTop.svelte';
 
 	const allRestaurants: Restaurant[] = data.restaurants as Restaurant[];
 
@@ -132,7 +133,10 @@
 		name="description"
 		content="Explore 289 community-recommended mom and pop restaurants in Orange County, CA — curated from a Reddit thread with 735 responses."
 	/>
-	<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+	<meta name="theme-color" content="#ff4500" />
+	<link rel="dns-prefetch" href="https://a.tile.openstreetmap.org" />
+	<link rel="dns-prefetch" href="https://b.tile.openstreetmap.org" />
+	<link rel="dns-prefetch" href="https://c.tile.openstreetmap.org" />
 </svelte:head>
 
 <section class="hero-section">
@@ -169,18 +173,31 @@
 	<div class="portal-backdrop" onclick={() => (mapExpanded = false)} role="presentation"></div>
 {/if}
 
+<BackToTop />
+
 <style>
+	:global(html) {
+		scroll-behavior: smooth;
+	}
+
 	:global(body) {
 		margin: 0;
-		font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
-			sans-serif;
-		color: #333;
-		background: #fff;
+		font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue',
+			Arial, sans-serif;
+		color: #3e2c23;
+		background: #faf7f2;
 		-webkit-font-smoothing: antialiased;
+		-moz-osx-font-smoothing: grayscale;
+		line-height: 1.55;
 	}
 
 	:global(*) {
 		box-sizing: border-box;
+	}
+
+	:global(*:focus-visible) {
+		outline: 2px solid #ff4500;
+		outline-offset: 2px;
 	}
 
 	/* Hero parallax fade — CSS scroll-driven, no JS */
