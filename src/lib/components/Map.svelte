@@ -68,7 +68,7 @@
 		if (!mapContainer) return;
 
 		// On mobile, defer map init until visible; on desktop, init immediately
-		if (window.innerWidth <= 768) {
+		if (window.innerWidth <= 1023) {
 			const observer = new IntersectionObserver(
 				(entries) => {
 					if (entries[0].isIntersecting) {
@@ -168,7 +168,7 @@
 	}
 </script>
 
-<div class="map-panel">
+<div class="map-panel" class:map-leaflet-chrome-hidden-mobile={!mapExpanded}>
 	<div class="map-container" bind:this={mapContainer} role="application" aria-label="Map of restaurants in Orange County"></div>
 	{#if !mapExpanded}
 		<div class="map-click-blocker" aria-hidden="true"></div>
@@ -293,6 +293,12 @@
 	}
 
 	@media (max-width: 1023px) {
+		/* Minimized mobile FAB: hide Leaflet zoom + attribution; expanded removes this class */
+		.map-panel.map-leaflet-chrome-hidden-mobile :global(.leaflet-control-container),
+		.map-panel.map-leaflet-chrome-hidden-mobile :global(.leaflet-control-attribution) {
+			display: none !important;
+		}
+
 		.map-panel {
 			min-height: 0;
 			overflow: visible;

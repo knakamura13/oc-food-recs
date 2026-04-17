@@ -51,6 +51,27 @@
 		return arr;
 	});
 
+	function scrollRestaurantRowIntoView(el: HTMLElement) {
+		const pane = el.closest('.list-pane') as HTMLElement | null;
+		const inner = el.closest('.list-scroll') as HTMLElement | null;
+
+		function centerIn(scroller: HTMLElement) {
+			const sTop = scroller.getBoundingClientRect().top;
+			const eTop = el.getBoundingClientRect().top;
+			const delta = eTop - sTop + scroller.scrollTop;
+			const next = delta - scroller.clientHeight / 2 + el.offsetHeight / 2;
+			scroller.scrollTo({ top: Math.max(0, next), behavior: 'smooth' });
+		}
+
+		if (inner && inner.scrollHeight > inner.clientHeight + 1) {
+			centerIn(inner);
+		} else if (pane && pane.scrollHeight > pane.clientHeight + 1) {
+			centerIn(pane);
+		} else {
+			el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+		}
+	}
+
 	$effect(() => {
 		const target = appState.listScrollTarget;
 		if (target) {
@@ -59,9 +80,7 @@
 			appState.listScrollTarget = null;
 			tick().then(() => {
 				const el = document.getElementById(`restaurant-${slug}`);
-				if (el) {
-					el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-				}
+				if (el) scrollRestaurantRowIntoView(el);
 			});
 		}
 	});
