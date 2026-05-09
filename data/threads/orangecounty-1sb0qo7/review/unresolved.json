@@ -1,0 +1,1199 @@
+[
+  {
+    "name": "Rosine's",
+    "location": "Anaheim Hills",
+    "cuisine": null,
+    "reason": "found",
+    "address": "721 S Weir Canyon Rd, Anaheim, CA 92808"
+  },
+  {
+    "name": "Confetti Italian Ice and Custard",
+    "location": "Costa Mesa",
+    "cuisine": "ice cream",
+    "reason": "found",
+    "address": "1175 Baker St, Ste E22, Costa Mesa, CA 92626"
+  },
+  {
+    "name": "Mitasie Vegan Cafe",
+    "location": "Lake Forest",
+    "cuisine": "Vegan",
+    "reason": "found",
+    "address": "22722 Lambert St #1704, Lake Forest, CA 92630"
+  },
+  {
+    "name": "Taste of Burma",
+    "location": "Stanton",
+    "cuisine": "Burmese",
+    "reason": "found",
+    "address": "7076 Katella Ave, Stanton, CA 90680"
+  },
+  {
+    "name": "Folks",
+    "location": "Costa Mesa",
+    "cuisine": null,
+    "reason": "found",
+    "address": "2937 Bristol St, Ste A102, Costa Mesa, CA 92626"
+  },
+  {
+    "name": "Tama Sushi",
+    "location": "Huntington Beach",
+    "cuisine": "Sushi",
+    "reason": "found",
+    "address": "16367 Bolsa Chica St, Huntington Beach, CA 92649"
+  },
+  {
+    "name": "Huckleberry's",
+    "location": "Huntington Beach",
+    "cuisine": "Bakery",
+    "reason": "found",
+    "address": "15891 Gothard St, Huntington Beach, CA 92647"
+  },
+  {
+    "name": "Huntington Ramen",
+    "location": "Fullerton",
+    "cuisine": "Ramen",
+    "reason": "found",
+    "address": "1325 E Chapman Ave, Fullerton, CA 92831"
+  },
+  {
+    "name": "Peter's Burgers",
+    "location": "Tustin",
+    "cuisine": "Burgers",
+    "reason": "found",
+    "address": "14311 Newport Ave, Tustin, CA 92780"
+  },
+  {
+    "name": "Cortina's Pizzeria",
+    "location": "Anaheim",
+    "cuisine": "Pizza",
+    "reason": "found",
+    "address": "2175 W Orange Ave, Anaheim, CA 92804"
+  },
+  {
+    "name": "Cafe Cup",
+    "location": "Huntington Beach",
+    "cuisine": "Cafe",
+    "reason": "found",
+    "address": "5930 Warner Ave, Huntington Beach, CA 92649"
+  },
+  {
+    "name": "Mo Ran Gak",
+    "location": "Buena Park",
+    "cuisine": "KBBQ",
+    "reason": "permanently_closed",
+    "address": "6681 Beach Blvd, Buena Park, CA 90621"
+  },
+  {
+    "name": "George's",
+    "location": "Fullerton",
+    "cuisine": "Breakfast",
+    "reason": "found",
+    "address": "815 W Commonwealth Ave, Fullerton, CA 92832"
+  },
+  {
+    "name": "Tikiyaki",
+    "location": "Orange",
+    "cuisine": "Polynesian",
+    "reason": "found",
+    "address": "2271 N Tustin St, Orange, CA 92865"
+  },
+  {
+    "name": "De Simone Deli",
+    "location": "Huntington Beach",
+    "cuisine": "Deli",
+    "reason": "found",
+    "address": "6850 Edinger Ave, Huntington Beach, CA 92647"
+  },
+  {
+    "name": "Molcajete",
+    "location": "Fountain Valley",
+    "cuisine": "Mexican",
+    "reason": "found",
+    "address": "19023 Bushard St, Huntington Beach, CA 92646"
+  },
+  {
+    "name": "Stefanos",
+    "location": "Yorba Linda",
+    "cuisine": null,
+    "reason": "found",
+    "address": "18220 Yorba Linda Blvd, Yorba Linda, CA 92886"
+  },
+  {
+    "name": "Yogis Teriyaki",
+    "location": "Tustin",
+    "cuisine": "Japanese",
+    "reason": "found",
+    "address": "1108 Irvine Blvd, Tustin, CA 92780"
+  },
+  {
+    "name": "Wok-in",
+    "location": "Costa Mesa",
+    "cuisine": "Singaporean",
+    "reason": "found",
+    "address": "2394 Newport Blvd, Costa Mesa, CA 92627"
+  },
+  {
+    "name": "Keno's",
+    "location": "Huntington Beach",
+    "cuisine": "American",
+    "reason": "not_found",
+    "address": null
+  },
+  {
+    "name": "Sushi Kizuna",
+    "location": "Aliso Viejo",
+    "cuisine": "Sushi",
+    "reason": "found",
+    "address": "22912 Pacific Park Dr, Ste G, Aliso Viejo, CA 92656"
+  },
+  {
+    "name": "El Paraiso",
+    "location": "Lake Forest",
+    "cuisine": "Pupusas",
+    "reason": "found",
+    "address": "25252 Jeronimo Rd, Ste B, Lake Forest, CA 92630"
+  },
+  {
+    "name": "Kawamata Seafood",
+    "location": "Dana Point",
+    "cuisine": "Poke",
+    "reason": "found",
+    "address": "26881 Camino De Estrella, Dana Point, CA 92624"
+  },
+  {
+    "name": "A's Burgers",
+    "location": "Dana Point / San Juan Capistrano",
+    "cuisine": "Burgers",
+    "reason": "found",
+    "address": "34344 Pacific Coast Hwy, Dana Point, CA 92629"
+  },
+  {
+    "name": "Itz A Deli",
+    "location": "Lake Forest/Foothill Ranch",
+    "cuisine": "Deli",
+    "reason": "found",
+    "address": "20651 Lake Forest Dr, Ste A110, Lake Forest, CA 92630"
+  },
+  {
+    "name": "Gary's New York Style Deli",
+    "location": "Corona del Mar",
+    "cuisine": "Deli",
+    "reason": "found",
+    "address": "3309 East Coast Hwy, Corona Del Mar, CA 92625"
+  },
+  {
+    "name": "Paradise Deli",
+    "location": "Mission Viejo",
+    "cuisine": "Deli",
+    "reason": "found",
+    "address": "26061 La Paz Rd, Mission Viejo, CA 92691"
+  },
+  {
+    "name": "Arthur's",
+    "location": "La Habra",
+    "cuisine": null,
+    "reason": "found",
+    "address": "1281 E La Habra Blvd, La Habra, CA 90631"
+  },
+  {
+    "name": "The Snooty Fox",
+    "location": "Laguna Hills",
+    "cuisine": "British",
+    "reason": "found",
+    "address": "23028 Lake Forest Dr, Laguna Hills, CA 92653"
+  },
+  {
+    "name": "Omelette House",
+    "location": "Garden Grove",
+    "cuisine": "Breakfast",
+    "reason": "found",
+    "address": "10082 Chapman Ave, Garden Grove, CA 92840"
+  },
+  {
+    "name": "Neighborhood Bento",
+    "location": "Cypress",
+    "cuisine": "Japanese",
+    "reason": "found",
+    "address": "10488 Valley View St, Ste 5, Buena Park, CA 90620"
+  },
+  {
+    "name": "Brooklyn City Pizza",
+    "location": "Laguna Niguel",
+    "cuisine": "Pizza",
+    "reason": "found",
+    "address": "30012 Crown Valley Pkwy, Laguna Niguel, CA 92677"
+  },
+  {
+    "name": "Copenhagen Corner",
+    "location": "Laguna Niguel",
+    "cuisine": "Danish",
+    "reason": "found",
+    "address": "31161 Niguel Rd, Ste B, Laguna Niguel, CA 92677"
+  },
+  {
+    "name": "Jim's Super Burger",
+    "location": "Anaheim",
+    "cuisine": "burgers",
+    "reason": "found",
+    "address": "3500 W Ball Rd, Anaheim, CA 92804"
+  },
+  {
+    "name": "Mollie's Cafe",
+    "location": "San Juan Capistrano",
+    "cuisine": "Diner",
+    "reason": "found",
+    "address": "32033 Camino Capistrano, San Juan Capistrano, CA 92675"
+  },
+  {
+    "name": "Moonlight Pizza",
+    "location": "Fountain Valley",
+    "cuisine": "Pizza",
+    "reason": "found",
+    "address": "9895 Warner Ave, Ste G, Fountain Valley, CA 92708"
+  },
+  {
+    "name": "Union Jacks",
+    "location": "Fountain Valley",
+    "cuisine": "British",
+    "reason": "found",
+    "address": "17916 Magnolia St, Fountain Valley, CA 92708"
+  },
+  {
+    "name": "Patagonia Empanadas",
+    "location": "Orange",
+    "cuisine": "Argentinian",
+    "reason": "found",
+    "address": "2279 N Tustin St, Orange, CA 92865"
+  },
+  {
+    "name": "Dads Sandwiches and Things",
+    "location": "Missions Viejo",
+    "cuisine": "Sandwiches",
+    "reason": "found",
+    "address": "27533 Puerta Real, Mission Viejo, CA 92691"
+  },
+  {
+    "name": "Himalayan Grill",
+    "location": "Sunset Beach/Huntington Beach",
+    "cuisine": "Himalayan",
+    "reason": "found",
+    "address": "16400 Pacific Coast Hwy, Ste 110, Huntington Beach, CA 92649"
+  },
+  {
+    "name": "Seasons Kitchen",
+    "location": "Anaheim",
+    "cuisine": "Singaporean/Malaysian",
+    "reason": "found",
+    "address": "641 N Euclid St, Anaheim, CA 92801"
+  },
+  {
+    "name": "Kaju Soft Tofu",
+    "location": "Garden Grove, Buena Park",
+    "cuisine": "Tofu",
+    "reason": "found",
+    "address": "8895 Garden Grove Blvd, Garden Grove, CA 92844"
+  },
+  {
+    "name": "Hanyang",
+    "location": "Buena Park",
+    "cuisine": "Korean",
+    "reason": "found",
+    "address": "7152 Orangethorpe Ave, Buena Park, CA 90621"
+  },
+  {
+    "name": "Sookdal",
+    "location": "Garden Grove",
+    "cuisine": "Korean BBQ",
+    "reason": "found",
+    "address": "9448 Garden Grove Blvd, Garden Grove, CA 92844"
+  },
+  {
+    "name": "Nok's Kitchen",
+    "location": "Westminster",
+    "cuisine": "Laotian",
+    "reason": "found",
+    "address": "9361 Bolsa Ave, Ste 108, Westminster, CA 92683"
+  },
+  {
+    "name": "Sushi Murasaki",
+    "location": "Santa Ana",
+    "cuisine": "Sushi",
+    "reason": "found",
+    "address": "2901 W MacArthur Blvd, Ste 108, Santa Ana, CA 92704"
+  },
+  {
+    "name": "Los de Juarez Burritos",
+    "location": "Anaheim",
+    "cuisine": "Mexican",
+    "reason": "found",
+    "address": "1101 W Lincoln Ave, Anaheim, CA 92805"
+  },
+  {
+    "name": "Mitasie",
+    "location": "Los Feliz",
+    "cuisine": null,
+    "reason": "Listed as Los Feliz in source data but actually located in Huntington Beach. Vegan Vietnamese restaurant.",
+    "address": "7636 Edinger Ave, Huntington Beach, CA 92647"
+  },
+  {
+    "name": "Cloud Cafe",
+    "location": "Lake Forest",
+    "cuisine": "Cafe",
+    "reason": "found",
+    "address": "23352 El Toro Rd, Lake Forest, CA 92630"
+  },
+  {
+    "name": "Burger Stop",
+    "location": "Santa Ana",
+    "cuisine": "American",
+    "reason": "found",
+    "address": "2302 S Broadway, Santa Ana, CA 92707"
+  },
+  {
+    "name": "Sammy's Stackhouse",
+    "location": "Orange",
+    "cuisine": "American",
+    "reason": "found",
+    "address": "707 N Tustin St, Orange, CA 92867"
+  },
+  {
+    "name": "Beale's Texas BBQ",
+    "location": "Santa Ana",
+    "cuisine": "BBQ",
+    "reason": "found",
+    "address": "100 S Main St, Santa Ana, CA 92701"
+  },
+  {
+    "name": "Taqueria Hoy",
+    "location": "Orange",
+    "cuisine": "Mexican",
+    "reason": "found",
+    "address": "291 N Tustin St, Orange, CA 92867"
+  },
+  {
+    "name": "B and C",
+    "location": "Placentia",
+    "cuisine": null,
+    "reason": "Full name is B & C Burgers",
+    "address": "1868 N Placentia Ave, Placentia, CA 92870"
+  },
+  {
+    "name": "DeSimone's",
+    "location": "Huntington Beach",
+    "cuisine": "Bakery",
+    "reason": "Full name is DeSimone Deli & Bakery",
+    "address": "6850 Edinger Ave, Huntington Beach, CA 92647"
+  },
+  {
+    "name": "Fu Wing Low",
+    "location": "Fountain Valley",
+    "cuisine": "Chinese",
+    "reason": "found",
+    "address": "16545 Brookhurst St, Fountain Valley, CA 92708"
+  },
+  {
+    "name": "Hofs Hut",
+    "location": "Long Beach/Orange County",
+    "cuisine": null,
+    "reason": "Nearest OC-area location is in Seal Beach",
+    "address": "10900 Los Alamitos Blvd, Seal Beach, CA 90740"
+  },
+  {
+    "name": "The Green Chile",
+    "location": "La Habra",
+    "cuisine": null,
+    "reason": "found",
+    "address": "2050 W Whittier Blvd, La Habra, CA 90631"
+  },
+  {
+    "name": "Ake Larry",
+    "location": "Orange",
+    "cuisine": "Italian Fusion",
+    "reason": "Full name is Ake'Larry. Listed as Orange in source data but actually in Anaheim.",
+    "address": "2821 E White Star Ave, Ste G, Anaheim, CA 92806"
+  },
+  {
+    "name": "Takaya",
+    "location": "Costa Mesa",
+    "cuisine": null,
+    "reason": "Full name is Takaya Yakitori Izakaya",
+    "address": "891 Baker St, Costa Mesa, CA 92626"
+  },
+  {
+    "name": "Garduno's",
+    "location": "Costa Mesa",
+    "cuisine": "Italian",
+    "reason": "Full name is Garduno's Ristorante Italiano",
+    "address": "298 E 17th St, Costa Mesa, CA 92627"
+  },
+  {
+    "name": "Taco Station LLC",
+    "location": "Tustin",
+    "cuisine": "Mexican",
+    "reason": "Full name is The Taco Station LLC",
+    "address": "16471 McFadden Ave, Tustin, CA 92780"
+  },
+  {
+    "name": "Dominics",
+    "location": "Cypress",
+    "cuisine": null,
+    "reason": "Full name is Dominic's Ristorante Italiano",
+    "address": "9921 Walker St, Cypress, CA 90630"
+  },
+  {
+    "name": "wine tasting place",
+    "location": "Cypress",
+    "cuisine": null,
+    "reason": "Too generic to identify a specific restaurant",
+    "address": null
+  },
+  {
+    "name": "King's Donuts",
+    "location": "Monte Vista",
+    "cuisine": "Salvadoran/Donuts",
+    "reason": "Could not find a King's Donuts in the Monte Vista area. Closest match is King's Donuts at 25100 Marguerite Pkwy, Ste C, Mission Viejo, CA 92692, but cannot confirm it is the same.",
+    "address": null
+  },
+  {
+    "name": "Nice Burger",
+    "location": "Monte Vista",
+    "cuisine": "Burgers",
+    "reason": "Full name is Nice Burger 100% Vegan. Listed as Monte Vista in source data; Monte Vista is a neighborhood in Santa Ana.",
+    "address": "1727 E 17th St, Santa Ana, CA 92705"
+  },
+  {
+    "name": "Manaao Thai Comfort Food",
+    "location": "Tustin",
+    "cuisine": "Thai",
+    "reason": "found",
+    "address": "13842 Newport Ave, Ste F, Tustin, CA 92780"
+  },
+  {
+    "name": "California Vintage Wine Bistro",
+    "location": "Anaheim",
+    "cuisine": "Wine Bistro",
+    "reason": "found",
+    "address": "1925 S State College Blvd, Anaheim, CA 92805"
+  },
+  {
+    "name": "Stone Groove Stillhouse",
+    "location": "Anaheim",
+    "cuisine": "Stillhouse",
+    "reason": "found",
+    "address": "500 S Anaheim Blvd, Space A, Anaheim, CA 92805"
+  },
+  {
+    "name": "Mama Cozza’s",
+    "location": "Anaheim",
+    "cuisine": "Italian",
+    "reason": "found",
+    "address": "2170 W Ball Rd, Anaheim, CA 92804"
+  },
+  {
+    "name": "Da Bianca Trattoria",
+    "location": "Orange",
+    "cuisine": "Italian",
+    "reason": "found",
+    "address": "7448 E Chapman Ave, Orange, CA 92869"
+  },
+  {
+    "name": "Mangi Con Amore",
+    "location": "Laguna Hills",
+    "cuisine": "Italian",
+    "reason": "found",
+    "address": "26941 Cabot Rd #107, Laguna Hills, CA 92653"
+  },
+  {
+    "name": "Bake and Broil",
+    "location": "Long Beach",
+    "cuisine": null,
+    "reason": "found",
+    "address": "3697 Atlantic Ave, Long Beach, CA 90807"
+  },
+  {
+    "name": "AniKri Foods",
+    "location": "Cypress",
+    "cuisine": "Indian",
+    "reason": "found",
+    "address": "4504 Lincoln Ave, Cypress, CA 90630"
+  },
+  {
+    "name": "Awaze",
+    "location": "Artesia",
+    "cuisine": "Ethiopian",
+    "reason": "found",
+    "address": "18764 Pioneer Blvd, Artesia, CA 90701"
+  },
+  {
+    "name": "Ranch Enchilada",
+    "location": "Yorba Linda",
+    "cuisine": "Mexican",
+    "reason": "found",
+    "address": "4965 Valley View Ave, Yorba Linda, CA 92886"
+  },
+  {
+    "name": "El Cortez",
+    "location": "Laguna Niguel",
+    "cuisine": "Mexican",
+    "reason": "found",
+    "address": "28971 Golden Lantern St, Laguna Niguel, CA 92677"
+  },
+  {
+    "name": "El Maguey",
+    "location": "San Juan Capistrano",
+    "cuisine": "Mexican",
+    "reason": "found",
+    "address": "31481 Camino Capistrano, San Juan Capistrano, CA 92675"
+  },
+  {
+    "name": "Pocket Burger",
+    "location": "Sunset Beach",
+    "cuisine": "Burgers",
+    "reason": "found",
+    "address": "16873 Pacific Coast Hwy, Sunset Beach, CA 90742"
+  },
+  {
+    "name": "Imperial Meat Market",
+    "location": "Placentia",
+    "cuisine": null,
+    "reason": "found",
+    "address": "242 S Bradford Ave, Placentia, CA 92870"
+  },
+  {
+    "name": "Mi Casita",
+    "location": "Placentia",
+    "cuisine": null,
+    "reason": "found",
+    "address": "330 W Santa Fe Ave, Placentia, CA 92870"
+  },
+  {
+    "name": "limoncello ristorante",
+    "location": "San Juan Capistrano",
+    "cuisine": "Italian",
+    "reason": "found",
+    "address": "31115 Rancho Viejo Rd, San Juan Capistrano, CA 92675"
+  },
+  {
+    "name": "Roux Seafood Kitchen",
+    "location": "Huntington Beach",
+    "cuisine": "Seafood",
+    "reason": "found",
+    "address": "16883 Beach Blvd, Huntington Beach, CA 92647"
+  },
+  {
+    "name": "Nicks Burritos",
+    "location": "Seal Beach or Los Alamitos",
+    "cuisine": "Mexican",
+    "reason": "found",
+    "address": "223 Main St, Seal Beach, CA 90740"
+  },
+  {
+    "name": "Medii Kitchen",
+    "location": "Anaheim Hills",
+    "cuisine": null,
+    "reason": "found",
+    "address": "116 S Fairmont Blvd, Anaheim, CA 92808"
+  },
+  {
+    "name": "Latte Da",
+    "location": "Anaheim Hills",
+    "cuisine": "Italian",
+    "reason": "found",
+    "address": "751 S Weir Canyon Rd, Anaheim, CA 92808"
+  },
+  {
+    "name": "Romano Cucina",
+    "location": "Aliso Viejo",
+    "cuisine": "Italian",
+    "reason": "found",
+    "address": "25214 Cabot Rd, Laguna Hills, CA 92653"
+  },
+  {
+    "name": "Oriental Chinese Cuisine",
+    "location": "Placentia",
+    "cuisine": "Chinese",
+    "reason": "found",
+    "address": "1448 N Kraemer Blvd, Placentia, CA 92870"
+  },
+  {
+    "name": "Agrusa's Italian",
+    "location": "La Habra",
+    "cuisine": "Italian",
+    "reason": "found",
+    "address": "1240 W Imperial Hwy, La Habra, CA 90631"
+  },
+  {
+    "name": "Yoon Busan Gukbap",
+    "location": "Garden Grove",
+    "cuisine": "Korean",
+    "reason": "found",
+    "address": "12921 Magnolia St, Garden Grove, CA 92841"
+  },
+  {
+    "name": "Molly's",
+    "location": "Laguna Niguel",
+    "cuisine": null,
+    "reason": "found",
+    "address": "27932 La Paz Rd, Laguna Niguel, CA 92677"
+  },
+  {
+    "name": "Yoo's Place",
+    "location": "Irvine",
+    "cuisine": null,
+    "reason": "found",
+    "address": "2626 Dupont Dr, Irvine, CA 92612"
+  },
+  {
+    "name": "Tacos Jaliscos",
+    "location": "Orange",
+    "cuisine": "Mexican",
+    "reason": "found",
+    "address": "480 N Tustin St, Orange, CA 92867"
+  },
+  {
+    "name": "Okazya Kitchen",
+    "location": "Fullerton",
+    "cuisine": "Japanese",
+    "reason": "found",
+    "address": "1811 W Commonwealth Ave, Fullerton, CA 92833"
+  },
+  {
+    "name": "Alebriges taco truck",
+    "location": "Santa Ana",
+    "cuisine": "Mexican",
+    "reason": "not_found",
+    "address": null
+  },
+  {
+    "name": "Kimmies",
+    "location": "Huntington Beach",
+    "cuisine": "Korean",
+    "reason": "not_found",
+    "address": null
+  },
+  {
+    "name": "Storico",
+    "location": "Old Town Tustin",
+    "cuisine": "Italian",
+    "reason": "found",
+    "address": "405 El Camino Real, Tustin, CA 92780"
+  },
+  {
+    "name": "Centro",
+    "location": "Old Town Tustin",
+    "cuisine": "Mexican",
+    "reason": "found",
+    "address": "140 E Main St, Tustin, CA 92780"
+  },
+  {
+    "name": "Chaak",
+    "location": "Old Town Tustin",
+    "cuisine": "Mexican",
+    "reason": "found",
+    "address": "215 El Camino Real, Tustin, CA 92780"
+  },
+  {
+    "name": "The Rice",
+    "location": "Lake Forest/FHR",
+    "cuisine": "Japanese",
+    "reason": "found",
+    "address": "26781 Portola Pkwy, Foothill Ranch, CA 92610"
+  },
+  {
+    "name": "Pops",
+    "location": "Santa Ana",
+    "cuisine": null,
+    "reason": "found",
+    "address": "112 E 9th St, Santa Ana, CA 92701"
+  },
+  {
+    "name": "Casa Franco",
+    "location": "Mission Viejo",
+    "cuisine": "Mexican",
+    "reason": "found",
+    "address": "24395 Alicia Pkwy, Mission Viejo, CA 92691"
+  },
+  {
+    "name": "Three Monkeys",
+    "location": "Huntington Beach",
+    "cuisine": "Japanese",
+    "reason": "found",
+    "address": "9556 Hamilton Ave, Huntington Beach, CA 92646"
+  },
+  {
+    "name": "Twenty Eight Restaurant",
+    "location": "Irvine",
+    "cuisine": "Steakhouse",
+    "reason": "found",
+    "address": "19530 Jamboree Rd, Irvine, CA 92612"
+  },
+  {
+    "name": "Palbang Seolleongtang",
+    "location": "Norwalk",
+    "cuisine": "Korean",
+    "reason": "found",
+    "address": "16511 Pioneer Blvd, Norwalk, CA 90650"
+  },
+  {
+    "name": "Hai Master",
+    "location": "Laguna Hills",
+    "cuisine": "Chinese & Vietnamese",
+    "reason": "found",
+    "address": "24401 Ridge Route Dr, Ste B102, Laguna Hills, CA 92653"
+  },
+  {
+    "name": "Chavito",
+    "location": "Huntington Beach",
+    "cuisine": "Mexican",
+    "reason": "found",
+    "address": "8201 Newman Ave, Huntington Beach, CA 92647"
+  },
+  {
+    "name": "JD Flannels",
+    "location": "San Juan Capistrano",
+    "cuisine": "donuts",
+    "reason": "found",
+    "address": "31878 Del Obispo St, Ste 122, San Juan Capistrano, CA 92675"
+  },
+  {
+    "name": "Pho Alley",
+    "location": "Los Alamitos",
+    "cuisine": "Vietnamese",
+    "reason": "found",
+    "address": "4123 Ball Rd, Cypress, CA 90630"
+  },
+  {
+    "name": "Nick's Deli",
+    "location": "Los Alamitos",
+    "cuisine": "Deli",
+    "reason": "found",
+    "address": "10900 Los Alamitos Blvd, Ste 109, Los Alamitos, CA 90720"
+  },
+  {
+    "name": "Kareems",
+    "location": "Anaheim",
+    "cuisine": "Mediterranean",
+    "reason": "found",
+    "address": "1208 S Brookhurst St, Anaheim, CA 92804"
+  },
+  {
+    "name": "Mr. G’s Tacos",
+    "location": "Lake Forest",
+    "cuisine": "Mexican",
+    "reason": "found",
+    "address": "21991 El Toro Rd, Ste 7, Lake Forest, CA 92630"
+  },
+  {
+    "name": "Confetti Ice Cream",
+    "location": "Costa Mesa",
+    "cuisine": "ice cream",
+    "reason": "found",
+    "address": "1175 Baker St, Ste E22, Costa Mesa, CA 92626"
+  },
+  {
+    "name": "Renato's",
+    "location": "Westminster",
+    "cuisine": "Italian",
+    "reason": "found",
+    "address": "15383 Brookhurst St, Westminster, CA 92683"
+  },
+  {
+    "name": "Tan Cang Newport Seafood",
+    "location": "Santa Ana",
+    "cuisine": "Vietnamese",
+    "reason": "found",
+    "address": "4411 W 1st St, Santa Ana, CA 92703"
+  },
+  {
+    "name": "Las Barcas",
+    "location": "Huntington Beach",
+    "cuisine": "Mexican",
+    "reason": "found",
+    "address": "21032 Beach Blvd, Huntington Beach, CA 92648"
+  },
+  {
+    "name": "Mi A Dong",
+    "location": "Westminster/Fountain Valley",
+    "cuisine": "Vietnamese",
+    "reason": "found",
+    "address": "16175 Brookhurst St, Fountain Valley, CA 92708"
+  },
+  {
+    "name": "Vientiane Lao Thai restaurant",
+    "location": "Garden Grove",
+    "cuisine": "Lao/Thai",
+    "reason": "found",
+    "address": "10262 Westminster Ave, Garden Grove, CA 92843"
+  },
+  {
+    "name": "Benjie's",
+    "location": "Santa Ana",
+    "cuisine": "NY-style Jewish deli",
+    "reason": "found",
+    "address": "1828 N Tustin Ave, Santa Ana, CA 92705"
+  },
+  {
+    "name": "Tang N Tang",
+    "location": "Irvine",
+    "cuisine": "Korean",
+    "reason": "found",
+    "address": "3953 Irvine Blvd, Irvine, CA 92602"
+  },
+  {
+    "name": "El Canejo",
+    "location": "Lake Forest",
+    "cuisine": "Mexican",
+    "reason": "found",
+    "address": "24331 Muirlands Blvd, Lake Forest, CA 92630"
+  },
+  {
+    "name": "Ballpark Pizza",
+    "location": "Mission Viejo",
+    "cuisine": "Pizza",
+    "reason": "found",
+    "address": "28813 Los Alisos Blvd, Mission Viejo, CA 92692"
+  },
+  {
+    "name": "Hatam Persian food",
+    "location": "Anaheim",
+    "cuisine": "Persian",
+    "reason": "found",
+    "address": "2383 W Lincoln Ave, Anaheim, CA 92801"
+  },
+  {
+    "name": "Los Rios Tea House",
+    "location": "San Juan Capistrano",
+    "cuisine": null,
+    "reason": "found",
+    "address": "31731 Los Rios St, San Juan Capistrano, CA 92675"
+  },
+  {
+    "name": "Momma Cozza’s",
+    "location": "Anaheim",
+    "cuisine": null,
+    "reason": "found",
+    "address": "2170 W Ball Rd, Anaheim, CA 92804"
+  },
+  {
+    "name": "Mazara trattoria",
+    "location": "Huntington Beach",
+    "cuisine": "Italian",
+    "reason": "found",
+    "address": "18027 Beach Blvd, Huntington Beach, CA 92648"
+  },
+  {
+    "name": "Biaggios",
+    "location": "Lake Forest",
+    "cuisine": "Italian",
+    "reason": "found",
+    "address": "24301 Muirlands Blvd, Lake Forest, CA 92630"
+  },
+  {
+    "name": "Matty’s Patty’s Burger Club",
+    "location": "Costa Mesa",
+    "cuisine": "burgers",
+    "reason": "found",
+    "address": "1734 Newport Blvd, Costa Mesa, CA 92627"
+  },
+  {
+    "name": "Mai Phung",
+    "location": "Westminster",
+    "cuisine": "Vietnamese",
+    "reason": "found",
+    "address": "8415 Westminster Blvd, Westminster, CA 92683"
+  },
+  {
+    "name": "Normita's Surf City Taco",
+    "location": "Huntington Beach",
+    "cuisine": "Mexican",
+    "reason": "found",
+    "address": "815 Indianapolis Ave, Huntington Beach, CA 92648"
+  },
+  {
+    "name": "Habibi Time",
+    "location": "Costa Mesa",
+    "cuisine": "Middle Eastern",
+    "reason": "found",
+    "address": "3601 Jamboree Rd, Ste 4, Newport Beach, CA 92660"
+  },
+  {
+    "name": "Peking Kitchen",
+    "location": "Santa Ana",
+    "cuisine": "Chinese",
+    "reason": "permanently_closed",
+    "address": "413 W 17th St, Ste 101, Santa Ana, CA 92706"
+  },
+  {
+    "name": "Claro's Italian Deli",
+    "location": "Tustin",
+    "cuisine": "Italian Deli",
+    "reason": "found",
+    "address": "1095 E Main St, Tustin, CA 92780"
+  },
+  {
+    "name": "Taqueria Mexico",
+    "location": "Orange",
+    "cuisine": "Mexican",
+    "reason": "found",
+    "address": "108 W Katella Ave, Ste C, Orange, CA 92867"
+  },
+  {
+    "name": "Nicks Superburgers",
+    "location": "Fullerton",
+    "cuisine": "Burgers",
+    "reason": "found",
+    "address": "1117 E Commonwealth Ave, Fullerton, CA 92831"
+  },
+  {
+    "name": "Normita's Tacos",
+    "location": "Beach Blvd @ Indianapolis",
+    "cuisine": "Mexican",
+    "reason": "found",
+    "address": "815 Indianapolis Ave, Huntington Beach, CA 92648"
+  },
+  {
+    "name": "Sweet Lou's BBQ",
+    "location": "Huntington Beach",
+    "cuisine": "BBQ",
+    "reason": "found",
+    "address": "6441 W McFadden Ave, Huntington Beach, CA 92647"
+  },
+  {
+    "name": "Snooty Fox",
+    "location": "Corona del Mar",
+    "cuisine": "American",
+    "reason": "found",
+    "address": "23028 Lake Forest Dr, Laguna Hills, CA 92653"
+  },
+  {
+    "name": "Taco Connection",
+    "location": "Santa Ana",
+    "cuisine": "Mexican",
+    "reason": "found",
+    "address": "120 S Harbor Blvd, Ste H, Santa Ana, CA 92704"
+  },
+  {
+    "name": "George's Burgers",
+    "location": "Fullerton",
+    "cuisine": "American",
+    "reason": "found",
+    "address": "815 W Commonwealth Ave, Fullerton, CA 92832"
+  },
+  {
+    "name": "Ciro's Pizza",
+    "location": "Buena Park",
+    "cuisine": "Italian",
+    "reason": "found",
+    "address": "6969 La Palma Ave, Buena Park, CA 90620"
+  },
+  {
+    "name": "Wowee Zowee",
+    "location": "Tustin",
+    "cuisine": "pizza",
+    "reason": "found",
+    "address": "12932 Newport Ave #15, Tustin, CA 92780"
+  },
+  {
+    "name": "Lomeli’s",
+    "location": "Fullerton",
+    "cuisine": "Mexican",
+    "reason": "found",
+    "address": "1000 E Bastanchury Rd, Fullerton, CA 92835"
+  },
+  {
+    "name": "Romans Mexi-Cali grill",
+    "location": "Huntington Beach",
+    "cuisine": "Mexican",
+    "reason": "found",
+    "address": "5050 Heil Ave, Ste B, Huntington Beach, CA 92649"
+  },
+  {
+    "name": "Pops Café",
+    "location": "Santa Ana",
+    "cuisine": null,
+    "reason": "found",
+    "address": "112 E 9th St, Santa Ana, CA 92701"
+  },
+  {
+    "name": "Annapoorna Indian American buffet",
+    "location": "Irvine",
+    "cuisine": "Indian American",
+    "reason": "found",
+    "address": "14450 Culver Dr, Ste A, Irvine, CA 92604"
+  },
+  {
+    "name": "Nina's British Indian",
+    "location": "Lake Forest",
+    "cuisine": "British Indian",
+    "reason": "found",
+    "address": "23542 El Toro Rd, Lake Forest, CA 92630"
+  },
+  {
+    "name": "El Matatan",
+    "location": "Orange",
+    "cuisine": "Mexican",
+    "reason": "found",
+    "address": "1446 E Katella Ave, Orange, CA 92867"
+  },
+  {
+    "name": "Noonerz",
+    "location": "Laguna Hills",
+    "cuisine": "Sandwiches",
+    "reason": "found",
+    "address": "22981 Triton Way, Unit A, Laguna Hills, CA 92653"
+  },
+  {
+    "name": "Tim is Making Great Coffee",
+    "location": "San Juan Capistrano",
+    "cuisine": "Vietnamese",
+    "reason": "found",
+    "address": "31431 Rancho Viejo Rd, Ste 101, San Juan Capistrano, CA 92675"
+  },
+  {
+    "name": "Benjies deli",
+    "location": "Tustin",
+    "cuisine": "deli",
+    "reason": "found",
+    "address": "1828 N Tustin Ave, Santa Ana, CA 92705"
+  },
+  {
+    "name": "Roman Cucina",
+    "location": "Laguna Hills",
+    "cuisine": "Italian",
+    "reason": "found",
+    "address": "25214 Cabot Rd, Laguna Hills, CA 92653"
+  },
+  {
+    "name": "Angelo an Vinci's",
+    "location": "DTF",
+    "cuisine": "Italian",
+    "reason": "permanently_closed",
+    "address": "550 N Harbor Blvd, Fullerton, CA 92832"
+  },
+  {
+    "name": "Vinnys Italian",
+    "location": "La Habra",
+    "cuisine": "Italian",
+    "reason": "found",
+    "address": "2101 E Lambert Rd, La Habra, CA 90631"
+  },
+  {
+    "name": "Avila's El Ranchito",
+    "location": "Orange downtown",
+    "cuisine": "Mexican",
+    "reason": "found",
+    "address": "182 S Orange St, Orange, CA 92866"
+  },
+  {
+    "name": "The Hair of the Dog",
+    "location": "Garden Grove",
+    "cuisine": "Bar",
+    "reason": "not_found",
+    "address": null
+  },
+  {
+    "name": "Matty's Patty's",
+    "location": "Costa Mesa",
+    "cuisine": "Burgers",
+    "reason": "found",
+    "address": "1734 Newport Blvd, Costa Mesa, CA 92627"
+  },
+  {
+    "name": "Sake 2 Me",
+    "location": "Newport",
+    "cuisine": "Sushi",
+    "reason": "found",
+    "address": "14071 Newport Ave, Ste 91, Tustin, CA 92780"
+  },
+  {
+    "name": "Mr. Wok",
+    "location": "Lake Forest",
+    "cuisine": "Chinese",
+    "reason": "found",
+    "address": "22421 El Toro Rd, Ste G, Lake Forest, CA 92630"
+  },
+  {
+    "name": "TruBru",
+    "location": "Orange",
+    "cuisine": "Coffee",
+    "reason": "found",
+    "address": "7626 E Chapman Ave, Ste D, Orange, CA 92869"
+  },
+  {
+    "name": "Punjabi Tandoor",
+    "location": "Anaheim",
+    "cuisine": "Indian",
+    "reason": "found",
+    "address": "327 S Anaheim Blvd, Ste A, Anaheim, CA 92805"
+  },
+  {
+    "name": "Mi Rak Korean BBQ",
+    "location": "Fullerton",
+    "cuisine": "Korean",
+    "reason": "found",
+    "address": "1056 S Brookhurst Rd, Fullerton, CA 92833"
+  },
+  {
+    "name": "Hickory & Spice BBQ",
+    "location": "Orange",
+    "cuisine": "American BBQ",
+    "reason": "found",
+    "address": "2143 N Tustin St, Ste 6, Orange, CA 92865"
+  },
+  {
+    "name": "Carolina's",
+    "location": "Garden Grove",
+    "cuisine": "Italian",
+    "reason": "found",
+    "address": "12045 Chapman Ave, Garden Grove, CA 92840"
+  },
+  {
+    "name": "Olive Pit",
+    "location": "Brea",
+    "cuisine": "Mediterranean",
+    "reason": "found",
+    "address": "240 S Brea Blvd, Brea, CA 92821"
+  },
+  {
+    "name": "The Green Olive Mediterranean Cuisine",
+    "location": "Long Beach",
+    "cuisine": "Mediterranean",
+    "reason": "found",
+    "address": "3580 Long Beach Blvd, Long Beach, CA 90807"
+  },
+  {
+    "name": "Super Juicy Dumpling",
+    "location": "Brea",
+    "cuisine": "Chinese",
+    "reason": "found",
+    "address": "2445 E Imperial Hwy, Unit A, Brea, CA 92821"
+  },
+  {
+    "name": "Omeli Kitchen",
+    "location": "Fullerton",
+    "cuisine": "Vietnamese",
+    "reason": "found",
+    "address": "2466 E Chapman Ave, Fullerton, CA 92831"
+  },
+  {
+    "name": "El Maguey Restaurant",
+    "location": "San Juan Capistrano",
+    "cuisine": "Mexican",
+    "reason": "found",
+    "address": "31481 Camino Capistrano, San Juan Capistrano, CA 92675"
+  },
+  {
+    "name": "Truly Pizza",
+    "location": "Dana Point",
+    "cuisine": "Pizza",
+    "reason": "found",
+    "address": "24402 Del Prado, Dana Point, CA 92629"
+  },
+  {
+    "name": "Natraj",
+    "location": "Los Alamitos",
+    "cuisine": "Indian",
+    "reason": "not_found",
+    "address": null
+  }
+]

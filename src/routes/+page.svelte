@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import data from '$lib/data/restaurants.json';
 	import type { Restaurant } from '$lib/types';
 	import { appState, slugify, normalizeCuisine, normalizeCity } from '$lib/stores.svelte';
@@ -26,6 +26,78 @@
 
 	let prevCuisines = $state('');
 	let prevCities = $state('');
+
+	let mapExpanded = $state(false);
+	let appTrapEl = $state<HTMLDivElement | undefined>(undefined);
+	let controlsBarEl = $state<HTMLDivElement | undefined>(undefined);
+	/** Subscribed by mobile-map $effect so resize clears scroll lock when crossing the breakpoint */
+	let viewportWidth = $state(0);
+
+	const MOBILE_MAX_PX = 1023;
+
+	function isMobileViewport() {
+		const w = viewportWidth || (typeof window !== 'undefined' ? window.innerWidth : MOBILE_MAX_PX + 1);
+		return w <= MOBILE_MAX_PX;
+	}
+
+	/** Viewport-space bottom edge of controls + gap; used as `top` for fixed expanded map */
+	function updateMobileMapTopOffsetVar() {
+		if (typeof document === 'undefined' || !controlsBarEl) return;
+		const bottom = Math.ceil(controlsBarEl.getBoundingClientRect().bottom);
+		document.documentElement.style.setProperty('--mobile-map-top-offset', `${bottom + 8}px`);
+	}
+
+	/** Scroll document so controls (search) sit at the top; bypasses `html { scroll-behavior: smooth }` */
+	function snapMobileShellToTop() {
+		if (typeof window === 'undefined') return;
+		const anchor = controlsBarEl ?? appTrapEl;
+		if (!anchor) return;
+		const html = document.documentElement;
+		const prev = html.style.scrollBehavior;
+		html.style.scrollBehavior = 'auto';
+		const y = window.scrollY + anchor.getBoundingClientRect().top;
+		window.scrollTo(0, Math.max(0, y));
+		html.style.scrollBehavior = prev;
+	}
+
+	// Mobile expanded map: snap shell to top, lock page scroll, measure controls for map placement
+	$effect(() => {
+		if (typeof window === 'undefined') return;
+
+		const expanded = mapExpanded;
+		const _vw = viewportWidth;
+		const mobile = isMobileViewport();
+
+		if (!expanded || !mobile) {
+			document.documentElement.classList.remove('mobile-map-expanded-lock');
+			document.documentElement.style.removeProperty('--mobile-map-top-offset');
+			return;
+		}
+
+		let cancelled = false;
+		let ro: ResizeObserver | null = null;
+
+		void tick().then(() => {
+			if (cancelled) return;
+			snapMobileShellToTop();
+			requestAnimationFrame(() => {
+				requestAnimationFrame(() => {
+					if (cancelled) return;
+					updateMobileMapTopOffsetVar();
+					ro = new ResizeObserver(() => updateMobileMapTopOffsetVar());
+					if (controlsBarEl) ro.observe(controlsBarEl);
+					document.documentElement.classList.add('mobile-map-expanded-lock');
+				});
+			});
+		});
+
+		return () => {
+			cancelled = true;
+			ro?.disconnect();
+			document.documentElement.classList.remove('mobile-map-expanded-lock');
+			document.documentElement.style.removeProperty('--mobile-map-top-offset');
+		};
+	});
 
 	let filteredRestaurants = $derived.by(() => {
 		let result = allRestaurants;
@@ -66,6 +138,15 @@
 				appState.fitBoundsTarget = allRestaurants;
 			}
 		}
+	});
+
+	onMount(() => {
+		viewportWidth = window.innerWidth;
+		const onResize = () => {
+			viewportWidth = window.innerWidth;
+		};
+		window.addEventListener('resize', onResize, { passive: true });
+		return () => window.removeEventListener('resize', onResize);
 	});
 
 	// Sync URL params -> state on mount
@@ -137,18 +218,61 @@
 	<link rel="dns-prefetch" href="https://c.tile.openstreetmap.org" />
 </svelte:head>
 
-<Hero />
-<SearchBar restaurants={allRestaurants} {cuisineNames} {cityNames} />
-<FilterBar restaurants={allRestaurants} />
+<section class="hero-section">
+	<Hero />
+</section>
 
-<main class="split-view" aria-label="Restaurant map and list">
-	<div class="map-side">
-		<Map restaurants={filteredRestaurants} />
+<div class="app-trap" bind:this={appTrapEl}>
+	<div class="controls-bar" bind:this={controlsBarEl}>
+		<SearchBar restaurants={allRestaurants} {cuisineNames} {cityNames} />
+		<FilterBar restaurants={allRestaurants} />
 	</div>
-	<div class="list-side">
-		<RestaurantList restaurants={filteredRestaurants} />
+	<div class="content-area">
+		<div
+			class="map-pane"
+			class:portal-expanded={mapExpanded}
+			onpointerdown={() => {
+				if (mapExpanded) return;
+				if (typeof window !== 'undefined' && window.innerWidth <= MOBILE_MAX_PX) {
+					snapMobileShellToTop();
+				}
+				mapExpanded = true;
+			}}
+			onkeydown={(e) => {
+				if (mapExpanded) return;
+				if (e.key !== 'Enter' && e.key !== ' ') return;
+				e.preventDefault();
+				if (typeof window !== 'undefined' && window.innerWidth <= MOBILE_MAX_PX) {
+					snapMobileShellToTop();
+				}
+				mapExpanded = true;
+			}}
+			role="button"
+			tabindex="0"
+		>
+			{#if mapExpanded}
+				<div
+					class="portal-backdrop"
+					onclick={() => (mapExpanded = false)}
+					role="presentation"
+				></div>
+			{/if}
+			<div class="map-interactive-layer">
+				<Map restaurants={filteredRestaurants} {mapExpanded} />
+			</div>
+			{#if mapExpanded}
+				<button
+					class="map-close-btn"
+					onclick={(e) => { e.stopPropagation(); mapExpanded = false; }}
+					aria-label="Close map"
+				>&times;</button>
+			{/if}
+		</div>
+		<div class="list-pane">
+			<RestaurantList restaurants={filteredRestaurants} />
+		</div>
 	</div>
-</main>
+</div>
 
 <BackToTop />
 
@@ -177,49 +301,259 @@
 		outline-offset: 2px;
 	}
 
-	.split-view {
+	/* Hero parallax fade — CSS scroll-driven, no JS */
+	@supports (animation-timeline: scroll()) {
+		.hero-section {
+			animation: hero-fade linear both;
+			animation-timeline: scroll(root);
+			animation-range: 0 80%;
+		}
+	}
+
+	@keyframes hero-fade {
+		from {
+			opacity: 1;
+			transform: translateY(0);
+		}
+		to {
+			opacity: 0;
+			transform: translateY(-24px);
+		}
+	}
+
+	/* Sticky trap — locks to top once hero scrolls past */
+	.app-trap {
+		position: sticky;
+		top: 0;
+		height: 100dvh;
 		display: flex;
-		height: calc(100vh - 220px);
-		min-height: 500px;
-		padding: 0.5rem;
-		gap: 0.5rem;
-		max-width: 1400px;
-		margin: 0 auto 40vh;
+		flex-direction: column;
+		background: #fff;
+		z-index: 1100;
 	}
 
-	.map-side {
-		flex: 1;
-		min-width: 0;
+	/* Controls bar — no overflow set so dropdowns escape freely into the viewport */
+	.controls-bar {
+		flex-shrink: 0;
+		position: relative;
+		z-index: 1200; /* above map portal (1050) and backdrop (1040) */
 	}
 
-	.list-side {
+	/* Content area clips its children (map + list) but NOT the controls-bar sibling */
+	.content-area {
 		flex: 1;
-		min-width: 0;
-		border: 1px solid #e8e0d6;
-		border-radius: 10px;
+		display: flex;
+		min-height: 0;
+		position: relative;
+		isolation: isolate;
 		overflow: hidden;
-		background: #fffcf8;
-		box-shadow: 0 1px 4px rgba(62, 44, 35, 0.06);
 	}
 
-	@media (max-width: 768px) {
-		.split-view {
-			flex-direction: column;
-			height: auto;
-			padding: 0.25rem;
-			gap: 0.25rem;
+	/* ── Desktop: CSS :has() hover morph (≥ 1024px) ─────────────────────── */
+	@media (min-width: 1024px) {
+		:global(html) {
+			height: 100%;
+			overflow: hidden;
 		}
 
-		.map-side {
-			height: 200px;
-			min-height: 200px;
+		:global(body) {
+			height: 100%;
+			display: flex;
+			flex-direction: column;
+			overflow: hidden;
+		}
+
+		.hero-section {
 			flex-shrink: 0;
 		}
 
-		.list-side {
+		.app-trap {
+			position: relative;
+			top: auto;
 			height: auto;
-			border: none;
+			min-height: 0;
+			flex: 1;
+			overflow: hidden;
+		}
+
+		.controls-bar {
 			overflow: visible;
+		}
+
+		.content-area {
+			align-items: stretch;
+		}
+
+		.map-pane {
+			flex-basis: 25%;
+			flex-shrink: 0;
+			display: flex;
+			flex-direction: column;
+			position: relative;
+			z-index: 0;
+			overflow: hidden;
+			height: 100%;
+			min-height: 0;
+			min-width: 0;
+			transition: flex-basis 0.4s ease;
+		}
+
+		.list-pane {
+			flex: 1;
+			height: 100%;
+			min-width: 0;
+			position: relative;
+			z-index: 2;
+			isolation: isolate;
+			margin-left: -48px; /* overlap the map — gives a layered depth effect */
+			box-shadow: -8px 0 32px rgba(0, 0, 0, 0.18);
+			overflow: hidden;
+			overscroll-behavior: contain;
+			background: #fff;
+			border-radius: 12px 0 0 0;
+			transition: flex-basis 0.4s ease, margin-left 0.4s ease, box-shadow 0.4s ease;
+		}
+
+		/* Hover: map expands to 1/3, list retreats, layered depth collapses to flat */
+		.content-area:has(.map-pane:hover) .map-pane {
+			flex-basis: 33.33%;
+		}
+
+		.content-area:has(.map-pane:hover) .list-pane {
+			flex-basis: 66.67%;
+			margin-left: 0;
+			box-shadow: none;
+		}
+
+		.map-interactive-layer {
+			flex: 1;
+			min-height: 0;
+			display: flex;
+			flex-direction: column;
+			position: relative;
+			z-index: 0;
+		}
+	}
+
+	/* ── Mobile: map-pane IS the circular FAB portal (< 1024px) ─────────── */
+	@media (max-width: 1023px) {
+		:global(html.mobile-map-expanded-lock),
+		:global(html.mobile-map-expanded-lock body) {
+			overflow: hidden;
+			height: 100%;
+		}
+
+		.map-pane {
+			position: fixed;
+			bottom: max(20px, env(safe-area-inset-bottom, 0px));
+			right: max(16px, env(safe-area-inset-right, 0px));
+			width: clamp(88px, 22vw, 120px);
+			height: clamp(88px, 22vw, 120px);
+			border-radius: 50%;
+			border: 4px solid white;
+			box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+			z-index: 1300;
+			cursor: pointer;
+			overflow: hidden;
+			/* Omit `top` so expanded `top: var(--mobile-map-top-offset)` applies immediately (no FAB→sheet tween) */
+			transition:
+				width 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+				height 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+				bottom 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+				right 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+				left 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+				border-radius 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+				box-shadow 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+		}
+
+		.map-pane.portal-expanded {
+			top: var(--mobile-map-top-offset, 160px);
+			left: max(16px, env(safe-area-inset-left, 0px));
+			right: max(16px, env(safe-area-inset-right, 0px));
+			bottom: max(16px, env(safe-area-inset-bottom, 0px));
+			width: auto;
+			height: auto;
+			border-radius: 16px;
+			cursor: default;
+			z-index: 1400;
+		}
+
+		.list-pane {
+			width: 100%;
+			overflow-y: auto;
+			overscroll-behavior: contain;
+		}
+
+		/* Block manual scroll / interaction on the list while the map sheet is open */
+		.app-trap:has(.map-pane.portal-expanded) .list-pane {
+			overflow: hidden !important;
+			overscroll-behavior: none;
+			touch-action: none;
+			pointer-events: none;
+		}
+
+		.app-trap:has(.map-pane.portal-expanded) .list-pane :global(.list-scroll) {
+			overflow: hidden !important;
+			overscroll-behavior: none;
+			touch-action: none;
+		}
+
+		/* Lives inside .map-pane so it stacks under the map (sibling .app-trap was 1100, so a
+		   global-sibling backdrop at 1110 painted over the entire trap including the map). */
+		.portal-backdrop {
+			position: absolute;
+			inset: 0;
+			z-index: 0;
+			background: rgba(0, 0, 0, 0.4);
+			backdrop-filter: blur(4px);
+			-webkit-backdrop-filter: blur(4px);
+		}
+
+		.map-interactive-layer {
+			position: absolute;
+			inset: 0;
+			z-index: 1;
+			min-height: 0;
+			display: flex;
+			flex-direction: column;
+		}
+
+		.map-close-btn {
+			position: absolute;
+			top: 12px;
+			right: 12px;
+			width: 36px;
+			height: 36px;
+			border-radius: 50%;
+			border: none;
+			background: rgba(255, 255, 255, 0.92);
+			font-size: 1.4rem;
+			line-height: 1;
+			cursor: pointer;
+			z-index: 2;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+		}
+
+		/* Expanded map sits below controls; keep shell overflow visible for dropdowns */
+		.app-trap:has(.map-pane.portal-expanded) {
+			overflow: visible;
+		}
+		.app-trap:has(.map-pane.portal-expanded) .content-area {
+			overflow: visible;
+		}
+	}
+
+	/* Hide mobile-only elements on desktop */
+	@media (min-width: 1024px) {
+		.map-close-btn {
+			display: none;
+		}
+
+		.portal-backdrop {
+			display: none;
 		}
 	}
 </style>
