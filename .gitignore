@@ -1,4 +1,6 @@
 node_modules
+.claude/worktrees/
+__oc-food-recs-reddit-thread-01-parsed/
 
 # Output
 .output
@@ -7,6 +9,8 @@ node_modules
 .wrangler
 /.svelte-kit
 /build
+/playwright-report
+/test-results
 
 # OS
 .DS_Store

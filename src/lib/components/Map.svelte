@@ -5,9 +5,10 @@
 
 	interface Props {
 		restaurants: Restaurant[];
+		mapExpanded: boolean;
 	}
 
-	let { restaurants }: Props = $props();
+	let { restaurants, mapExpanded = false }: Props = $props();
 
 	let mapContainer: HTMLDivElement | undefined = $state();
 	let leafletMap: any = $state();
@@ -49,7 +50,7 @@
 		leafletMap = L.map(mapContainer).setView([33.7, -117.8], 10);
 
 		// Disable scroll-wheel zoom on mobile to prevent scroll trapping
-		if (window.innerWidth <= 768) {
+		if (window.innerWidth <= 1023) {
 			leafletMap.scrollWheelZoom.disable();
 		}
 
@@ -67,7 +68,7 @@
 		if (!mapContainer) return;
 
 		// On mobile, defer map init until visible; on desktop, init immediately
-		if (window.innerWidth <= 768) {
+		if (window.innerWidth <= 1023) {
 			const observer = new IntersectionObserver(
 				(entries) => {
 					if (entries[0].isIntersecting) {
@@ -152,14 +153,26 @@
 		}
 	});
 
+	// Invalidate map size when portal expands/collapses
+	$effect(() => {
+		const _ = mapExpanded; // reactive tracking
+		if (leafletMap) {
+			setTimeout(() => leafletMap.invalidateSize(true), 50);
+			setTimeout(() => leafletMap.invalidateSize(true), 450); // after transition ends
+		}
+	});
+
 	function scrollToRestaurant(r: Restaurant) {
 		appState.selectedRestaurantSlug = slugify(r.name);
 		appState.listScrollTarget = r;
 	}
 </script>
 
-<div class="map-panel">
+<div class="map-panel" class:map-leaflet-chrome-hidden-mobile={!mapExpanded}>
 	<div class="map-container" bind:this={mapContainer} role="application" aria-label="Map of restaurants in Orange County"></div>
+	{#if !mapExpanded}
+		<div class="map-click-blocker" aria-hidden="true"></div>
+	{/if}
 
 	{#if unmappedRestaurants.length > 0}
 		<button class="unmapped-toggle" onclick={() => (showUnmapped = !showUnmapped)} aria-expanded={showUnmapped}>
@@ -185,14 +198,31 @@
 		display: flex;
 		flex-direction: column;
 		height: 100%;
-		min-height: 400px;
+		min-height: 0;
+		position: relative;
+		overflow: hidden;
 	}
 
 	.map-container {
-		flex: 1;
-		min-height: 350px;
+		flex: 1 1 auto;
+		min-height: 0;
 		border-radius: 8px;
 		overflow: hidden;
+	}
+
+	/* Transparent overlay that sits above Leaflet panes to intercept
+	   the expand tap before Leaflet's own click handlers fire */
+	.map-click-blocker {
+		position: absolute;
+		inset: 0;
+		z-index: 500; /* above Leaflet panes (~400) */
+		cursor: pointer;
+	}
+
+	@media (min-width: 1024px) {
+		.map-click-blocker {
+			display: none;
+		}
 	}
 
 	.unmapped-toggle {
@@ -200,6 +230,7 @@
 		align-items: center;
 		justify-content: space-between;
 		width: 100%;
+		flex-shrink: 0;
 		padding: 0.5rem 0.75rem;
 		border: none;
 		background: #f0ebe3;
@@ -225,6 +256,7 @@
 	}
 
 	.unmapped-list {
+		flex-shrink: 0;
 		max-height: 200px;
 		overflow-y: auto;
 		border: 1px solid #e8e0d6;
@@ -260,16 +292,25 @@
 		font-size: 0.78rem;
 	}
 
-	@media (max-width: 768px) {
+	@media (max-width: 1023px) {
+		/* Minimized mobile FAB: hide Leaflet zoom + attribution; expanded removes this class */
+		.map-panel.map-leaflet-chrome-hidden-mobile :global(.leaflet-control-container),
+		.map-panel.map-leaflet-chrome-hidden-mobile :global(.leaflet-control-attribution) {
+			display: none !important;
+		}
+
 		.map-panel {
-			min-height: unset;
-			height: 200px;
+			min-height: 0;
+			overflow: visible;
+			width: 100%;
+			height: 100%;
 		}
 
 		.map-container {
-			min-height: unset;
-			height: 200px;
-			flex: none;
+			width: 100%;
+			min-height: 0;
+			height: 100%;
+			flex: 1;
 		}
 
 		.unmapped-toggle {
@@ -278,6 +319,12 @@
 
 		.unmapped-list {
 			display: none;
+		}
+	}
+
+	@media (min-width: 1024px) {
+		.unmapped-list {
+			max-height: min(240px, 35%);
 		}
 	}
 </style>

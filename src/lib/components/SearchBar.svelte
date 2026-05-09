@@ -166,8 +166,7 @@
 
 <style>
 	.search-container {
-		position: sticky;
-		top: 0;
+		position: relative;
 		z-index: 1100;
 		background: #fffcf8;
 		padding: 0.75rem 1rem;
