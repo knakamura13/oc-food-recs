@@ -222,7 +222,7 @@ class RedditPipelineTest(unittest.TestCase):
                             "model_used": "stub",
                             "geocoded_count": 2,
                             "unmapped_count": 0,
-                            "endorsement_types_kept": [
+                            "kept_endorsement_types": [
                                 "personal_story",
                                 "endorsement",
                                 "dish_rec",
@@ -278,7 +278,7 @@ class RedditPipelineTest(unittest.TestCase):
                             "model_used": "stub",
                             "geocoded_count": 2,
                             "unmapped_count": 0,
-                            "endorsement_types_kept": [
+                            "kept_endorsement_types": [
                                 "personal_story",
                                 "endorsement",
                                 "dish_rec",
