@@ -45,7 +45,7 @@ export interface RestaurantData {
 		total_comments_processed: number;
 		model_used: string;
 		generated_at: string;
-		endorsement_types_kept: Endorsement['type'][];
+		kept_endorsement_types: Endorsement['type'][];
 		geocoded_count: number;
 		unmapped_count: number;
 	};
