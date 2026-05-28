@@ -114,10 +114,20 @@ def main() -> int:
     mentions_inserted = 0
     ambiguous_attributions = 0
 
+    # The JSON's meta.source_threads has the comment counts that match what's been
+    # published to the live site (e.g. 735 + 202 = 937 total). The on-disk manifests
+    # carry stale counts from a later partial re-fetch. Prefer the JSON values here.
+    published_counts: dict[str, int] = {
+        thread["id"]: thread.get("comment_count", 0)
+        for thread in dataset.get("meta", {}).get("source_threads", [])
+    }
+
     with psycopg.connect(database_url, row_factory=dict_row) as conn:
         with conn.cursor() as cur:
-            # 1. Threads — upsert from manifests
+            # 1. Threads — upsert from manifests, overriding comment_count with the
+            #    published value when available.
             for thread_id, manifest in manifests.items():
+                comment_count = published_counts.get(thread_id, manifest.get("comment_count", 0))
                 cur.execute(
                     """
                     INSERT INTO threads (id, subreddit, post_id, url, title, comment_count, max_depth, included_in_publish)
@@ -137,7 +147,7 @@ def main() -> int:
                         manifest["post_id"],
                         manifest["url"],
                         manifest["title"],
-                        manifest.get("comment_count", 0),
+                        comment_count,
                         manifest.get("max_depth", 0),
                         manifest.get("include_in_publish", True),
                     ),
@@ -190,7 +200,7 @@ def main() -> int:
                     """
                     INSERT INTO mentions (restaurant_id, thread_id, comment_id, permalink, author, body, score, role, classification)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, 'primary', NULL)
-                    ON CONFLICT (thread_id, comment_id) DO UPDATE SET
+                    ON CONFLICT (thread_id, comment_id, restaurant_id) DO UPDATE SET
                         restaurant_id = EXCLUDED.restaurant_id,
                         permalink = EXCLUDED.permalink,
                         author = EXCLUDED.author,
@@ -227,7 +237,7 @@ def main() -> int:
                         """
                         INSERT INTO mentions (restaurant_id, thread_id, comment_id, permalink, author, body, score, role, classification)
                         VALUES (%s, %s, %s, NULL, %s, %s, %s, 'endorsement', %s)
-                        ON CONFLICT (thread_id, comment_id) DO UPDATE SET
+                        ON CONFLICT (thread_id, comment_id, restaurant_id) DO UPDATE SET
                             restaurant_id = EXCLUDED.restaurant_id,
                             author = EXCLUDED.author,
                             body = EXCLUDED.body,
