@@ -37,13 +37,13 @@
 		</p>
 		<div class="source-list">
 			{#each meta.source_threads as thread}
-				<a href={thread.url} target="_blank" rel="noopener">
+				<a href={thread.url} target="_blank" rel="noopener noreferrer">
 					{thread.title}
 				</a>
 			{/each}
 		</div>
 	</div>
-	<p class="attribution">Built with SvelteKit, hosted on <a href="https://railway.com?referralCode=QCz9lp" target="_blank" rel="noopener">Railway</a></p>
+	<p class="attribution">Built with SvelteKit, hosted on <a href="https://railway.com?referralCode=QCz9lp" target="_blank" rel="noopener noreferrer">Railway</a></p>
 </section>
 
 <style>
