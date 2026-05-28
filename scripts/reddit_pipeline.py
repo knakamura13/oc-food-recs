@@ -972,7 +972,7 @@ def build_thread_dataset(
             "total_restaurants": len(restaurants),
             "total_comments_processed": len(comments),
             "model_used": OLLAMA_MODEL,
-            "endorsement_types_kept": sorted(ENDORSEMENT_TYPES),
+            "kept_endorsement_types": sorted(ENDORSEMENT_TYPES),
         },
     }
 
@@ -1198,7 +1198,7 @@ def publish_threads(
         if model_name and model_name not in models_used:
             models_used.append(model_name)
 
-        for endorsement_type in meta.get("endorsement_types_kept", []):
+        for endorsement_type in meta.get("kept_endorsement_types", []):
             endorsement_types.add(endorsement_type)
 
         source_threads.append(
@@ -1247,7 +1247,7 @@ def publish_threads(
             "total_comments_processed": total_comments_processed,
             "model_used": ", ".join(models_used),
             "generated_at": current_timestamp(),
-            "endorsement_types_kept": sorted(endorsement_types),
+            "kept_endorsement_types": sorted(endorsement_types),
             "geocoded_count": geocoded_count,
             "unmapped_count": len(restaurants) - geocoded_count,
         },
