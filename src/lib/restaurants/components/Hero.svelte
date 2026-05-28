@@ -1,23 +1,48 @@
 <script lang="ts">
+	import type { RestaurantData } from '$lib/restaurants/types';
+
+	interface Props {
+		meta: RestaurantData['meta'];
+	}
+
+	let { meta }: Props = $props();
 	let expanded = $state(false);
+
+	let threadCount = $derived(meta.source_threads.length);
+	let totalCommentsLabel = $derived(meta.total_comments_processed.toLocaleString());
 </script>
 
 <section class="hero">
 	<h1>Best Mom & Pop Restaurants in Orange County</h1>
 	<p class="summary">
-		In April 2026, someone asked r/orangecounty: <em>"What's your favorite mom and pop family owned restaurant?"</em>
-		— and 735 people answered.
+		{#if threadCount === 1}
+			This interactive explorer is built from one Reddit thread and {totalCommentsLabel} community comments.
+		{:else}
+			This interactive explorer pulls together {threadCount} Reddit threads and {totalCommentsLabel} community comments.
+		{/if}
 		<span class="full-text" class:visible={expanded}>
-			This site is an interactive explorer built from that thread.
-			Every restaurant, upvote, and endorsement below comes directly from the community.
+			Every restaurant, upvote, and endorsement below comes directly from r/orangecounty.
 		</span>
 		<button class="read-more" class:hidden={expanded} onclick={() => (expanded = true)} aria-expanded={expanded}>
 			More&hellip;
 		</button>
 	</p>
-	<a href="https://www.reddit.com/r/orangecounty/comments/1sb0qo7/" target="_blank" rel="noopener">
-		View the original Reddit thread &rarr;
-	</a>
+	<div class="sources">
+		<p class="sources-label">
+			{#if threadCount === 1}
+				Source thread
+			{:else}
+				Source Reddit threads
+			{/if}
+		</p>
+		<div class="source-list">
+			{#each meta.source_threads as thread}
+				<a href={thread.url} target="_blank" rel="noopener">
+					{thread.title}
+				</a>
+			{/each}
+		</div>
+	</div>
 	<p class="attribution">Built with SvelteKit, hosted on <a href="https://railway.com?referralCode=QCz9lp" target="_blank" rel="noopener">Railway</a></p>
 </section>
 
@@ -44,6 +69,25 @@
 		color: #7a6e63;
 		line-height: 1.6;
 		margin: 0 0 0.5rem;
+	}
+
+	.sources {
+		margin: 0.5rem 0 0;
+	}
+
+	.sources-label {
+		font-size: 0.8rem;
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		color: #9a8f84;
+		margin-bottom: 0.35rem;
+	}
+
+	.source-list {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: center;
+		gap: 0.4rem 0.75rem;
 	}
 
 	a {
@@ -102,6 +146,12 @@
 			font-size: 0.82rem;
 			line-height: 1.45;
 			margin: 0 0 0.3rem;
+		}
+
+		.source-list {
+			flex-direction: column;
+			align-items: center;
+			gap: 0.2rem;
 		}
 
 		a {

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import Fuse from 'fuse.js';
-	import type { Restaurant } from '$lib/types';
-	import { appState, slugify, findFilterMatch } from '$lib/stores.svelte';
+	import type { Restaurant } from '$lib/restaurants/types';
+	import { appState, slugify, findFilterMatch } from '$lib/restaurants/stores.svelte';
 
 	interface Props {
 		restaurants: Restaurant[];
@@ -15,12 +15,15 @@
 	let showDropdown = $state(false);
 	let highlightIndex = $state(-1);
 
-	const fuse = new Fuse(restaurants, {
-		keys: ['name', 'cuisine', 'location'],
-		threshold: 0.4,
-		distance: 200,
-		includeScore: true
-	});
+	let fuse = $derived.by(
+		() =>
+			new Fuse(restaurants, {
+				keys: ['name', 'cuisine', 'location'],
+				threshold: 0.4,
+				distance: 200,
+				includeScore: true
+			})
+	);
 
 	let results = $derived.by(() => {
 		if (!appState.searchQuery.trim()) return [];

@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { tick } from 'svelte';
 	import { slide } from 'svelte/transition';
-	import type { Restaurant, SortKey } from '$lib/types';
-	import { appState, slugify, normalizeCuisine } from '$lib/stores.svelte';
+	import type { Restaurant } from '$lib/restaurants/types';
+	import { appState, slugify, normalizeCuisine } from '$lib/restaurants/stores.svelte';
 
 	interface Props {
 		restaurants: Restaurant[];
@@ -183,10 +183,10 @@
 								<span class="comment-author">u/{restaurant.primary_comment.author}</span>
 								<span class="comment-score">
 									{restaurant.primary_comment.score} points
-									<span class="info-tip" tabindex="0" aria-label="Score info">
+									<button type="button" class="info-tip" aria-label="Score info">
 										<span class="info-icon" aria-hidden="true">i</span>
 										<span class="info-tooltip" role="tooltip">Total Reddit upvotes across all comments that recommended this restaurant.</span>
-									</span>
+									</button>
 								</span>
 							</div>
 							<p class="comment-body">{restaurant.primary_comment.body}</p>
@@ -433,6 +433,9 @@
 		align-items: center;
 		margin-left: 2px;
 		vertical-align: middle;
+		padding: 0;
+		border: 0;
+		background: transparent;
 	}
 
 	.info-icon {

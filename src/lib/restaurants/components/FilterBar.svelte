@@ -1,6 +1,6 @@
 <script lang="ts">
-	import type { Restaurant } from '$lib/types';
-	import { appState, normalizeCuisine, normalizeCity } from '$lib/stores.svelte';
+	import type { Restaurant } from '$lib/restaurants/types';
+	import { appState, normalizeCuisine, normalizeCity } from '$lib/restaurants/stores.svelte';
 
 	interface Props {
 		restaurants: Restaurant[];
