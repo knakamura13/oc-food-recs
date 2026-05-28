@@ -2,7 +2,7 @@
 	import { tick } from 'svelte';
 	import { slide } from 'svelte/transition';
 	import type { Restaurant } from '$lib/restaurants/types';
-	import { appState, slugify, normalizeCuisine } from '$lib/restaurants/stores.svelte';
+	import { appState, normalizeCuisine } from '$lib/restaurants/stores.svelte';
 
 	interface Props {
 		restaurants: Restaurant[];
@@ -75,7 +75,7 @@
 	$effect(() => {
 		const target = appState.listScrollTarget;
 		if (target) {
-			const slug = slugify(target.name);
+			const slug = target.slug;
 			appState.selectedRestaurantSlug = slug;
 			appState.listScrollTarget = null;
 			tick().then(() => {
@@ -86,7 +86,7 @@
 	});
 
 	function toggleRow(restaurant: Restaurant) {
-		const slug = slugify(restaurant.name);
+		const slug = restaurant.slug;
 		if (appState.selectedRestaurantSlug === slug) {
 			appState.selectedRestaurantSlug = null;
 		} else {
@@ -150,8 +150,8 @@
 				<p class="empty-hint">Try adjusting your filters or search terms</p>
 			</div>
 		{/if}
-		{#each sorted as restaurant (restaurant.name)}
-			{@const slug = slugify(restaurant.name)}
+		{#each sorted as restaurant (restaurant.slug)}
+			{@const slug = restaurant.slug}
 			{@const isOpen = appState.selectedRestaurantSlug === slug}
 			{@const groups = groupEndorsements(restaurant)}
 

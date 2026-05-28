@@ -2,7 +2,7 @@
 	import { onMount, tick } from 'svelte';
 	import { restaurantDataSet } from '$lib/restaurants/data';
 	import type { Restaurant } from '$lib/restaurants/types';
-	import { appState, slugify, normalizeCuisine, normalizeCity } from '$lib/restaurants/stores.svelte';
+	import { appState, normalizeCuisine, normalizeCity } from '$lib/restaurants/stores.svelte';
 	import Hero from '$lib/restaurants/components/Hero.svelte';
 	import SearchBar from '$lib/restaurants/components/SearchBar.svelte';
 	import FilterBar from '$lib/restaurants/components/FilterBar.svelte';
@@ -175,7 +175,7 @@
 		const restaurant = params.get('restaurant');
 		if (restaurant) {
 			appState.selectedRestaurantSlug = restaurant;
-			const match = allRestaurants.find((r) => slugify(r.name) === restaurant);
+			const match = allRestaurants.find((r) => r.slug === restaurant);
 			if (match) {
 				appState.listScrollTarget = match;
 				if (match.lat && match.lng) {

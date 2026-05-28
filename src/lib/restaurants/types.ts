@@ -15,6 +15,7 @@ export interface PrimaryComment {
 
 export interface Restaurant {
 	name: string;
+	slug: string;
 	location: string | null;
 	cuisine: string | null;
 	aggregate_score: number;
