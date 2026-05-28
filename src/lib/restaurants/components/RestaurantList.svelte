@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { tick } from 'svelte';
 	import { slide } from 'svelte/transition';
-	import type { Restaurant } from '$lib/restaurants/types';
+	import type { Mention, Restaurant } from '$lib/restaurants/types';
 	import { appState, normalizeCuisine } from '$lib/restaurants/stores.svelte';
 
 	interface Props {
@@ -110,16 +110,31 @@
 		return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(query);
 	}
 
+	function getPrimaryMention(restaurant: Restaurant): Mention | null {
+		const primaries = restaurant.mentions.filter((m) => m.role === 'primary');
+		if (primaries.length === 0) return null;
+		// Defensive: there should be exactly one per restaurant per thread, but
+		// pick the highest-scored primary if multiple slipped through.
+		return primaries.reduce((best, m) => (m.score > best.score ? m : best), primaries[0]);
+	}
+
 	function groupEndorsements(restaurant: Restaurant) {
 		const groups = {
-			dish_rec: [] as typeof restaurant.endorsements,
-			personal_story: [] as typeof restaurant.endorsements,
-			endorsement: [] as typeof restaurant.endorsements
+			dish_rec: [] as Mention[],
+			personal_story: [] as Mention[],
+			endorsement: [] as Mention[]
 		};
-		for (const e of restaurant.endorsements) {
-			groups[e.type]?.push(e);
+		for (const m of restaurant.mentions) {
+			if (m.role !== 'endorsement') continue;
+			if (m.classification === 'dish_rec') groups.dish_rec.push(m);
+			else if (m.classification === 'personal_story') groups.personal_story.push(m);
+			else if (m.classification === 'endorsement') groups.endorsement.push(m);
 		}
 		return groups;
+	}
+
+	function endorsementCount(restaurant: Restaurant): number {
+		return restaurant.mentions.filter((m) => m.role === 'endorsement').length;
 	}
 </script>
 
@@ -154,6 +169,7 @@
 			{@const slug = restaurant.slug}
 			{@const isOpen = appState.selectedRestaurantSlug === slug}
 			{@const groups = groupEndorsements(restaurant)}
+			{@const primary = getPrimaryMention(restaurant)}
 
 			<div class="row" class:expanded={isOpen} id="restaurant-{slug}">
 				<button class="row-header" onclick={() => toggleRow(restaurant)} aria-expanded={isOpen} aria-controls={isOpen ? `drawer-${slug}` : undefined}>
@@ -170,7 +186,7 @@
 					</div>
 					<div class="row-stats">
 						<span class="stat score">{restaurant.aggregate_score} <small>pts</small></span>
-						<span class="stat">{restaurant.endorsements.length} <small>endorse</small></span>
+						<span class="stat">{endorsementCount(restaurant)} <small>endorse</small></span>
 						<span class="stat">{restaurant.mention_count} <small>mentions</small></span>
 					</div>
 					<span class="chevron" aria-hidden="true" class:open={isOpen}>&rsaquo;</span>
@@ -178,38 +194,52 @@
 
 				{#if isOpen}
 					<div class="drawer" id="drawer-{slug}" role="region" aria-label="{restaurant.name} details" transition:slide={{ duration: 200 }}>
-						<div class="primary-comment">
-							<div class="comment-header">
-								<span class="comment-author">u/{restaurant.primary_comment.author}</span>
-								<span class="comment-score">
-									{restaurant.primary_comment.score} points
-									<button type="button" class="info-tip" aria-label="Score info">
-										<span class="info-icon" aria-hidden="true">i</span>
-										<span class="info-tooltip" role="tooltip">Total Reddit upvotes across all comments that recommended this restaurant.</span>
-									</button>
-								</span>
+						{#if primary}
+							<div class="primary-comment">
+								<div class="comment-header">
+									<span class="comment-author">u/{primary.author}</span>
+									<span class="comment-score">
+										{primary.score} points
+										<button type="button" class="info-tip" aria-label="Score info">
+											<span class="info-icon" aria-hidden="true">i</span>
+											<span class="info-tooltip" role="tooltip">Total Reddit upvotes across all comments that recommended this restaurant.</span>
+										</button>
+									</span>
+								</div>
+								<p class="comment-body">{primary.body}</p>
+								{#if primary.permalink}
+									<a
+										href={primary.permalink}
+										target="_blank"
+										rel="noopener noreferrer"
+										class="permalink"
+									>
+										View on Reddit &rarr;
+									</a>
+								{/if}
 							</div>
-							<p class="comment-body">{restaurant.primary_comment.body}</p>
-							<a
-								href={restaurant.primary_comment.permalink}
-								target="_blank"
-								rel="noopener noreferrer"
-								class="permalink"
-							>
-								View on Reddit &rarr;
-							</a>
-						</div>
+						{/if}
 
 						{#if groups.dish_rec.length > 0}
 							<div class="endorsement-section">
 								<h3>What to Order</h3>
-								{#each groups.dish_rec as e}
+								{#each groups.dish_rec as e (e.comment_id)}
 									<div class="endorsement-card">
 										<div class="endorsement-meta">
 											<span class="endorsement-author">u/{e.author}</span>
 											<span class="endorsement-score">{e.score} pts</span>
 										</div>
 										<p>{e.body}</p>
+										{#if e.permalink}
+											<a
+												href={e.permalink}
+												target="_blank"
+												rel="noopener noreferrer"
+												class="endorsement-permalink"
+											>
+												View comment &rarr;
+											</a>
+										{/if}
 									</div>
 								{/each}
 							</div>
@@ -218,13 +248,23 @@
 						{#if groups.personal_story.length > 0}
 							<div class="endorsement-section">
 								<h3>Community Stories</h3>
-								{#each groups.personal_story as e}
+								{#each groups.personal_story as e (e.comment_id)}
 									<div class="endorsement-card">
 										<div class="endorsement-meta">
 											<span class="endorsement-author">u/{e.author}</span>
 											<span class="endorsement-score">{e.score} pts</span>
 										</div>
 										<p>{e.body}</p>
+										{#if e.permalink}
+											<a
+												href={e.permalink}
+												target="_blank"
+												rel="noopener noreferrer"
+												class="endorsement-permalink"
+											>
+												View comment &rarr;
+											</a>
+										{/if}
 									</div>
 								{/each}
 							</div>
@@ -233,13 +273,23 @@
 						{#if groups.endorsement.length > 0}
 							<div class="endorsement-section">
 								<h3>Community Love</h3>
-								{#each groups.endorsement as e}
+								{#each groups.endorsement as e (e.comment_id)}
 									<div class="endorsement-card">
 										<div class="endorsement-meta">
 											<span class="endorsement-author">u/{e.author}</span>
 											<span class="endorsement-score">{e.score} pts</span>
 										</div>
 										<p>{e.body}</p>
+										{#if e.permalink}
+											<a
+												href={e.permalink}
+												target="_blank"
+												rel="noopener noreferrer"
+												class="endorsement-permalink"
+											>
+												View comment &rarr;
+											</a>
+										{/if}
 									</div>
 								{/each}
 							</div>
@@ -609,6 +659,21 @@
 		line-height: 1.5;
 		color: #3e2c23;
 		margin: 0;
+	}
+
+	.endorsement-permalink {
+		display: inline-block;
+		margin-top: 0.35rem;
+		font-size: 0.72rem;
+		color: #ff4500;
+		text-decoration: underline;
+		text-decoration-thickness: 1px;
+		text-underline-offset: 2px;
+		transition: text-decoration-thickness 0.15s ease;
+	}
+
+	.endorsement-permalink:hover {
+		text-decoration-thickness: 2px;
 	}
 
 	.drawer-actions {

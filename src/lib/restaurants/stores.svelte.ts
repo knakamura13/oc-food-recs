@@ -187,7 +187,8 @@ export const FILTER_SYNONYMS: Record<string, string[]> = {
 };
 
 export function getEngagement(r: Restaurant): number {
-	return r.aggregate_score + r.endorsements.length + r.mention_count;
+	const endorsementCount = r.mentions.filter((m) => m.role === 'endorsement').length;
+	return r.aggregate_score + endorsementCount + r.mention_count;
 }
 
 // Find the best filter match for a search term
