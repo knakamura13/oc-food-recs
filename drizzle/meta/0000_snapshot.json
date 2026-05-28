@@ -1,5 +1,5 @@
 {
-  "id": "6f64540c-c346-4833-82fd-477a2023da6e",
+  "id": "e42d3c57-eb76-4af3-8dbf-3c8280e725ba",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -77,8 +77,8 @@
         }
       },
       "indexes": {
-        "mentions_thread_comment_unique": {
-          "name": "mentions_thread_comment_unique",
+        "mentions_thread_comment_restaurant_unique": {
+          "name": "mentions_thread_comment_restaurant_unique",
           "columns": [
             {
               "expression": "thread_id",
@@ -88,6 +88,12 @@
             },
             {
               "expression": "comment_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "restaurant_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
