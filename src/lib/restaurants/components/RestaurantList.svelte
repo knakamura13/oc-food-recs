@@ -193,7 +193,7 @@
 							<a
 								href={restaurant.primary_comment.permalink}
 								target="_blank"
-								rel="noopener"
+								rel="noopener noreferrer"
 								class="permalink"
 							>
 								View on Reddit &rarr;
@@ -255,7 +255,7 @@
 								class="maps-link"
 								href={googleMapsUrl(restaurant)}
 								target="_blank"
-								rel="noopener"
+								rel="noopener noreferrer"
 								aria-label="Open {restaurant.name} in Google Maps"
 							>
 								<svg class="maps-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
