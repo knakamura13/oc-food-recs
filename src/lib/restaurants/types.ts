@@ -23,16 +23,28 @@ export interface Restaurant {
 	lng: number | null;
 	primary_comment: PrimaryComment;
 	endorsements: Endorsement[];
+	source_threads: string[];
+}
+
+export interface ThreadSummary {
+	id: string;
+	title: string;
+	url: string;
+	subreddit: string;
+	post_id: string;
+	comment_count: number;
+	restaurant_count: number;
 }
 
 export interface RestaurantData {
 	restaurants: Restaurant[];
 	meta: {
-		source_thread: string;
-		source_title: string;
+		source_threads: ThreadSummary[];
 		total_restaurants: number;
 		total_comments_processed: number;
-		extraction_date: string;
+		model_used: string;
+		generated_at: string;
+		endorsement_types_kept: Endorsement['type'][];
 		geocoded_count: number;
 		unmapped_count: number;
 	};

@@ -1,6 +1,7 @@
 node_modules
 .claude/worktrees/
 __oc-food-recs-reddit-thread-01-parsed/
+__pycache__/
 
 # Output
 .output

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import type { Restaurant } from '$lib/types';
-	import { appState, slugify } from '$lib/stores.svelte';
+	import type { Restaurant } from '$lib/restaurants/types';
+	import { appState, slugify } from '$lib/restaurants/stores.svelte';
 
 	interface Props {
 		restaurants: Restaurant[];

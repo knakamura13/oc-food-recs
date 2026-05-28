@@ -1,16 +1,17 @@
 <script lang="ts">
 	import { onMount, tick } from 'svelte';
-	import data from '$lib/data/restaurants.json';
-	import type { Restaurant } from '$lib/types';
-	import { appState, slugify, normalizeCuisine, normalizeCity } from '$lib/stores.svelte';
-	import Hero from '$lib/components/Hero.svelte';
-	import SearchBar from '$lib/components/SearchBar.svelte';
-	import FilterBar from '$lib/components/FilterBar.svelte';
-	import Map from '$lib/components/Map.svelte';
-	import RestaurantList from '$lib/components/RestaurantList.svelte';
+	import { restaurantDataSet } from '$lib/restaurants/data';
+	import type { Restaurant } from '$lib/restaurants/types';
+	import { appState, slugify, normalizeCuisine, normalizeCity } from '$lib/restaurants/stores.svelte';
+	import Hero from '$lib/restaurants/components/Hero.svelte';
+	import SearchBar from '$lib/restaurants/components/SearchBar.svelte';
+	import FilterBar from '$lib/restaurants/components/FilterBar.svelte';
+	import Map from '$lib/restaurants/components/Map.svelte';
+	import RestaurantList from '$lib/restaurants/components/RestaurantList.svelte';
 	import BackToTop from '$lib/components/BackToTop.svelte';
 
-	const allRestaurants: Restaurant[] = data.restaurants as Restaurant[];
+	const allRestaurants: Restaurant[] = restaurantDataSet.restaurants as Restaurant[];
+	const threadCount = restaurantDataSet.meta.source_threads.length;
 
 	// Compute unique cuisine and city names for search matching
 	const cuisineSet = new Set<string>();
@@ -210,7 +211,7 @@
 	<title>Best Mom & Pop Restaurants in Orange County | Reddit Community Picks</title>
 	<meta
 		name="description"
-		content="Explore 289 community-recommended mom and pop restaurants in Orange County, CA — curated from a Reddit thread with 735 responses."
+		content={`Explore ${allRestaurants.length} community-recommended mom and pop restaurants in Orange County, CA — curated from ${threadCount} Reddit ${threadCount === 1 ? 'thread' : 'threads'} and ${restaurantDataSet.meta.total_comments_processed} comments.`}
 	/>
 	<meta name="theme-color" content="#ff4500" />
 	<link rel="dns-prefetch" href="https://a.tile.openstreetmap.org" />
@@ -219,7 +220,7 @@
 </svelte:head>
 
 <section class="hero-section">
-	<Hero />
+	<Hero meta={restaurantDataSet.meta} />
 </section>
 
 <div class="app-trap" bind:this={appTrapEl}>

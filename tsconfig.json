@@ -10,7 +10,8 @@
     "skipLibCheck": true,
     "sourceMap": true,
     "strict": true,
-    "moduleResolution": "bundler"
+    "moduleResolution": "bundler",
+    "types": ["node"]
   },
   "exclude": ["tests/**", "playwright.config.ts"]
   // Path aliases are handled by https://svelte.dev/docs/kit/configuration#alias
