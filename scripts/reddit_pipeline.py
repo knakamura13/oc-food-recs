@@ -19,6 +19,14 @@ from typing import Any, Callable
 
 from bs4 import BeautifulSoup, NavigableString
 
+# psycopg is only required by the `ingest` subcommand. Keep the import optional
+# so the rest of the pipeline (init-thread, fetch-thread, build-thread, publish)
+# continues to work in environments where psycopg isn't installed.
+try:
+    import psycopg  # type: ignore[import-not-found]
+except ImportError:  # pragma: no cover - environment-dependent
+    psycopg = None  # type: ignore[assignment]
+
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA_ROOT = ROOT / "data"
@@ -605,19 +613,10 @@ def current_timestamp() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
 
-def init_thread_from_json(url: str, reddit_json: list[dict[str, Any]], threads_root: Path = THREADS_ROOT) -> Path:
-    parsed_thread = parse_reddit_json(reddit_json)
-    thread_id = thread_folder_name(parsed_thread)
-    thread_dir = threads_root / thread_id
-
-    ensure_directory(thread_dir / "raw")
-    ensure_directory(thread_dir / "processed")
-    ensure_directory(thread_dir / "review")
-
-    write_json(thread_dir / "raw" / "thread.json", reddit_json)
-
-    manifest = {
-        "id": thread_id,
+def manifest_from_parsed_thread(url: str, parsed_thread: dict[str, Any]) -> dict[str, Any]:
+    """Build the manifest dict for a parsed Reddit JSON thread (in-memory, no disk I/O)."""
+    return {
+        "id": thread_folder_name(parsed_thread),
         "subreddit": parsed_thread["post"]["subreddit"],
         "post_id": parsed_thread["post"]["id"],
         "title": parsed_thread["post"]["title"],
@@ -631,6 +630,20 @@ def init_thread_from_json(url: str, reddit_json: list[dict[str, Any]], threads_r
             "source_type": "reddit_json",
         },
     }
+
+
+def init_thread_from_json(url: str, reddit_json: list[dict[str, Any]], threads_root: Path = THREADS_ROOT) -> Path:
+    parsed_thread = parse_reddit_json(reddit_json)
+    thread_id = thread_folder_name(parsed_thread)
+    thread_dir = threads_root / thread_id
+
+    ensure_directory(thread_dir / "raw")
+    ensure_directory(thread_dir / "processed")
+    ensure_directory(thread_dir / "review")
+
+    write_json(thread_dir / "raw" / "thread.json", reddit_json)
+
+    manifest = manifest_from_parsed_thread(url, parsed_thread)
     write_json(thread_dir / "manifest.json", manifest)
     return thread_dir
 
@@ -872,6 +885,8 @@ def collect_endorsements(parent_id: str, children_map: dict[str, list[dict[str, 
         if reply_type in ENDORSEMENT_TYPES:
             endorsements.append(
                 {
+                    "id": child["id"],
+                    "permalink": child.get("permalink", ""),
                     "type": reply_type,
                     "author": child["author"],
                     "body": child["body"],
@@ -1256,6 +1271,295 @@ def publish_threads(
     return published
 
 
+def _load_assign_slugs() -> Callable[[list[dict[str, Any]]], list[tuple[dict[str, Any], str]]]:
+    """Lazily import `assign_slugs` from migrate_json_to_db (same scripts/ dir).
+
+    Lazy + path-injecting so existing subcommands that never call write_to_db
+    don't pay the import cost or break if migrate_json_to_db itself can't load.
+    """
+    scripts_dir = str(Path(__file__).resolve().parent)
+    if scripts_dir not in sys.path:
+        sys.path.insert(0, scripts_dir)
+    from migrate_json_to_db import assign_slugs  # type: ignore[import-not-found]
+    return assign_slugs
+
+
+def write_to_db(
+    parsed_thread: dict[str, Any],
+    restaurants_with_geocodes: list[dict[str, Any]],
+    manifest: dict[str, Any],
+    *,
+    connection_factory: Callable[[str], Any] | None = None,
+) -> dict[str, int]:
+    """Persist a freshly-ingested thread + restaurants + mentions to Postgres.
+
+    Single transaction. Idempotent (upserts by primary key / unique slug /
+    unique (thread_id, comment_id)). Returns counts for the caller.
+
+    `connection_factory` is an injection point for tests; defaults to
+    `psycopg.connect`.
+    """
+    if connection_factory is None:
+        if psycopg is None:
+            raise RuntimeError(
+                "psycopg is not installed. Run: pip install 'psycopg[binary]>=3.2'"
+            )
+        connection_factory = psycopg.connect
+
+    database_url = os.environ.get("DATABASE_URL")
+    if not database_url:
+        raise RuntimeError("DATABASE_URL is not set; cannot write to Postgres")
+
+    assign_slugs = _load_assign_slugs()
+    thread_id = manifest["id"]
+
+    restaurants_inserted = 0
+    mentions_inserted = 0
+
+    with connection_factory(database_url) as conn:
+        with conn.cursor() as cur:
+            # 1. Threads — upsert from manifest
+            cur.execute(
+                """
+                INSERT INTO threads (id, subreddit, post_id, url, title, comment_count, max_depth, included_in_publish)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (id) DO UPDATE SET
+                    subreddit = EXCLUDED.subreddit,
+                    post_id = EXCLUDED.post_id,
+                    url = EXCLUDED.url,
+                    title = EXCLUDED.title,
+                    comment_count = EXCLUDED.comment_count,
+                    max_depth = EXCLUDED.max_depth,
+                    included_in_publish = EXCLUDED.included_in_publish
+                """,
+                (
+                    thread_id,
+                    manifest["subreddit"],
+                    manifest["post_id"],
+                    manifest["url"],
+                    manifest["title"],
+                    manifest.get("comment_count", parsed_thread.get("comment_count", 0)),
+                    manifest.get("max_depth", parsed_thread.get("max_depth", 0)),
+                    manifest.get("include_in_publish", True),
+                ),
+            )
+
+            # 2. Restaurants — assign collision-safe slugs (imported from migrate_json_to_db)
+            for restaurant, slug in assign_slugs(restaurants_with_geocodes):
+                cur.execute(
+                    """
+                    INSERT INTO restaurants (name, slug, location, cuisine, lat, lng)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (slug) DO UPDATE SET
+                        name = EXCLUDED.name,
+                        location = EXCLUDED.location,
+                        cuisine = EXCLUDED.cuisine,
+                        lat = EXCLUDED.lat,
+                        lng = EXCLUDED.lng,
+                        updated_at = now()
+                    RETURNING id
+                    """,
+                    (
+                        restaurant["name"],
+                        slug,
+                        restaurant.get("location"),
+                        restaurant.get("cuisine"),
+                        restaurant.get("lat"),
+                        restaurant.get("lng"),
+                    ),
+                )
+                row = cur.fetchone()
+                if not row:
+                    raise RuntimeError(
+                        f"INSERT did not return a row for {restaurant['name']!r}"
+                    )
+                # `row` may be a tuple (default psycopg cursor) or a dict (dict_row).
+                restaurant_id = row[0] if isinstance(row, (tuple, list)) else row["id"]
+                restaurants_inserted += 1
+
+                # 3. Primary mention — role='primary', classification NULL
+                primary = restaurant["primary_comment"]
+                cur.execute(
+                    """
+                    INSERT INTO mentions (restaurant_id, thread_id, comment_id, permalink, author, body, score, role, classification)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, 'primary', NULL)
+                    ON CONFLICT (thread_id, comment_id, restaurant_id) DO UPDATE SET
+                        restaurant_id = EXCLUDED.restaurant_id,
+                        permalink = EXCLUDED.permalink,
+                        author = EXCLUDED.author,
+                        body = EXCLUDED.body,
+                        score = EXCLUDED.score
+                    """,
+                    (
+                        restaurant_id,
+                        thread_id,
+                        primary["id"],
+                        primary.get("permalink"),
+                        primary["author"],
+                        primary["body"],
+                        primary["score"],
+                    ),
+                )
+                mentions_inserted += 1
+
+                # 4. Endorsements — role='endorsement', classification=<type>
+                # Fresh ingests carry real comment_ids and permalinks (propagated
+                # via collect_endorsements + build_thread_dataset).
+                for endorsement in restaurant.get("endorsements", []):
+                    cur.execute(
+                        """
+                        INSERT INTO mentions (restaurant_id, thread_id, comment_id, permalink, author, body, score, role, classification)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, 'endorsement', %s)
+                        ON CONFLICT (thread_id, comment_id, restaurant_id) DO UPDATE SET
+                            restaurant_id = EXCLUDED.restaurant_id,
+                            permalink = EXCLUDED.permalink,
+                            author = EXCLUDED.author,
+                            body = EXCLUDED.body,
+                            score = EXCLUDED.score,
+                            classification = EXCLUDED.classification
+                        """,
+                        (
+                            restaurant_id,
+                            thread_id,
+                            endorsement["id"],
+                            endorsement.get("permalink"),
+                            endorsement["author"],
+                            endorsement["body"],
+                            endorsement["score"],
+                            endorsement.get("type"),
+                        ),
+                    )
+                    mentions_inserted += 1
+
+        conn.commit()
+
+    print(
+        f"inserted {restaurants_inserted} restaurants, {mentions_inserted} mentions across thread {thread_id}"
+    )
+    return {
+        "restaurants": restaurants_inserted,
+        "mentions": mentions_inserted,
+        "thread_id": thread_id,
+    }
+
+
+def _emit_progress(event: dict[str, Any]) -> None:
+    """Emit a JSON-lines progress event to stdout (consumed by the SSE endpoint)."""
+    print(json.dumps(event), flush=True)
+
+
+def ingest(
+    url: str,
+    *,
+    dry_run: bool = False,
+    extract_entities_fn: Callable[..., Any] = default_extract_entities,
+    geocode_fn: Callable[..., tuple[float | None, float | None, str]] = default_geocode,
+) -> dict[str, Any]:
+    """Fetch -> extract -> geocode -> DB write, in memory, with progress events."""
+    _emit_progress({"stage": "fetch", "progress": 0.0, "message": "fetching thread..."})
+    reddit_json = fetch_all_comments(url)
+    parsed_thread = parse_reddit_json(reddit_json)
+    manifest = manifest_from_parsed_thread(url, parsed_thread)
+    _emit_progress(
+        {
+            "stage": "fetch",
+            "progress": 1.0,
+            "message": f"fetched {parsed_thread['comment_count']} comments",
+            "thread_id": manifest["id"],
+        }
+    )
+
+    comments_flat = flatten_comment_tree(parsed_thread["comments"])
+    roots = [comment for comment in comments_flat if comment["depth"] == 0]
+    total_roots = len(roots) or 1
+
+    entity_records: list[dict[str, Any]] = []
+    for index, root in enumerate(roots, start=1):
+        entities, raw = normalize_extractor_result(
+            extract_entities_fn(root["body"], comment=root, manifest=manifest)
+        )
+        entity_records.append(
+            {
+                "comment_id": root["id"],
+                "entities": entities,
+                "raw": raw,
+            }
+        )
+        _emit_progress(
+            {
+                "stage": "extract",
+                "progress": index / total_roots,
+                "message": f"extracted entities from comment {index}/{total_roots}",
+                "comment_id": root["id"],
+                "entity_count": len(entities),
+            }
+        )
+
+    thread_dataset = build_thread_dataset(parsed_thread, entity_records)
+    restaurants = copy.deepcopy(thread_dataset["restaurants"])
+    total_restaurants = len(restaurants) or 1
+
+    for index, restaurant in enumerate(restaurants, start=1):
+        lat, lng, detail = geocode_fn(restaurant["name"], restaurant.get("location"))
+        restaurant["lat"] = lat
+        restaurant["lng"] = lng
+        _emit_progress(
+            {
+                "stage": "geocode",
+                "progress": index / total_restaurants,
+                "message": f"geocoded {restaurant['name']} ({index}/{total_restaurants})",
+                "name": restaurant["name"],
+                "resolved": lat is not None and lng is not None,
+                "detail": detail,
+            }
+        )
+        if geocode_fn is default_geocode:
+            time.sleep(1.05)
+
+    if dry_run:
+        _emit_progress(
+            {
+                "stage": "write",
+                "progress": 1.0,
+                "message": "dry-run: skipping DB write",
+                "dry_run": True,
+            }
+        )
+        result = {
+            "thread_id": manifest["id"],
+            "restaurants": len(restaurants),
+            "mentions": sum(1 + len(r.get("endorsements", [])) for r in restaurants),
+        }
+    else:
+        _emit_progress(
+            {"stage": "write", "progress": 0.0, "message": "writing to Postgres..."}
+        )
+        result = write_to_db(parsed_thread, restaurants, manifest)
+        _emit_progress(
+            {
+                "stage": "write",
+                "progress": 1.0,
+                "message": "DB write complete",
+                **result,
+            }
+        )
+
+    _emit_progress(
+        {
+            "stage": "done",
+            "thread_id": manifest["id"],
+            "restaurants": result["restaurants"],
+            "mentions": result["mentions"],
+        }
+    )
+    return {
+        "thread_id": manifest["id"],
+        "restaurants": result["restaurants"],
+        "mentions": result["mentions"],
+        "manifest": manifest,
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="OC Food Recs Reddit ingestion pipeline")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -1271,6 +1575,17 @@ def main(argv: list[str] | None = None) -> int:
 
     publish_parser = subparsers.add_parser("publish", help="Merge publishable threads into the app dataset")
     publish_parser.add_argument("--output", type=Path, default=GENERATED_DATA_PATH)
+
+    ingest_parser = subparsers.add_parser(
+        "ingest",
+        help="Fetch a thread from URL and write directly to Postgres",
+    )
+    ingest_parser.add_argument("--url", required=True, type=str)
+    ingest_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Run fetch/extract/geocode and emit progress events but skip the DB write",
+    )
 
     args = parser.parse_args(argv)
 
@@ -1294,6 +1609,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "publish":
         published = publish_threads(output_path=args.output)
         print(json.dumps(published["meta"], indent=2))
+        return 0
+
+    if args.command == "ingest":
+        ingest(args.url, dry_run=args.dry_run)
         return 0
 
     parser.error(f"Unknown command: {args.command}")
