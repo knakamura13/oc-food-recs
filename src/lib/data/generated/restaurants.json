@@ -8746,7 +8746,7 @@
     "total_comments_processed": 937,
     "model_used": "gemma3:12b, gemma4:latest",
     "generated_at": "2026-04-17T06:15:36+00:00",
-    "endorsement_types_kept": [
+    "kept_endorsement_types": [
       "dish_rec",
       "endorsement",
       "personal_story"

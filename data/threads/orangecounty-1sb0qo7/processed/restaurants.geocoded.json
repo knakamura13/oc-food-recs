@@ -6437,7 +6437,7 @@
     "total_comments_processed": 735,
     "model_used": "gemma3:12b",
     "extraction_date": "2026-04-07",
-    "endorsement_types_kept": [
+    "kept_endorsement_types": [
       "personal_story",
       "endorsement",
       "dish_rec"
