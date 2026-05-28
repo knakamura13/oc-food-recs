@@ -8,7 +8,7 @@
 	import FilterBar from '$lib/restaurants/components/FilterBar.svelte';
 	import Map from '$lib/restaurants/components/Map.svelte';
 	import RestaurantList from '$lib/restaurants/components/RestaurantList.svelte';
-	import BackToTop from '$lib/components/BackToTop.svelte';
+	import BackToTop from '$lib/restaurants/components/BackToTop.svelte';
 
 	const allRestaurants: Restaurant[] = restaurantDataSet.restaurants as Restaurant[];
 	const threadCount = restaurantDataSet.meta.source_threads.length;
