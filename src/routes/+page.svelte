@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { onMount, tick } from 'svelte';
-	import { restaurantDataSet } from '$lib/restaurants/data';
 	import type { Restaurant } from '$lib/restaurants/types';
 	import { appState, normalizeCuisine, normalizeCity } from '$lib/restaurants/stores.svelte';
 	import Hero from '$lib/restaurants/components/Hero.svelte';
@@ -9,21 +8,30 @@
 	import Map from '$lib/restaurants/components/Map.svelte';
 	import RestaurantList from '$lib/restaurants/components/RestaurantList.svelte';
 	import BackToTop from '$lib/restaurants/components/BackToTop.svelte';
+	import type { PageData } from './$types';
 
-	const allRestaurants: Restaurant[] = restaurantDataSet.restaurants as Restaurant[];
-	const threadCount = restaurantDataSet.meta.source_threads.length;
+	let { data }: { data: PageData } = $props();
+
+	const allRestaurants: Restaurant[] = $derived(data.dataset.restaurants as Restaurant[]);
+	const threadCount = $derived(data.dataset.meta.source_threads.length);
 
 	// Compute unique cuisine and city names for search matching
-	const cuisineSet = new Set<string>();
-	const citySet = new Set<string>();
-	for (const r of allRestaurants) {
-		const c = normalizeCuisine(r.cuisine);
-		if (c !== 'Unknown' && c !== 'Other') cuisineSet.add(c);
-		const city = normalizeCity(r.location);
-		if (city && city !== 'Other') citySet.add(city);
-	}
-	const cuisineNames = [...cuisineSet].sort();
-	const cityNames = [...citySet].sort();
+	const cuisineNames = $derived.by(() => {
+		const set = new Set<string>();
+		for (const r of allRestaurants) {
+			const c = normalizeCuisine(r.cuisine);
+			if (c !== 'Unknown' && c !== 'Other') set.add(c);
+		}
+		return [...set].sort();
+	});
+	const cityNames = $derived.by(() => {
+		const set = new Set<string>();
+		for (const r of allRestaurants) {
+			const city = normalizeCity(r.location);
+			if (city && city !== 'Other') set.add(city);
+		}
+		return [...set].sort();
+	});
 
 	let prevCuisines = $state('');
 	let prevCities = $state('');
@@ -211,7 +219,7 @@
 	<title>Best Mom & Pop Restaurants in Orange County | Reddit Community Picks</title>
 	<meta
 		name="description"
-		content={`Explore ${allRestaurants.length} community-recommended mom and pop restaurants in Orange County, CA — curated from ${threadCount} Reddit ${threadCount === 1 ? 'thread' : 'threads'} and ${restaurantDataSet.meta.total_comments_processed} comments.`}
+		content={`Explore ${allRestaurants.length} community-recommended mom and pop restaurants in Orange County, CA — curated from ${threadCount} Reddit ${threadCount === 1 ? 'thread' : 'threads'} and ${data.dataset.meta.total_comments_processed} comments.`}
 	/>
 	<meta name="theme-color" content="#ff4500" />
 	<link rel="dns-prefetch" href="https://a.tile.openstreetmap.org" />
@@ -220,7 +228,7 @@
 </svelte:head>
 
 <section class="hero-section">
-	<Hero meta={restaurantDataSet.meta} />
+	<Hero meta={data.dataset.meta} />
 </section>
 
 <div class="app-trap" bind:this={appTrapEl}>
