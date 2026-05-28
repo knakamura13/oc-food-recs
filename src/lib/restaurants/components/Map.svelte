@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import type { Restaurant } from '$lib/types';
-	import { appState, slugify } from '$lib/stores.svelte';
+	import type { Restaurant } from '$lib/restaurants/types';
+	import { appState } from '$lib/restaurants/stores.svelte';
 
 	interface Props {
 		restaurants: Restaurant[];
@@ -24,7 +24,7 @@
 			const r = appState.mapTarget;
 			if (r.lat && r.lng) {
 				leafletMap.setView([r.lat, r.lng], 15, { animate: true });
-				const marker = markers.get(slugify(r.name));
+				const marker = markers.get(r.slug);
 				if (marker) {
 					marker.openPopup();
 				}
@@ -120,11 +120,11 @@
 			);
 
 			marker.on('click', () => {
-				appState.selectedRestaurantSlug = slugify(r.name);
+				appState.selectedRestaurantSlug = r.slug;
 				appState.listScrollTarget = r;
 			});
 
-			markers.set(slugify(r.name), marker);
+			markers.set(r.slug, marker);
 			clusterGroupRef.addLayer(marker);
 		}
 
@@ -163,7 +163,7 @@
 	});
 
 	function scrollToRestaurant(r: Restaurant) {
-		appState.selectedRestaurantSlug = slugify(r.name);
+		appState.selectedRestaurantSlug = r.slug;
 		appState.listScrollTarget = r;
 	}
 </script>
