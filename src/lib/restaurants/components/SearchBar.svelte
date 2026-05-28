@@ -1,7 +1,7 @@
 <script lang="ts">
 	import Fuse from 'fuse.js';
 	import type { Restaurant } from '$lib/restaurants/types';
-	import { appState, slugify, findFilterMatch } from '$lib/restaurants/stores.svelte';
+	import { appState, findFilterMatch } from '$lib/restaurants/stores.svelte';
 
 	interface Props {
 		restaurants: Restaurant[];
@@ -34,7 +34,7 @@
 		appState.searchQuery = restaurant.name;
 		showDropdown = false;
 		highlightIndex = -1;
-		appState.selectedRestaurantSlug = slugify(restaurant.name);
+		appState.selectedRestaurantSlug = restaurant.slug;
 		appState.listScrollTarget = restaurant;
 		if (restaurant.lat && restaurant.lng) {
 			appState.mapTarget = restaurant;
