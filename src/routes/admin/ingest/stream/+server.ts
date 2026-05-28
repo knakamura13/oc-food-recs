@@ -1,13 +1,29 @@
 import type { RequestHandler } from './$types';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { error } from '@sveltejs/kit';
 
-export const GET: RequestHandler = async ({ url }) => {
-	const targetUrl = url.searchParams.get('url');
-	if (!targetUrl || !/^https:\/\/(www\.)?reddit\.com\//.test(targetUrl)) {
-		error(400, 'Missing or invalid Reddit URL');
+/**
+ * Accepts a multipart upload of a saved Reddit thread HTML file, writes it to a
+ * temp path, runs `reddit_pipeline.py ingest --html <file>`, and streams the
+ * pipeline's JSON-lines progress events back as newline-delimited JSON.
+ */
+export const POST: RequestHandler = async ({ request }) => {
+	const formData = await request.formData();
+	const file = formData.get('html');
+	if (!(file instanceof File) || file.size === 0) {
+		error(400, 'Missing HTML file upload (field "html")');
 	}
+
+	// Persist the upload so the Python subprocess can read it from disk.
+	const tmpDir = await mkdtemp(path.join(os.tmpdir(), 'oc-ingest-'));
+	const tmpFile = path.join(tmpDir, 'thread.html');
+	await writeFile(tmpFile, Buffer.from(await file.arrayBuffer()));
+	const cleanup = () => {
+		void rm(tmpDir, { recursive: true, force: true });
+	};
 
 	let proc: ChildProcessWithoutNullStreams | null = null;
 
@@ -18,7 +34,7 @@ export const GET: RequestHandler = async ({ url }) => {
 			const send = (event: object) => {
 				if (closed) return;
 				try {
-					controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+					controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
 				} catch {
 					// controller already closed
 				}
@@ -26,6 +42,7 @@ export const GET: RequestHandler = async ({ url }) => {
 			const closeOnce = () => {
 				if (closed) return;
 				closed = true;
+				cleanup();
 				try {
 					controller.close();
 				} catch {
@@ -33,23 +50,17 @@ export const GET: RequestHandler = async ({ url }) => {
 				}
 			};
 
-			// Resolve repo root from current working directory (where the Node
-			// server was started — this is always the project root in our setup).
+			// The Node server is always started from the project root in our setup.
 			const repoRoot = path.resolve(process.cwd());
-			proc = spawn(
-				'python3',
-				['scripts/reddit_pipeline.py', 'ingest', '--url', targetUrl],
-				{
-					cwd: repoRoot,
-					env: process.env
-				}
-			);
+			proc = spawn('python3', ['scripts/reddit_pipeline.py', 'ingest', '--html', tmpFile], {
+				cwd: repoRoot,
+				env: process.env
+			});
 
 			let stdoutBuffer = '';
 			proc.stdout.on('data', (chunk: Buffer) => {
 				stdoutBuffer += chunk.toString('utf8');
 				const lines = stdoutBuffer.split('\n');
-				// Keep any trailing partial line in the buffer until we see a newline.
 				stdoutBuffer = lines.pop() ?? '';
 				for (const line of lines) {
 					const trimmed = line.trim();
@@ -79,7 +90,6 @@ export const GET: RequestHandler = async ({ url }) => {
 			});
 
 			proc.on('close', (code: number | null) => {
-				// Flush any trailing buffered partial line on close.
 				if (stdoutBuffer.trim()) {
 					const tail = stdoutBuffer.trim();
 					try {
@@ -101,19 +111,18 @@ export const GET: RequestHandler = async ({ url }) => {
 		},
 
 		cancel() {
-			// EventSource was closed by the client — terminate the subprocess so we
-			// don't leak a long-running Python process.
+			// Client aborted — terminate the subprocess and clean up the temp file.
 			if (proc && proc.exitCode === null && !proc.killed) {
 				proc.kill('SIGTERM');
 			}
+			cleanup();
 		}
 	});
 
 	return new Response(stream, {
 		headers: {
-			'content-type': 'text/event-stream',
+			'content-type': 'application/x-ndjson',
 			'cache-control': 'no-store',
-			connection: 'keep-alive',
 			'x-accel-buffering': 'no'
 		}
 	});
