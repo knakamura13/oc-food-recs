@@ -76,7 +76,14 @@ export const mentions = pgTable(
 		createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 	},
 	(table) => ({
-		uniqueComment: uniqueIndex('mentions_thread_comment_unique').on(table.threadId, table.commentId),
+		// A single Reddit comment can mention multiple restaurants ("I love El Farolito AND
+		// Tama Sushi"), so the natural key is (thread, comment, restaurant), not (thread, comment).
+		// In the existing dataset 44 distinct primary comments introduce 137 restaurants between them.
+		uniqueMention: uniqueIndex('mentions_thread_comment_restaurant_unique').on(
+			table.threadId,
+			table.commentId,
+			table.restaurantId
+		),
 		restaurantIdx: index('mentions_restaurant_idx').on(table.restaurantId),
 		threadIdx: index('mentions_thread_idx').on(table.threadId),
 	})

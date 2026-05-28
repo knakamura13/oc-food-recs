@@ -39,6 +39,6 @@ CREATE TABLE "threads" (
 --> statement-breakpoint
 ALTER TABLE "mentions" ADD CONSTRAINT "mentions_restaurant_id_restaurants_id_fk" FOREIGN KEY ("restaurant_id") REFERENCES "public"."restaurants"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "mentions" ADD CONSTRAINT "mentions_thread_id_threads_id_fk" FOREIGN KEY ("thread_id") REFERENCES "public"."threads"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-CREATE UNIQUE INDEX "mentions_thread_comment_unique" ON "mentions" USING btree ("thread_id","comment_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "mentions_thread_comment_restaurant_unique" ON "mentions" USING btree ("thread_id","comment_id","restaurant_id");--> statement-breakpoint
 CREATE INDEX "mentions_restaurant_idx" ON "mentions" USING btree ("restaurant_id");--> statement-breakpoint
 CREATE INDEX "mentions_thread_idx" ON "mentions" USING btree ("thread_id");

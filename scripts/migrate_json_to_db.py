@@ -190,7 +190,7 @@ def main() -> int:
                     """
                     INSERT INTO mentions (restaurant_id, thread_id, comment_id, permalink, author, body, score, role, classification)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, 'primary', NULL)
-                    ON CONFLICT (thread_id, comment_id) DO UPDATE SET
+                    ON CONFLICT (thread_id, comment_id, restaurant_id) DO UPDATE SET
                         restaurant_id = EXCLUDED.restaurant_id,
                         permalink = EXCLUDED.permalink,
                         author = EXCLUDED.author,
@@ -227,7 +227,7 @@ def main() -> int:
                         """
                         INSERT INTO mentions (restaurant_id, thread_id, comment_id, permalink, author, body, score, role, classification)
                         VALUES (%s, %s, %s, NULL, %s, %s, %s, 'endorsement', %s)
-                        ON CONFLICT (thread_id, comment_id) DO UPDATE SET
+                        ON CONFLICT (thread_id, comment_id, restaurant_id) DO UPDATE SET
                             restaurant_id = EXCLUDED.restaurant_id,
                             author = EXCLUDED.author,
                             body = EXCLUDED.body,
