@@ -7,8 +7,11 @@ import { error } from '@sveltejs/kit';
 
 /**
  * Accepts a multipart upload of a saved Reddit thread HTML file, writes it to a
- * temp path, runs `reddit_pipeline.py ingest --html <file>`, and streams the
- * pipeline's JSON-lines progress events back as newline-delimited JSON.
+ * temp path, runs `reddit_pipeline.py ingest --html <file> --no-archive`, and
+ * streams the pipeline's JSON-lines progress events back as newline-delimited
+ * JSON. We pass --no-archive because this route owns the temp file's lifecycle
+ * (it cleans up its own tmp dir) and the upload has no canonical
+ * {subreddit}-{thread_id}.html name to archive under.
  */
 export const POST: RequestHandler = async ({ request }) => {
 	const formData = await request.formData();
@@ -52,10 +55,14 @@ export const POST: RequestHandler = async ({ request }) => {
 
 			// The Node server is always started from the project root in our setup.
 			const repoRoot = path.resolve(process.cwd());
-			proc = spawn('python3', ['scripts/reddit_pipeline.py', 'ingest', '--html', tmpFile], {
-				cwd: repoRoot,
-				env: process.env
-			});
+			proc = spawn(
+				'python3',
+				['scripts/reddit_pipeline.py', 'ingest', '--html', tmpFile, '--no-archive'],
+				{
+					cwd: repoRoot,
+					env: process.env
+				}
+			);
 
 			let stdoutBuffer = '';
 			proc.stdout.on('data', (chunk: Buffer) => {

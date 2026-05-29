@@ -664,6 +664,107 @@ class WriteToDbTest(unittest.TestCase):
                 )
             self.assertIn("DATABASE_URL", str(ctx.exception))
 
+    # --- batch ingest + archive -------------------------------------------------
+
+    def _make_batch_dirs(self, tmp_path, filenames):
+        uningested = tmp_path / "data" / "uningested-threads"
+        threads = tmp_path / "data" / "threads"
+        uningested.mkdir(parents=True)
+        threads.mkdir(parents=True)
+        for name in filenames:
+            (uningested / name).write_text(f"<html>{name}</html>", encoding="utf-8")
+        return uningested, threads
+
+    def test_ingest_batch_processes_all_and_archives(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            names = ["orangecounty-aaa111.html", "orangecounty-bbb222.html"]
+            uningested, threads = self._make_batch_dirs(tmp_path, names)
+
+            with mock.patch.object(self.pipeline, "UNINGESTED_ROOT", uningested), \
+                mock.patch.object(self.pipeline, "THREADS_ROOT", threads), \
+                mock.patch.object(self.pipeline, "ingest") as fake_ingest:
+                code = self.pipeline.ingest_batch()
+
+            self.assertEqual(code, 0)
+            self.assertEqual(fake_ingest.call_count, 2)
+            self.assertEqual(list(uningested.glob("*.html")), [])
+            self.assertEqual(
+                sorted(p.name for p in threads.glob("*.html")), sorted(names)
+            )
+
+    def test_ingest_batch_skips_failures_and_continues(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            good, bad = "orangecounty-good11.html", "orangecounty-bad222.html"
+            uningested, threads = self._make_batch_dirs(tmp_path, [good, bad])
+
+            def side_effect(html_path, **_kwargs):
+                if html_path.name == bad:
+                    raise RuntimeError("boom")
+
+            with mock.patch.object(self.pipeline, "UNINGESTED_ROOT", uningested), \
+                mock.patch.object(self.pipeline, "THREADS_ROOT", threads), \
+                mock.patch.object(self.pipeline, "ingest", side_effect=side_effect):
+                code = self.pipeline.ingest_batch()
+
+            self.assertEqual(code, 1)
+            self.assertTrue((threads / good).exists())
+            self.assertFalse((uningested / good).exists())
+            # The failed file is left in place and not archived.
+            self.assertTrue((uningested / bad).exists())
+            self.assertFalse((threads / bad).exists())
+
+    def test_ingest_batch_dry_run_does_not_move(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            names = ["orangecounty-aaa111.html", "orangecounty-bbb222.html"]
+            uningested, threads = self._make_batch_dirs(tmp_path, names)
+
+            with mock.patch.object(self.pipeline, "UNINGESTED_ROOT", uningested), \
+                mock.patch.object(self.pipeline, "THREADS_ROOT", threads), \
+                mock.patch.object(self.pipeline, "ingest") as fake_ingest:
+                code = self.pipeline.ingest_batch(dry_run=True)
+
+            self.assertEqual(code, 0)
+            self.assertEqual(fake_ingest.call_count, 2)
+            self.assertEqual(
+                sorted(p.name for p in uningested.glob("*.html")), sorted(names)
+            )
+            self.assertEqual(list(threads.glob("*.html")), [])
+
+    def test_ingest_batch_no_archive_does_not_move(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            names = ["orangecounty-aaa111.html", "orangecounty-bbb222.html"]
+            uningested, threads = self._make_batch_dirs(tmp_path, names)
+
+            with mock.patch.object(self.pipeline, "UNINGESTED_ROOT", uningested), \
+                mock.patch.object(self.pipeline, "THREADS_ROOT", threads), \
+                mock.patch.object(self.pipeline, "ingest") as fake_ingest:
+                code = self.pipeline.ingest_batch(archive=False)
+
+            self.assertEqual(code, 0)
+            self.assertEqual(fake_ingest.call_count, 2)
+            self.assertEqual(
+                sorted(p.name for p in uningested.glob("*.html")), sorted(names)
+            )
+            self.assertEqual(list(threads.glob("*.html")), [])
+
+    def test_ingest_no_files_is_noop(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            uningested, threads = self._make_batch_dirs(tmp_path, [])
+
+            with mock.patch.object(self.pipeline, "UNINGESTED_ROOT", uningested), \
+                mock.patch.object(self.pipeline, "THREADS_ROOT", threads), \
+                mock.patch.object(self.pipeline, "ingest") as fake_ingest:
+                code = self.pipeline.ingest_batch()
+
+            self.assertEqual(code, 0)
+            fake_ingest.assert_not_called()
+            self.assertEqual(list(threads.glob("*.html")), [])
+
 
 if __name__ == "__main__":
     unittest.main()

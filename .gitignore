@@ -26,3 +26,7 @@ Thumbs.db
 # Vite
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# staging area for scraped HTML awaiting ingest (raw, not committed)
+data/uningested-threads/*
+!data/uningested-threads/.gitkeep
