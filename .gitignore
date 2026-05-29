@@ -33,3 +33,9 @@ data/new.html
 # staging area for scraped HTML awaiting ingest (raw, not committed)
 data/uningested-threads/*
 !data/uningested-threads/.gitkeep
+
+# archived HTML exports moved here after a successful ingest (derived, not committed)
+data/threads/*.html
+
+# local geocode cache (derived from Nominatim; delete to force a re-geocode)
+data/geocode-cache.json

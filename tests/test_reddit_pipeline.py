@@ -778,6 +778,51 @@ class WriteToDbTest(unittest.TestCase):
             fake_ingest.assert_not_called()
             self.assertEqual(list(threads.glob("*.html")), [])
 
+    # --- geocode cache ----------------------------------------------------------
+
+    def test_default_geocode_caches_and_skips_network_on_repeat(self):
+        pipeline = self.pipeline
+
+        class _FakeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def read(self):
+                return json.dumps(
+                    [{"lat": "33.75", "lon": "-117.85", "display_name": "Taco Place, Santa Ana, CA"}]
+                ).encode()
+
+        calls = {"n": 0}
+
+        def fake_urlopen(request, timeout=10):
+            calls["n"] += 1
+            return _FakeResponse()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            orig_path = pipeline.GEOCODE_CACHE_PATH
+            try:
+                pipeline.GEOCODE_CACHE_PATH = Path(tmpdir) / "geocode-cache.json"
+                pipeline._geocode_cache = None
+                pipeline._last_geocode_ts = 0.0
+                with mock.patch.object(pipeline.urllib.request, "urlopen", fake_urlopen):
+                    first = pipeline.default_geocode("Taco Place", "Santa Ana")
+                    second = pipeline.default_geocode("taco place ", " santa ana")  # same normalized key
+
+                # Network hit exactly once; the repeat (case/space-insensitive) is served from cache.
+                self.assertEqual(calls["n"], 1)
+                self.assertEqual(first, (33.75, -117.85, "Taco Place, Santa Ana, CA"))
+                self.assertEqual(second, first)
+                self.assertTrue(pipeline.GEOCODE_CACHE_PATH.exists())
+                cached = json.loads(pipeline.GEOCODE_CACHE_PATH.read_text())
+                self.assertIn("taco place|santa ana", cached)
+            finally:
+                pipeline.GEOCODE_CACHE_PATH = orig_path
+                pipeline._geocode_cache = None
+                pipeline._last_geocode_ts = 0.0
+
 
 if __name__ == "__main__":
     unittest.main()
