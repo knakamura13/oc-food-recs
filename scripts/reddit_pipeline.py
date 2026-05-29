@@ -32,6 +32,13 @@ ROOT = Path(__file__).resolve().parents[1]
 DATA_ROOT = ROOT / "data"
 THREADS_ROOT = DATA_ROOT / "threads"
 UNINGESTED_ROOT = DATA_ROOT / "uningested-threads"
+GEOCODE_CACHE_PATH = DATA_ROOT / "geocode-cache.json"
+GEOCODE_MIN_INTERVAL_S = 1.05  # Nominatim usage policy: max ~1 request/second
+
+# Lazily-loaded persistent geocode cache + last-request timestamp for throttling.
+# Keyed by normalized (name, location) so repeat restaurants across threads are free.
+_geocode_cache: dict[str, list] | None = None
+_last_geocode_ts = 0.0
 OVERRIDES_PATH = DATA_ROOT / "overrides" / "restaurants.json"
 GENERATED_DATA_PATH = ROOT / "src" / "lib" / "data" / "generated" / "restaurants.json"
 
@@ -779,9 +786,41 @@ def build_thread_dataset(
     }
 
 
+def _geocode_key(name: str, location: str | None) -> str:
+    return f"{(name or '').strip().lower()}|{(location or '').strip().lower()}"
+
+
+def _load_geocode_cache() -> dict[str, list]:
+    """Lazily load the on-disk geocode cache (once per process)."""
+    global _geocode_cache
+    if _geocode_cache is None:
+        try:
+            _geocode_cache = json.loads(GEOCODE_CACHE_PATH.read_text(encoding="utf-8"))
+        except (FileNotFoundError, json.JSONDecodeError):
+            _geocode_cache = {}
+    return _geocode_cache
+
+
+def _save_geocode_cache() -> None:
+    if _geocode_cache is None:
+        return
+    GEOCODE_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    GEOCODE_CACHE_PATH.write_text(
+        json.dumps(_geocode_cache, ensure_ascii=False), encoding="utf-8"
+    )
+
+
 def default_geocode(name: str, location: str | None) -> tuple[float | None, float | None, str]:
     if not location:
         return None, None, "missing location"
+
+    # Cache hit: skip both the network round-trip and the rate-limit sleep. Many
+    # restaurants recur across threads, so this is the dominant throughput win.
+    cache = _load_geocode_cache()
+    key = _geocode_key(name, location)
+    if key in cache:
+        lat, lng, detail = cache[key]
+        return lat, lng, detail
 
     query = f"{name}, {location}, Orange County, CA"
     params = urllib.parse.urlencode(
@@ -795,22 +834,38 @@ def default_geocode(name: str, location: str | None) -> tuple[float | None, floa
     )
     request = urllib.request.Request(f"{NOMINATIM_URL}?{params}", headers=HEADERS)
 
+    # Throttle real network calls to honor Nominatim's ~1 req/s policy. Spacing is
+    # measured start-to-start, so the request's own latency counts toward the gap.
+    global _last_geocode_ts
+    wait = GEOCODE_MIN_INTERVAL_S - (time.monotonic() - _last_geocode_ts)
+    if wait > 0:
+        time.sleep(wait)
+    _last_geocode_ts = time.monotonic()
+
     try:
         with urllib.request.urlopen(request, timeout=10) as response:
             results = json.loads(response.read())
     except Exception as exc:
+        # Don't cache transient network failures — they should be retried next run.
         return None, None, str(exc)
 
     if not results:
-        return None, None, "no results"
+        result = (None, None, "no results")
+    else:
+        hit = results[0]
+        lat = float(hit["lat"])
+        lng = float(hit["lon"])
+        display_name = hit.get("display_name", "")
+        if not (33.3 <= lat <= 34.0 and -118.2 <= lng <= -117.3):
+            result = (None, None, f"outside OC bounds: {lat},{lng} ({display_name})")
+        else:
+            result = (lat, lng, display_name)
 
-    hit = results[0]
-    lat = float(hit["lat"])
-    lng = float(hit["lon"])
-    display_name = hit.get("display_name", "")
-    if not (33.3 <= lat <= 34.0 and -118.2 <= lng <= -117.3):
-        return None, None, f"outside OC bounds: {lat},{lng} ({display_name})"
-    return lat, lng, display_name
+    # Cache definitive outcomes (including "no results"/"out of bounds") so we never
+    # pay the 1s rate-limit for the same query twice.
+    cache[key] = list(result)
+    _save_geocode_cache()
+    return result
 
 
 def build_thread(
@@ -877,9 +932,6 @@ def build_thread(
                     "reason": detail,
                 }
             )
-
-        if geocode_fn is default_geocode:
-            time.sleep(1.05)
 
     geocoded_dataset = {
         "restaurants": restaurants,
@@ -1311,8 +1363,6 @@ def ingest(
                 "detail": detail,
             }
         )
-        if geocode_fn is default_geocode:
-            time.sleep(1.05)
 
     if dry_run:
         _emit_progress(
