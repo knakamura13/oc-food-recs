@@ -31,6 +31,7 @@ except ImportError:  # pragma: no cover - environment-dependent
 ROOT = Path(__file__).resolve().parents[1]
 DATA_ROOT = ROOT / "data"
 THREADS_ROOT = DATA_ROOT / "threads"
+UNINGESTED_ROOT = DATA_ROOT / "uningested-threads"
 OVERRIDES_PATH = DATA_ROOT / "overrides" / "restaurants.json"
 GENERATED_DATA_PATH = ROOT / "src" / "lib" / "data" / "generated" / "restaurants.json"
 
@@ -1357,6 +1358,39 @@ def ingest(
     }
 
 
+def _archive_ingested_html(html_path: Path) -> Path:
+    """Move a successfully-ingested HTML file into THREADS_ROOT (flat)."""
+    THREADS_ROOT.mkdir(parents=True, exist_ok=True)
+    dest = THREADS_ROOT / html_path.name
+    shutil.move(str(html_path), str(dest))
+    return dest
+
+
+def ingest_batch(
+    *, limit: int | None = None, dry_run: bool = False, archive: bool = True
+) -> int:
+    """Ingest every ``*.html`` file in UNINGESTED_ROOT, archiving each on success.
+
+    On a per-file error the file is left in place and the loop continues to the
+    next file. Returns a non-zero exit code if any file failed.
+    """
+    files = sorted(UNINGESTED_ROOT.glob("*.html"))
+    if not files:
+        print(f"No .html files found in {UNINGESTED_ROOT}")
+        return 0
+    failures = 0
+    for html_path in files:
+        try:
+            ingest(html_path, limit=limit, dry_run=dry_run)
+            if not dry_run and archive:
+                dest = _archive_ingested_html(html_path)
+                print(f"archived -> {dest}")
+        except Exception as exc:  # skip + continue to the next file
+            failures += 1
+            print(f"ERROR ingesting {html_path.name}: {exc}", file=sys.stderr)
+    return 1 if failures else 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="OC Food Recs Reddit ingestion pipeline")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -1375,7 +1409,13 @@ def main(argv: list[str] | None = None) -> int:
         help="Parse a saved Reddit thread HTML export and write directly to Postgres",
     )
     ingest_parser.add_argument(
-        "--html", required=True, type=Path, help="Path to a saved Reddit thread HTML file"
+        "--html",
+        type=Path,
+        default=None,
+        help=(
+            "Path to a saved Reddit thread HTML file. "
+            "If omitted, every *.html file in ./data/uningested-threads/ is ingested."
+        ),
     )
     ingest_parser.add_argument(
         "--limit",
@@ -1387,6 +1427,14 @@ def main(argv: list[str] | None = None) -> int:
         "--dry-run",
         action="store_true",
         help="Run parse/extract/geocode and emit progress events but skip the DB write",
+    )
+    ingest_parser.add_argument(
+        "--no-archive",
+        action="store_true",
+        help=(
+            "Do not move the HTML file into ./data/threads/ after a successful ingest. "
+            "Used by callers (e.g. the admin upload route) that manage their own temp files."
+        ),
     )
 
     args = parser.parse_args(argv)
@@ -1408,7 +1456,13 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "ingest":
+        if args.html is None:
+            return ingest_batch(
+                limit=args.limit, dry_run=args.dry_run, archive=not args.no_archive
+            )
         ingest(args.html, limit=args.limit, dry_run=args.dry_run)
+        if not args.dry_run and not args.no_archive:
+            _archive_ingested_html(args.html)
         return 0
 
     parser.error(f"Unknown command: {args.command}")

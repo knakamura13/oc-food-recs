@@ -29,3 +29,7 @@ vite.config.ts.timestamp-*
 
 # scratch HTML drop zone for ad-hoc ingests
 data/new.html
+
+# staging area for scraped HTML awaiting ingest (raw, not committed)
+data/uningested-threads/*
+!data/uningested-threads/.gitkeep

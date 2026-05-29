@@ -86,6 +86,8 @@ export const mentions = pgTable(
 		),
 		restaurantIdx: index('mentions_restaurant_idx').on(table.restaurantId),
 		threadIdx: index('mentions_thread_idx').on(table.threadId),
+		// Supports per-user lookups across threads ("has this user recommended this before?").
+		authorIdx: index('mentions_author_idx').on(table.author),
 	})
 );
 
