@@ -20,8 +20,8 @@ from typing import Any, Callable
 from bs4 import BeautifulSoup, NavigableString
 
 # psycopg is only required by the `ingest` subcommand. Keep the import optional
-# so the rest of the pipeline (init-thread, fetch-thread, build-thread, publish)
-# continues to work in environments where psycopg isn't installed.
+# so the rest of the pipeline (init-thread, build-thread, publish) continues to
+# work in environments where psycopg isn't installed.
 try:
     import psycopg  # type: ignore[import-not-found]
 except ImportError:  # pragma: no cover - environment-dependent
@@ -162,206 +162,6 @@ def extract_subreddit(raw_html: str, soup: BeautifulSoup) -> str:
         if match:
             return match.group(1)
     return ""
-
-
-def fetch_reddit_json(url: str, comment_ids: list[str] | None = None) -> dict[str, Any]:
-    """Fetch Reddit JSON from a permalink URL."""
-    if not url.endswith("/"):
-        url += "/"
-    json_url = url + ".json"
-
-    if comment_ids:
-        json_url += f"?comment={','.join(comment_ids)}"
-
-    request = urllib.request.Request(json_url, headers=HEADERS)
-    try:
-        with urllib.request.urlopen(request, timeout=30) as response:
-            data = json.loads(response.read())
-    except Exception as exc:
-        raise RuntimeError(f"Failed to fetch Reddit JSON from {json_url}: {exc}") from exc
-
-    if not isinstance(data, list) or len(data) < 2:
-        raise RuntimeError(f"Unexpected Reddit JSON structure from {json_url}")
-
-    return data
-
-
-def fetch_missing_comments(url: str, comment_ids: list[str], post_id: str) -> list[dict[str, Any]]:
-    """Fetch specific comments by their IDs using Reddit's morechildren API."""
-    if not comment_ids:
-        return []
-
-    reddit_json = fetch_reddit_json(url, comment_ids)
-    comments_data = reddit_json[1]["data"]["children"]
-    return [c for c in comments_data if c.get("kind") == "t1"]
-
-
-def fetch_more_children(post_id: str, children_ids: list[str]) -> list[dict[str, Any]]:
-    """Fetch comments using Reddit's morechildren API."""
-    if not children_ids:
-        return []
-
-    api_url = f"https://www.reddit.com/api/morechildren.json"
-    params = {
-        "link_id": f"t3_{post_id}",
-        "children": ",".join(children_ids[:100]),  # Reddit limits to 100 per request
-        "api_type": "json",
-    }
-
-    request = urllib.request.Request(
-        f"{api_url}?{urllib.parse.urlencode(params)}",
-        headers=HEADERS,
-    )
-
-    try:
-        with urllib.request.urlopen(request, timeout=30) as response:
-            data = json.loads(response.read())
-    except Exception as exc:
-        print(f"Warning: Failed to fetch more children: {exc}", file=sys.stderr)
-        return []
-
-    if not isinstance(data, dict) or "json" not in data:
-        return []
-
-    comments = data["json"]["data"]["things"]
-    return [c for c in comments if c.get("kind") == "t1"]
-
-
-def extract_more_objects(comment_data: dict[str, Any]) -> list[dict[str, Any]]:
-    """Extract all 'more' objects from a comment tree."""
-    more_objects: list[dict[str, Any]] = []
-
-    def traverse(node: dict[str, Any]) -> None:
-        if node.get("kind") == "more":
-            more_objects.append(node)
-        elif node.get("kind") == "t1" and "data" in node:
-            replies = node["data"].get("replies", {})
-            if replies and "data" in replies:
-                for child in replies["data"].get("children", []):
-                    traverse(child)
-
-    if comment_data.get("kind") == "Listing" and "data" in comment_data:
-        for child in comment_data["data"].get("children", []):
-            traverse(child)
-    else:
-        traverse(comment_data)
-
-    return more_objects
-
-
-def replace_more_in_tree(node: dict[str, Any], post_id: str, fetched_map: dict[str, dict[str, Any]]) -> dict[str, Any]:
-    """Recursively replace 'more' objects in the tree with fetched comments."""
-    if node.get("kind") == "more":
-        children_ids = node.get("data", {}).get("children", [])
-        replacement_comments = []
-        for comment_id in children_ids:
-            if comment_id in fetched_map:
-                replacement_comments.append(fetched_map[comment_id])
-        
-        if replacement_comments:
-            return replacement_comments
-        return node
-    
-    elif node.get("kind") == "t1" and "data" in node:
-        replies = node["data"].get("replies", {})
-        if replies and "data" in replies:
-            new_children = []
-            for child in replies["data"].get("children", []):
-                replaced = replace_more_in_tree(child, post_id, fetched_map)
-                if isinstance(replaced, list):
-                    new_children.extend(replaced)
-                else:
-                    new_children.append(replaced)
-            replies["data"]["children"] = new_children
-    
-    return node
-
-
-def fetch_all_comments_praw(url: str) -> list[dict[str, Any]]:
-    """Fetch all comments using PRAW library for complete coverage."""
-    reddit = praw.Reddit(
-        user_agent="oc-food-recs-pipeline/1.0",
-        client_id="",
-        client_secret="",
-        check_for_updates=False,
-    )
-
-    submission = reddit.submission(url=url)
-    submission.comments.replace_more(limit=None)
-
-    all_comments: list[dict[str, Any]] = []
-
-    def comment_to_dict(comment: praw.models.Comment) -> dict[str, Any]:
-        return {
-            "kind": "t1",
-            "data": {
-                "id": comment.id,
-                "author": str(comment.author) if comment.author else "[deleted]",
-                "body": comment.body,
-                "score": comment.score,
-                "created_utc": comment.created_utc,
-                "parent_id": comment.parent_id,
-                "permalink": comment.permalink,
-                "replies": {"data": {"children": []}} if not comment.replies else None,
-            },
-        }
-
-    def process_comment(comment: praw.models.Comment) -> dict[str, Any]:
-        comment_dict = comment_to_dict(comment)
-        if comment.replies:
-            replies_list = []
-            for reply in comment.replies:
-                if isinstance(reply, praw.models.Comment):
-                    replies_list.append(process_comment(reply))
-            comment_dict["data"]["replies"] = {"data": {"children": replies_list}}
-        return comment_dict
-
-    for comment in submission.comments:
-        if isinstance(comment, praw.models.Comment):
-            all_comments.append(process_comment(comment))
-
-    return all_comments
-
-
-def fetch_all_comments(url: str, max_depth: int = 10) -> dict[str, Any]:
-    """Recursively fetch all comments including those hidden in 'more' objects."""
-    reddit_json = fetch_reddit_json(url)
-    all_comments = reddit_json[1]["data"]["children"]
-    
-    post_id = reddit_json[0]["data"]["children"][0]["data"]["id"]
-
-    depth = 0
-    while depth < max_depth:
-        more_objects = extract_more_objects({"kind": "Listing", "data": {"children": all_comments}})
-        if not more_objects:
-            break
-
-        all_comment_ids: list[str] = []
-        for more_obj in more_objects:
-            children = more_obj.get("data", {}).get("children", [])
-            all_comment_ids.extend(children)
-
-        if not all_comment_ids:
-            break
-
-        fetched_comments = fetch_more_children(post_id, all_comment_ids)
-
-        comment_id_map = {c["data"]["id"]: c for c in all_comments if c.get("kind") == "t1"}
-        new_comments_added = 0
-        for new_comment in fetched_comments:
-            comment_id = new_comment["data"]["id"]
-            if comment_id not in comment_id_map:
-                all_comments.append(new_comment)
-                comment_id_map[comment_id] = new_comment
-                new_comments_added += 1
-
-        if new_comments_added == 0:
-            break
-
-        depth += 1
-
-    reddit_json[1]["data"]["children"] = [c for c in all_comments if c.get("kind") != "more"]
-    return reddit_json
 
 
 def parse_reddit_json(reddit_json: list[dict[str, Any]]) -> dict[str, Any]:
@@ -627,25 +427,9 @@ def manifest_from_parsed_thread(url: str, parsed_thread: dict[str, Any]) -> dict
         "acquisition": {
             "imported_at": current_timestamp(),
             "source_url": url,
-            "source_type": "reddit_json",
+            "source_type": "reddit_html",
         },
     }
-
-
-def init_thread_from_json(url: str, reddit_json: list[dict[str, Any]], threads_root: Path = THREADS_ROOT) -> Path:
-    parsed_thread = parse_reddit_json(reddit_json)
-    thread_id = thread_folder_name(parsed_thread)
-    thread_dir = threads_root / thread_id
-
-    ensure_directory(thread_dir / "raw")
-    ensure_directory(thread_dir / "processed")
-    ensure_directory(thread_dir / "review")
-
-    write_json(thread_dir / "raw" / "thread.json", reddit_json)
-
-    manifest = manifest_from_parsed_thread(url, parsed_thread)
-    write_json(thread_dir / "manifest.json", manifest)
-    return thread_dir
 
 
 def init_thread(html_path: Path, threads_root: Path = THREADS_ROOT) -> Path:
@@ -1449,28 +1233,39 @@ def _emit_progress(event: dict[str, Any]) -> None:
 
 
 def ingest(
-    url: str,
+    html_path: Path,
     *,
+    limit: int | None = None,
     dry_run: bool = False,
     extract_entities_fn: Callable[..., Any] = default_extract_entities,
     geocode_fn: Callable[..., tuple[float | None, float | None, str]] = default_geocode,
 ) -> dict[str, Any]:
-    """Fetch -> extract -> geocode -> DB write, in memory, with progress events."""
-    _emit_progress({"stage": "fetch", "progress": 0.0, "message": "fetching thread..."})
-    reddit_json = fetch_all_comments(url)
-    parsed_thread = parse_reddit_json(reddit_json)
-    manifest = manifest_from_parsed_thread(url, parsed_thread)
+    """Parse a saved Reddit thread HTML export -> extract -> geocode -> DB write.
+
+    No network access. The operator exports the thread as HTML from a browser
+    (expanding "load more comments" first for full coverage) and points the CLI
+    at the file. ``limit`` truncates extraction to the first N top-level comments
+    (handy for a quick test run before processing the whole thread).
+    """
+    html_path = Path(html_path)
+    _emit_progress(
+        {"stage": "parse", "progress": 0.0, "message": f"parsing {html_path.name}..."}
+    )
+    parsed_thread = parse_saved_reddit_html(html_path)
+    manifest = manifest_from_parsed_thread(parsed_thread["post"]["url"], parsed_thread)
     _emit_progress(
         {
-            "stage": "fetch",
+            "stage": "parse",
             "progress": 1.0,
-            "message": f"fetched {parsed_thread['comment_count']} comments",
+            "message": f"parsed {parsed_thread['comment_count']} comments",
             "thread_id": manifest["id"],
         }
     )
 
     comments_flat = flatten_comment_tree(parsed_thread["comments"])
     roots = [comment for comment in comments_flat if comment["depth"] == 0]
+    if limit is not None and limit > 0:
+        roots = roots[:limit]
     total_roots = len(roots) or 1
 
     entity_records: list[dict[str, Any]] = []
@@ -1567,9 +1362,6 @@ def main(argv: list[str] | None = None) -> int:
     init_parser = subparsers.add_parser("init-thread", help="Create a thread folder from a saved Reddit HTML file")
     init_parser.add_argument("--html", required=True, type=Path)
 
-    fetch_parser = subparsers.add_parser("fetch-thread", help="Fetch a Reddit thread from URL and initialize it")
-    fetch_parser.add_argument("--url", required=True, type=str)
-
     build_parser = subparsers.add_parser("build-thread", help="Parse, extract, and geocode one saved Reddit thread")
     build_parser.add_argument("--thread", required=True)
 
@@ -1578,25 +1370,27 @@ def main(argv: list[str] | None = None) -> int:
 
     ingest_parser = subparsers.add_parser(
         "ingest",
-        help="Fetch a thread from URL and write directly to Postgres",
+        help="Parse a saved Reddit thread HTML export and write directly to Postgres",
     )
-    ingest_parser.add_argument("--url", required=True, type=str)
+    ingest_parser.add_argument(
+        "--html", required=True, type=Path, help="Path to a saved Reddit thread HTML file"
+    )
+    ingest_parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Process only the first N top-level comments (useful for testing)",
+    )
     ingest_parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Run fetch/extract/geocode and emit progress events but skip the DB write",
+        help="Run parse/extract/geocode and emit progress events but skip the DB write",
     )
 
     args = parser.parse_args(argv)
 
     if args.command == "init-thread":
         thread_dir = init_thread(args.html)
-        print(thread_dir)
-        return 0
-
-    if args.command == "fetch-thread":
-        reddit_json = fetch_all_comments(args.url)
-        thread_dir = init_thread_from_json(args.url, reddit_json)
         print(thread_dir)
         return 0
 
@@ -1612,7 +1406,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "ingest":
-        ingest(args.url, dry_run=args.dry_run)
+        ingest(args.html, limit=args.limit, dry_run=args.dry_run)
         return 0
 
     parser.error(f"Unknown command: {args.command}")

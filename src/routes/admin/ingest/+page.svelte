@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onDestroy } from 'svelte';
 
-	type Stage = 'fetch' | 'extract' | 'geocode' | 'write' | 'done' | 'error' | 'log';
+	type Stage = 'parse' | 'extract' | 'geocode' | 'write' | 'done' | 'error' | 'log';
 
 	interface ProgressEvent {
 		stage: Stage | string;
@@ -11,15 +11,14 @@
 		[key: string]: unknown;
 	}
 
-	let url = $state('');
+	let file = $state<File | null>(null);
 	let events = $state<ProgressEvent[]>([]);
 	let status = $state<'idle' | 'running' | 'done' | 'error'>('idle');
 	let errorMessage = $state('');
-	let source = $state<EventSource | null>(null);
+	let controller = $state<AbortController | null>(null);
 	let logEl = $state<HTMLDivElement | undefined>(undefined);
 
-	const isReddit = $derived(/^https:\/\/(www\.)?reddit\.com\//.test(url.trim()));
-	const canSubmit = $derived(isReddit && status !== 'running');
+	const canSubmit = $derived(file !== null && status !== 'running');
 
 	function fmtPercent(progress: number | undefined): string {
 		if (progress === undefined || Number.isNaN(progress)) return '';
@@ -29,8 +28,8 @@
 
 	function stageLabel(stage: string): string {
 		switch (stage) {
-			case 'fetch':
-				return 'Fetch';
+			case 'parse':
+				return 'Parse';
 			case 'extract':
 				return 'Extract';
 			case 'geocode':
@@ -56,58 +55,88 @@
 		});
 	}
 
-	function teardown() {
-		if (source) {
-			source.close();
-			source = null;
+	function onFileChange(e: Event) {
+		const input = e.currentTarget as HTMLInputElement;
+		file = input.files?.[0] ?? null;
+	}
+
+	function handleEvent(parsed: ProgressEvent) {
+		append(parsed);
+		if (parsed.stage === 'done') {
+			status = 'done';
+		} else if (parsed.stage === 'error') {
+			status = 'error';
+			errorMessage = typeof parsed.message === 'string' ? parsed.message : 'Pipeline failed';
 		}
 	}
 
-	function handleSubmit(e: SubmitEvent) {
+	async function handleSubmit(e: SubmitEvent) {
 		e.preventDefault();
-		if (!canSubmit) return;
-		const target = url.trim();
+		if (!canSubmit || !file) return;
+
 		// Reset state for a fresh run
-		teardown();
+		controller?.abort();
 		events = [];
 		errorMessage = '';
 		status = 'running';
 
-		const es = new EventSource(`/admin/ingest/stream?url=${encodeURIComponent(target)}`);
-		source = es;
+		const ac = new AbortController();
+		controller = ac;
+		const formData = new FormData();
+		formData.append('html', file);
 
-		es.onmessage = (msg) => {
-			let parsed: ProgressEvent;
-			try {
-				parsed = JSON.parse(msg.data);
-			} catch {
-				parsed = { stage: 'log', message: String(msg.data) };
+		try {
+			const res = await fetch('/admin/ingest/stream', {
+				method: 'POST',
+				body: formData,
+				signal: ac.signal
+			});
+			if (!res.ok || !res.body) {
+				const text = await res.text().catch(() => '');
+				throw new Error(text || `Request failed (${res.status})`);
 			}
-			append(parsed);
 
-			if (parsed.stage === 'done') {
-				status = 'done';
-				teardown();
-			} else if (parsed.stage === 'error') {
-				status = 'error';
-				errorMessage = typeof parsed.message === 'string' ? parsed.message : 'Pipeline failed';
-				teardown();
+			// Server streams newline-delimited JSON progress events.
+			const reader = res.body.getReader();
+			const decoder = new TextDecoder();
+			let buffer = '';
+			for (;;) {
+				const { done, value } = await reader.read();
+				if (done) break;
+				buffer += decoder.decode(value, { stream: true });
+				const lines = buffer.split('\n');
+				buffer = lines.pop() ?? '';
+				for (const line of lines) {
+					const trimmed = line.trim();
+					if (!trimmed) continue;
+					try {
+						handleEvent(JSON.parse(trimmed));
+					} catch {
+						handleEvent({ stage: 'log', message: trimmed });
+					}
+				}
 			}
-		};
-
-		es.onerror = () => {
-			// EventSource fires onerror when the server closes the stream too. Only
-			// treat it as a fatal error if we haven't already reached a terminal state.
+			if (buffer.trim()) {
+				try {
+					handleEvent(JSON.parse(buffer.trim()));
+				} catch {
+					handleEvent({ stage: 'log', message: buffer.trim() });
+				}
+			}
+			// Stream closed without an explicit done/error — treat as complete.
+			if (status === 'running') status = 'done';
+		} catch (err) {
 			if (status === 'running') {
 				status = 'error';
-				errorMessage = 'Connection to ingest stream lost';
+				errorMessage = err instanceof Error ? err.message : 'Ingest failed';
 			}
-			teardown();
-		};
+		} finally {
+			controller = null;
+		}
 	}
 
 	onDestroy(() => {
-		teardown();
+		controller?.abort();
 	});
 </script>
 
@@ -119,28 +148,27 @@
 	<header>
 		<h1>Ingest Reddit Thread</h1>
 		<p class="subtitle">
-			Paste a Reddit thread URL and watch the pipeline fetch, extract, geocode, and write to the database.
+			Upload a saved Reddit thread HTML file and watch the pipeline parse, extract, geocode, and write to the database. Export the thread from your browser (expand <em>load more comments</em> first for full coverage).
 		</p>
 	</header>
 
 	<form onsubmit={handleSubmit}>
-		<label for="reddit-url">Reddit thread URL</label>
+		<label for="thread-html">Reddit thread HTML file</label>
 		<div class="input-row">
 			<input
-				id="reddit-url"
-				type="url"
-				bind:value={url}
-				placeholder="https://www.reddit.com/r/orangecounty/comments/..."
+				id="thread-html"
+				type="file"
+				accept=".html,.htm,text/html"
+				onchange={onFileChange}
 				disabled={status === 'running'}
-				autocomplete="off"
 				required
 			/>
 			<button type="submit" disabled={!canSubmit}>
-				{status === 'running' ? 'Running…' : 'Submit'}
+				{status === 'running' ? 'Running…' : 'Ingest'}
 			</button>
 		</div>
-		{#if url.trim() && !isReddit}
-			<p class="hint">URL must start with <code>https://reddit.com/</code> or <code>https://www.reddit.com/</code>.</p>
+		{#if file}
+			<p class="hint">Selected: <code>{file.name}</code> ({(file.size / 1024).toFixed(0)} KB)</p>
 		{/if}
 	</form>
 
@@ -220,10 +248,10 @@
 		gap: 0.5rem;
 	}
 
-	input[type='url'] {
+	input[type='file'] {
 		flex: 1;
-		padding: 0.65rem 0.85rem;
-		font-size: 0.95rem;
+		padding: 0.55rem 0.85rem;
+		font-size: 0.9rem;
 		font-family: inherit;
 		border: 1px solid #d6cec5;
 		border-radius: 8px;
@@ -232,13 +260,13 @@
 		transition: border-color 0.15s ease, box-shadow 0.15s ease;
 	}
 
-	input[type='url']:focus {
+	input[type='file']:focus {
 		outline: none;
 		border-color: #ff4500;
 		box-shadow: 0 0 0 3px rgba(255, 69, 0, 0.15);
 	}
 
-	input[type='url']:disabled {
+	input[type='file']:disabled {
 		background: #f4efe9;
 		cursor: not-allowed;
 	}
