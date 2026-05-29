@@ -40,6 +40,19 @@ class RedditPipelineTest(unittest.TestCase):
     def setUpClass(cls):
         cls.pipeline = load_pipeline_module()
 
+    def test_normalize_extractor_result_drops_sentinel_names(self):
+        entities, _ = self.pipeline.normalize_extractor_result(
+            [
+                {"name": "None"},
+                {"name": "Real Taco", "location": "Santa Ana"},
+                {"name": "n/a"},
+                {"name": ""},
+                {"name": "  NULL "},
+                {"name": "Unknown"},
+            ]
+        )
+        self.assertEqual([e["name"] for e in entities], ["Real Taco"])
+
     def test_parse_saved_reddit_html_thread_01(self):
         parsed = self.pipeline.parse_saved_reddit_html(FIXTURES / "thread-01.html")
 

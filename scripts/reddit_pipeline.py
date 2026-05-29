@@ -483,7 +483,9 @@ def normalize_extractor_result(result: Any) -> tuple[list[dict[str, Any]], str |
         if not isinstance(entity, dict):
             continue
         name = normalize_text(str(entity.get("name", "")))
-        if not name:
+        # The LLM occasionally emits sentinel non-names ("None", "N/A", etc.)
+        # when a comment mentions no establishment; drop them.
+        if not name or name.strip().lower() in {"none", "null", "n/a", "na", "unknown", "none."}:
             continue
         cleaned.append(
             {
