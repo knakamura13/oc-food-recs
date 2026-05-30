@@ -810,6 +810,38 @@ def _save_geocode_cache() -> None:
     )
 
 
+# When a comment omits the city (common in city-specific subreddits like r/Anaheim,
+# where the city is implied), fall back to the subreddit's city as a geocoding hint.
+# County-wide subs (orangecounty) have no single city and are intentionally absent → no fallback.
+SUBREDDIT_CITY = {
+    "anaheim": "Anaheim", "santaana": "Santa Ana", "irvine": "Irvine",
+    "huntingtonbeach": "Huntington Beach", "gardengrove": "Garden Grove", "fullerton": "Fullerton",
+    "costamesa": "Costa Mesa", "missionviejo": "Mission Viejo", "westminster": "Westminster",
+    "newportbeach": "Newport Beach", "lagunabeach": "Laguna Beach", "tustin": "Tustin",
+    "orange": "Orange", "orangeca": "Orange", "cityoforange": "Orange",
+    "lakeforest": "Lake Forest", "sanclemente": "San Clemente", "buenapark": "Buena Park",
+    "lahabra": "La Habra", "fountainvalley": "Fountain Valley", "yorbalinda": "Yorba Linda",
+    "danapoint": "Dana Point", "alisoviejo": "Aliso Viejo", "ranchosantamargarita": "Rancho Santa Margarita",
+    "lagunaniguel": "Laguna Niguel", "lagunahills": "Laguna Hills", "lagunawoods": "Laguna Woods",
+    "brea": "Brea", "placentia": "Placentia", "cypress": "Cypress",
+    "sanjuancapistrano": "San Juan Capistrano", "sealbeach": "Seal Beach", "stanton": "Stanton",
+    "losalamitos": "Los Alamitos", "villapark": "Villa Park", "lapalma": "La Palma",
+    # unincorporated communities
+    "laderaranch": "Ladera Ranch", "cotodecaza": "Coto de Caza", "rossmoor": "Rossmoor",
+    "northtustin": "North Tustin", "midwaycity": "Midway City", "trabucocanyon": "Trabuco Canyon",
+    "silverado": "Silverado", "sunsetbeach": "Huntington Beach",
+    # campuses → nearest city
+    "uci": "Irvine", "csuf": "Fullerton", "calstatefullerton": "Fullerton",
+    "chapman": "Orange", "saddleback": "Mission Viejo",
+    # orangecounty: intentionally omitted (county-wide → no fallback)
+}
+
+
+def _subreddit_city(subreddit: str | None) -> str | None:
+    """City to use as a geocoding hint when a comment doesn't name one (city subreddits)."""
+    return SUBREDDIT_CITY.get((subreddit or "").strip().lower())
+
+
 def default_geocode(name: str, location: str | None) -> tuple[float | None, float | None, str]:
     if not location:
         return None, None, "missing location"
@@ -918,7 +950,10 @@ def build_thread(
     unresolved: list[dict[str, Any]] = []
     restaurants = copy.deepcopy(thread_dataset["restaurants"])
     for restaurant in restaurants:
-        lat, lng, detail = geocode_fn(restaurant["name"], restaurant.get("location"))
+        lat, lng, detail = geocode_fn(
+            restaurant["name"],
+            restaurant.get("location") or _subreddit_city(manifest["subreddit"]),
+        )
         restaurant["lat"] = lat
         restaurant["lng"] = lng
         if lat is not None and lng is not None:
@@ -1350,7 +1385,10 @@ def ingest(
     total_restaurants = len(restaurants) or 1
 
     for index, restaurant in enumerate(restaurants, start=1):
-        lat, lng, detail = geocode_fn(restaurant["name"], restaurant.get("location"))
+        lat, lng, detail = geocode_fn(
+            restaurant["name"],
+            restaurant.get("location") or _subreddit_city(manifest["subreddit"]),
+        )
         restaurant["lat"] = lat
         restaurant["lng"] = lng
         _emit_progress(
