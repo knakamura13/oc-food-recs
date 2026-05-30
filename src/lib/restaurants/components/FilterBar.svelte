@@ -4,12 +4,33 @@
 
 	interface Props {
 		restaurants: Restaurant[];
+		/** thread_id -> subreddit, used to attribute each restaurant to its origin subreddit. */
+		threadSubreddit: Record<string, string>;
 	}
 
-	let { restaurants }: Props = $props();
+	let { restaurants, threadSubreddit }: Props = $props();
 
 	let showCuisineDropdown = $state(false);
 	let showCityDropdown = $state(false);
+	let showSubredditDropdown = $state(false);
+
+	let subredditCounts = $derived.by(() => {
+		const counts = new Map<string, number>();
+		for (const r of restaurants) {
+			const seen = new Set<string>();
+			for (const tid of r.source_threads) {
+				const sub = threadSubreddit[tid];
+				if (sub) seen.add(sub);
+			}
+			for (const sub of seen) counts.set(sub, (counts.get(sub) || 0) + 1);
+		}
+		return [...counts.entries()]
+			.sort((a, b) => b[1] - a[1])
+			.map(([name, count]) => ({ name, count }));
+	});
+
+	// Only worth showing the subreddit filter once data spans more than one subreddit.
+	let showSubredditFilter = $derived(subredditCounts.length > 1);
 
 	let cuisineCounts = $derived.by(() => {
 		const counts = new Map<string, number>();
@@ -61,13 +82,25 @@
 		}
 	}
 
+	function toggleSubreddit(subreddit: string) {
+		const idx = appState.activeSubreddits.indexOf(subreddit);
+		if (idx >= 0) {
+			appState.activeSubreddits = appState.activeSubreddits.filter((s) => s !== subreddit);
+		} else {
+			appState.activeSubreddits = [...appState.activeSubreddits, subreddit];
+		}
+	}
+
 	function clearAllFilters() {
 		appState.activeCuisines = [];
 		appState.activeCities = [];
+		appState.activeSubreddits = [];
 	}
 
 	let hasActiveFilters = $derived(
-		appState.activeCuisines.length > 0 || appState.activeCities.length > 0
+		appState.activeCuisines.length > 0 ||
+			appState.activeCities.length > 0 ||
+			appState.activeSubreddits.length > 0
 	);
 </script>
 
@@ -151,6 +184,48 @@
 			{/if}
 		</div>
 
+		<!-- Subreddit dropdown (only when data spans more than one subreddit) -->
+		{#if showSubredditFilter}
+			<div class="dropdown-wrapper">
+				<button
+					class="dropdown-trigger"
+					class:has-active={appState.activeSubreddits.length > 0}
+					aria-expanded={showSubredditDropdown}
+					aria-haspopup="listbox"
+					aria-controls={showSubredditDropdown ? 'subreddit-listbox' : undefined}
+					onclick={() => {
+						showSubredditDropdown = !showSubredditDropdown;
+						showCuisineDropdown = false;
+						showCityDropdown = false;
+					}}
+				>
+					Subreddit
+					{#if appState.activeSubreddits.length > 0}
+						<span class="badge">{appState.activeSubreddits.length}</span>
+					{/if}
+					<span class="arrow" aria-hidden="true" class:open={showSubredditDropdown}>&#9662;</span>
+				</button>
+
+				{#if showSubredditDropdown}
+					<div class="dropdown-panel" id="subreddit-listbox" role="listbox" aria-label="Filter by subreddit">
+						{#each subredditCounts as { name, count }}
+							<button
+								class="dropdown-item"
+								class:active={appState.activeSubreddits.includes(name)}
+								onclick={() => toggleSubreddit(name)}
+								role="option"
+								aria-selected={appState.activeSubreddits.includes(name)}
+							>
+								<span class="item-check" aria-hidden="true">{appState.activeSubreddits.includes(name) ? '✓' : ''}</span>
+								<span class="item-name">r/{name}</span>
+								<span class="item-count">({count})</span>
+							</button>
+						{/each}
+					</div>
+				{/if}
+			</div>
+		{/if}
+
 		{#if hasActiveFilters}
 			<button class="clear-filters" onclick={clearAllFilters}>Clear all</button>
 		{/if}
@@ -169,6 +244,11 @@
 					{city} &times;
 				</button>
 			{/each}
+			{#each appState.activeSubreddits as subreddit}
+				<button class="pill subreddit-pill" onclick={() => toggleSubreddit(subreddit)} aria-label="Remove r/{subreddit} filter">
+					r/{subreddit} &times;
+				</button>
+			{/each}
 		</div>
 	{/if}
 </nav>
@@ -180,12 +260,14 @@
 		if (!target.closest('.dropdown-wrapper')) {
 			showCuisineDropdown = false;
 			showCityDropdown = false;
+			showSubredditDropdown = false;
 		}
 	}}
 	onkeydown={(e) => {
 		if (e.key === 'Escape') {
 			showCuisineDropdown = false;
 			showCityDropdown = false;
+			showSubredditDropdown = false;
 		}
 	}}
 />
@@ -352,6 +434,11 @@
 	.city-pill {
 		background: #fce8e0;
 		color: #b5543a;
+	}
+
+	.subreddit-pill {
+		background: #e6eef5;
+		color: #3a5a7a;
 	}
 
 	.pill:hover {

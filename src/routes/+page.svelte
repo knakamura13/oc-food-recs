@@ -15,6 +15,14 @@
 	const allRestaurants: Restaurant[] = $derived(data.dataset.restaurants as Restaurant[]);
 	const threadCount = $derived(data.dataset.meta.source_threads.length);
 
+	// thread_id -> subreddit, so mentions/restaurants can be attributed to their origin subreddit.
+	// (Plain object, not a Map — `Map` is shadowed by the Map.svelte component import above.)
+	const threadSubreddit = $derived.by(() => {
+		const lookup: Record<string, string> = {};
+		for (const t of data.dataset.meta.source_threads) lookup[t.id] = t.subreddit;
+		return lookup;
+	});
+
 	// Compute unique cuisine and city names for search matching
 	const cuisineNames = $derived.by(() => {
 		const set = new Set<string>();
@@ -35,6 +43,7 @@
 
 	let prevCuisines = $state('');
 	let prevCities = $state('');
+	let prevSubreddits = $state('');
 
 	let mapExpanded = $state(false);
 	let appTrapEl = $state<HTMLDivElement | undefined>(undefined);
@@ -111,6 +120,28 @@
 	let filteredRestaurants = $derived.by(() => {
 		let result = allRestaurants;
 
+		// Subreddit filter: keep only mentions from the selected subreddit(s) and recompute
+		// each restaurant's aggregates from that slice so datasources never blend.
+		if (appState.activeSubreddits.length > 0) {
+			const active = new Set(appState.activeSubreddits);
+			result = result.flatMap((r) => {
+				const kept = r.mentions.filter((m) => {
+					const sub = threadSubreddit[m.thread_id];
+					return sub ? active.has(sub) : false;
+				});
+				if (kept.length === 0) return [];
+				return [
+					{
+						...r,
+						mentions: kept,
+						mention_count: kept.length,
+						aggregate_score: kept.reduce((sum, m) => sum + m.score, 0),
+						source_threads: [...new Set(kept.map((m) => m.thread_id))]
+					}
+				];
+			});
+		}
+
 		if (appState.activeCuisines.length > 0) {
 			result = result.filter((r) => {
 				const normalized = normalizeCuisine(r.cuisine);
@@ -132,14 +163,20 @@
 	$effect(() => {
 		const cuisineKey = appState.activeCuisines.join(',');
 		const cityKey = appState.activeCities.join(',');
-		const currentKey = `${cuisineKey}|${cityKey}`;
-		const prevKey = `${prevCuisines}|${prevCities}`;
+		const subredditKey = appState.activeSubreddits.join(',');
+		const currentKey = `${cuisineKey}|${cityKey}|${subredditKey}`;
+		const prevKey = `${prevCuisines}|${prevCities}|${prevSubreddits}`;
 
 		if (currentKey !== prevKey) {
 			prevCuisines = cuisineKey;
 			prevCities = cityKey;
+			prevSubreddits = subredditKey;
 
-			if (appState.activeCuisines.length > 0 || appState.activeCities.length > 0) {
+			if (
+				appState.activeCuisines.length > 0 ||
+				appState.activeCities.length > 0 ||
+				appState.activeSubreddits.length > 0
+			) {
 				// Trigger map zoom to filtered restaurants
 				appState.fitBoundsTarget = filteredRestaurants;
 			} else {
@@ -170,6 +207,9 @@
 
 		const city = params.get('city');
 		if (city) appState.activeCities = city.split(',').filter(Boolean);
+
+		const subreddit = params.get('subreddit');
+		if (subreddit) appState.activeSubreddits = subreddit.split(',').filter(Boolean);
 
 		const sort = params.get('sort');
 		if (sort === 'name' || sort === 'score') {
@@ -202,6 +242,8 @@
 		if (appState.searchQuery) params.set('q', appState.searchQuery);
 		if (appState.activeCuisines.length > 0) params.set('cuisine', appState.activeCuisines.join(','));
 		if (appState.activeCities.length > 0) params.set('city', appState.activeCities.join(','));
+		if (appState.activeSubreddits.length > 0)
+			params.set('subreddit', appState.activeSubreddits.join(','));
 		if (appState.sortKey) params.set('sort', appState.sortKey);
 		if (appState.sortDirection !== 'desc') params.set('sortdir', appState.sortDirection);
 		if (appState.selectedRestaurantSlug) params.set('restaurant', appState.selectedRestaurantSlug);
@@ -234,7 +276,7 @@
 <div class="app-trap" bind:this={appTrapEl}>
 	<div class="controls-bar" bind:this={controlsBarEl}>
 		<SearchBar restaurants={allRestaurants} {cuisineNames} {cityNames} />
-		<FilterBar restaurants={allRestaurants} />
+		<FilterBar restaurants={allRestaurants} {threadSubreddit} />
 	</div>
 	<div class="content-area">
 		<div
