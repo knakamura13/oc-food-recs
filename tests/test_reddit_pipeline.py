@@ -823,6 +823,17 @@ class WriteToDbTest(unittest.TestCase):
                 pipeline._geocode_cache = None
                 pipeline._last_geocode_ts = 0.0
 
+    def test_subreddit_city_fallback_mapping(self):
+        p = self.pipeline
+        self.assertEqual(p._subreddit_city("Anaheim"), "Anaheim")
+        self.assertEqual(p._subreddit_city("anaheim"), "Anaheim")  # case-insensitive
+        self.assertEqual(p._subreddit_city("huntingtonbeach"), "Huntington Beach")
+        self.assertEqual(p._subreddit_city("UCI"), "Irvine")       # campus -> nearest city
+        self.assertEqual(p._subreddit_city("CSUF"), "Fullerton")
+        self.assertIsNone(p._subreddit_city("orangecounty"))       # county-wide -> no fallback
+        self.assertIsNone(p._subreddit_city(None))
+        self.assertIsNone(p._subreddit_city("nonexistentsub"))
+
 
 if __name__ == "__main__":
     unittest.main()
