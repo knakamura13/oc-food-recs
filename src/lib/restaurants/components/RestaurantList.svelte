@@ -390,6 +390,12 @@
 		overscroll-behavior: contain;
 	}
 
+	@media (max-width: 1023px) {
+		.list-scroll {
+			padding-bottom: calc(100px + env(safe-area-inset-bottom, 0px));
+		}
+	}
+
 	.row {
 		border-bottom: 1px solid #efe8e0;
 		border-left: 3px solid transparent;
@@ -765,13 +771,4 @@
 		margin: 0;
 	}
 
-	@media (max-width: 768px) {
-		.restaurant-list {
-			height: auto;
-		}
-
-		.list-scroll {
-			overflow-y: visible;
-		}
-	}
 </style>

@@ -537,8 +537,9 @@
 
 		.list-pane {
 			width: 100%;
-			overflow-y: auto;
-			overscroll-behavior: contain;
+			display: flex;
+			flex-direction: column;
+			min-height: 0;
 		}
 
 		/* Block manual scroll / interaction on the list while the map sheet is open */
