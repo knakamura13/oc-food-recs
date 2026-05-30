@@ -4,6 +4,7 @@ export const appState = $state({
 	searchQuery: '',
 	activeCuisines: [] as string[],
 	activeCities: [] as string[],
+	activeSubreddits: [] as string[],
 	sortKey: 'score' as SortKey,
 	sortDirection: 'desc' as 'asc' | 'desc',
 	selectedRestaurantSlug: null as string | null,
