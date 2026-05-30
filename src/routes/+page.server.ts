@@ -45,6 +45,23 @@ export const load: PageServerLoad = async (): Promise<{ dataset: RestaurantData 
 			JOIN threads t ON t.id = m.thread_id
 			WHERE t.included_in_publish = true
 		),
+		ranked_mentions AS (
+			-- Rank each author's mentions of a restaurant by score so the same
+			-- person recommending the same place over and over can't read as
+			-- broad consensus. Anonymous authors are each their own voice.
+			SELECT
+				pm.*,
+				CASE
+					WHEN COALESCE(NULLIF(TRIM(pm.author), ''), '[deleted]')
+						IN ('[deleted]', '[removed]')
+					THEN 1
+					ELSE ROW_NUMBER() OVER (
+						PARTITION BY pm.restaurant_id, pm.author
+						ORDER BY pm.score DESC, pm.id ASC
+					)
+				END AS author_rank
+			FROM published_mentions pm
+		),
 		restaurant_mentions AS (
 			SELECT
 				r.id,
@@ -54,32 +71,34 @@ export const load: PageServerLoad = async (): Promise<{ dataset: RestaurantData 
 				r.cuisine,
 				r.lat,
 				r.lng,
-				COALESCE(SUM(pm.score), 0)::int AS aggregate_score,
-				COUNT(pm.id)::int AS mention_count,
+				-- Geometric ½ decay per repeat (must match REPEAT_AUTHOR_DECAY).
+				COALESCE(SUM(rm.score * POWER(0.5, rm.author_rank - 1)), 0)::int AS aggregate_score,
+				-- Distinct contributors = count of rank-1 mentions.
+				COUNT(*) FILTER (WHERE rm.author_rank = 1)::int AS mention_count,
 				COALESCE(
-					ARRAY_AGG(DISTINCT pm.thread_id) FILTER (WHERE pm.thread_id IS NOT NULL),
+					ARRAY_AGG(DISTINCT rm.thread_id) FILTER (WHERE rm.thread_id IS NOT NULL),
 					ARRAY[]::text[]
 				) AS source_threads,
 				COALESCE(
 					JSON_AGG(
 						JSON_BUILD_OBJECT(
-							'comment_id', pm.comment_id,
-							'thread_id', pm.thread_id,
-							'permalink', pm.permalink,
-							'author', pm.author,
-							'body', pm.body,
-							'score', pm.score,
-							'role', pm.role,
-							'classification', pm.classification
+							'comment_id', rm.comment_id,
+							'thread_id', rm.thread_id,
+							'permalink', rm.permalink,
+							'author', rm.author,
+							'body', rm.body,
+							'score', rm.score,
+							'role', rm.role,
+							'classification', rm.classification
 						)
 						ORDER BY
-							CASE WHEN pm.role = 'primary' THEN 0 ELSE 1 END,
-							pm.score DESC
-					) FILTER (WHERE pm.id IS NOT NULL),
+							CASE WHEN rm.role = 'primary' THEN 0 ELSE 1 END,
+							rm.score DESC
+					) FILTER (WHERE rm.id IS NOT NULL),
 					'[]'::json
 				) AS mentions
 			FROM restaurants r
-			INNER JOIN published_mentions pm ON pm.restaurant_id = r.id
+			INNER JOIN ranked_mentions rm ON rm.restaurant_id = r.id
 			GROUP BY r.id, r.name, r.slug, r.location, r.cuisine, r.lat, r.lng
 		)
 		SELECT
