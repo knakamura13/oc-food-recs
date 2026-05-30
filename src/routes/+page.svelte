@@ -1,7 +1,12 @@
 <script lang="ts">
 	import { onMount, tick } from 'svelte';
 	import type { Restaurant } from '$lib/restaurants/types';
-	import { appState, normalizeCuisine, normalizeCity } from '$lib/restaurants/stores.svelte';
+	import {
+		appState,
+		normalizeCuisine,
+		normalizeCity,
+		weightedAggregates
+	} from '$lib/restaurants/stores.svelte';
 	import Hero from '$lib/restaurants/components/Hero.svelte';
 	import SearchBar from '$lib/restaurants/components/SearchBar.svelte';
 	import FilterBar from '$lib/restaurants/components/FilterBar.svelte';
@@ -130,12 +135,13 @@
 					return sub ? active.has(sub) : false;
 				});
 				if (kept.length === 0) return [];
+				const { aggregate_score, mention_count } = weightedAggregates(kept);
 				return [
 					{
 						...r,
 						mentions: kept,
-						mention_count: kept.length,
-						aggregate_score: kept.reduce((sum, m) => sum + m.score, 0),
+						mention_count,
+						aggregate_score,
 						source_threads: [...new Set(kept.map((m) => m.thread_id))]
 					}
 				];
