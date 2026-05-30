@@ -1,4 +1,4 @@
-import type { Restaurant, SortKey } from './types';
+import type { Mention, Restaurant, SortKey } from './types';
 
 export const appState = $state({
 	searchQuery: '',
@@ -186,6 +186,45 @@ export const FILTER_SYNONYMS: Record<string, string[]> = {
 	Cypress: ['cypress'],
 	Placentia: ['placentia']
 };
+
+export const REPEAT_AUTHOR_DECAY = 0.5; // must match the literal in +page.server.ts
+const ANONYMOUS_AUTHORS = new Set(['[deleted]', '[removed]', '']);
+
+/**
+ * Weighted aggregates for a set of mentions. An author's highest-scoring
+ * mention of a restaurant counts in full; each additional mention by the same
+ * author is devalued geometrically (REPEAT_AUTHOR_DECAY^rank) so one person's
+ * repetition can't read as broad consensus. Anonymous authors
+ * ([deleted]/[removed]/blank) are each treated as a distinct voice.
+ * mention_count = number of distinct contributors (rank-1 mentions).
+ */
+export function weightedAggregates(mentions: Mention[]): {
+	aggregate_score: number;
+	mention_count: number;
+} {
+	const byAuthor = new Map<string, Mention[]>();
+	let score = 0;
+	let count = 0;
+	for (const m of mentions) {
+		const author = (m.author ?? '').trim();
+		if (ANONYMOUS_AUTHORS.has(author)) {
+			score += m.score; // each anonymous mention: full value, own voice
+			count += 1;
+			continue;
+		}
+		const list = byAuthor.get(author) ?? [];
+		list.push(m);
+		byAuthor.set(author, list);
+	}
+	for (const list of byAuthor.values()) {
+		list.sort((a, b) => b.score - a.score); // best first
+		list.forEach((m, i) => {
+			score += m.score * Math.pow(REPEAT_AUTHOR_DECAY, i);
+		});
+		count += 1; // one distinct contributor
+	}
+	return { aggregate_score: Math.round(score), mention_count: count };
+}
 
 export function getEngagement(r: Restaurant): number {
 	const endorsementCount = r.mentions.filter((m) => m.role === 'endorsement').length;
