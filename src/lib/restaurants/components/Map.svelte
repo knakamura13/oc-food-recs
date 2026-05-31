@@ -153,13 +153,16 @@
 		}
 	});
 
-	// Invalidate map size when portal expands/collapses
+	// Invalidate map size when container dimensions change (desktop hover or mobile expansion)
 	$effect(() => {
-		const _ = mapExpanded; // reactive tracking
-		if (leafletMap) {
-			setTimeout(() => leafletMap.invalidateSize(true), 50);
-			setTimeout(() => leafletMap.invalidateSize(true), 450); // after transition ends
-		}
+		if (!mapContainer || !leafletMap) return;
+
+		const ro = new ResizeObserver(() => {
+			leafletMap.invalidateSize({ animate: true });
+		});
+
+		ro.observe(mapContainer);
+		return () => ro.disconnect();
 	});
 
 	function scrollToRestaurant(r: Restaurant) {
