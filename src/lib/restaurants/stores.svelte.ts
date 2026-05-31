@@ -8,6 +8,7 @@ export const appState = $state({
 	sortKey: 'score' as SortKey,
 	sortDirection: 'desc' as 'asc' | 'desc',
 	selectedRestaurantSlug: null as string | null,
+	hoveredRestaurantSlug: null as string | null,
 	mapTarget: null as Restaurant | null,
 	listScrollTarget: null as Restaurant | null,
 	fitBoundsTarget: null as Restaurant[] | null

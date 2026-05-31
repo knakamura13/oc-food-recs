@@ -24,17 +24,30 @@
 			const r = appState.mapTarget;
 			if (r.lat && r.lng) {
 				leafletMap.setView([r.lat, r.lng], 15, { animate: true });
-				const marker = markers.get(r.slug);
-				if (marker) {
-					marker.openPopup();
-				}
 			}
 			appState.mapTarget = null;
 		}
 	});
 
+	// Highlight the hovered (preferred) or selected restaurant's pin. This is the
+	// single source of truth shared with the list via appState — both list-hover
+	// and pin-hover write the same slug, and this one effect drives the visual.
+	$effect(() => {
+		// Read both so the effect re-runs whenever either changes.
+		void appState.hoveredRestaurantSlug;
+		void appState.selectedRestaurantSlug;
+		applyHighlight();
+	});
+
 	let clusterGroupRef: any = null;
 	let L: any = null;
+	let dotIcon: any = null;
+
+	// Hover/highlight bookkeeping — imperative handles, intentionally NOT $state
+	// (mutating them must not re-trigger the highlight effect).
+	let hoverTimer: ReturnType<typeof setTimeout> | null = null;
+	let clusterHoverTimer: ReturnType<typeof setTimeout> | null = null;
+	let appliedSlug: string | null = null;
 
 	async function initMap() {
 		if (mapInitialized || !mapContainer) return;
@@ -46,6 +59,21 @@
 		await import('leaflet.markercluster');
 		await import('leaflet.markercluster/dist/MarkerCluster.css');
 		await import('leaflet.markercluster/dist/MarkerCluster.Default.css');
+
+		// One combined marker carrying both a resting dot and an (initially hidden)
+		// red pin. The highlight toggles an `is-active` class on the element rather
+		// than swapping icons, so the dot->pin CSS transition fires cleanly.
+		dotIcon = L.divIcon({
+			className: 'rec-marker',
+			html:
+				'<span class="rec-dot"></span>' +
+				'<svg class="rec-pin" viewBox="0 0 30 42" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+				'<path d="M15 1C7.8 1 2 6.8 2 14c0 9.4 13 26 13 26s13-16.6 13-26C28 6.8 22.2 1 15 1z" fill="#ff4500" stroke="#fffcf8" stroke-width="2"/>' +
+				'<circle cx="15" cy="14" r="5" fill="#fffcf8"/></svg>',
+			iconSize: [30, 42],
+			iconAnchor: [15, 40],
+			tooltipAnchor: [0, -42]
+		});
 
 		leafletMap = L.map(mapContainer).setView([33.7, -117.8], 10);
 
@@ -86,7 +114,19 @@
 	});
 
 	function updateMarkers() {
-		if (!leafletMap || !L) return;
+		if (!leafletMap || !L || !dotIcon) return;
+
+		// Markers are about to be recreated: cancel pending hover work and drop
+		// stale highlight bookkeeping so the highlight re-applies to the new set.
+		if (hoverTimer) {
+			clearTimeout(hoverTimer);
+			hoverTimer = null;
+		}
+		if (clusterHoverTimer) {
+			clearTimeout(clusterHoverTimer);
+			clusterHoverTimer = null;
+		}
+		appliedSlug = null;
 
 		// Remove old cluster group
 		if (clusterGroupRef) {
@@ -100,35 +140,89 @@
 			showCoverageOnHover: false
 		});
 
-		const defaultIcon = L.icon({
-			iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-			iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-			shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-			iconSize: [25, 41],
-			iconAnchor: [12, 41],
-			popupAnchor: [1, -34],
-			shadowSize: [41, 41]
+		// Cluster hover popover: after a short delay, list the restaurants inside
+		// the hovered cluster (sorted by score, capped) in a tooltip above it.
+		clusterGroupRef.on('clustermouseover', (e: any) => {
+			if (clusterHoverTimer) clearTimeout(clusterHoverTimer);
+			const cluster = e.layer;
+			clusterHoverTimer = setTimeout(() => {
+				const childRestaurants = (cluster.getAllChildMarkers() as any[])
+					.map((m) => m.restaurant as Restaurant)
+					.filter(Boolean)
+					.sort((a, b) => b.aggregate_score - a.aggregate_score);
+				cluster
+					.bindTooltip(clusterTooltipHtml(childRestaurants), {
+						permanent: true,
+						direction: 'top',
+						className: 'rec-tooltip rec-tooltip--cluster',
+						opacity: 1
+					})
+					.openTooltip();
+				clusterHoverTimer = null;
+			}, 150);
+		});
+		clusterGroupRef.on('clustermouseout', (e: any) => {
+			if (clusterHoverTimer) {
+				clearTimeout(clusterHoverTimer);
+				clusterHoverTimer = null;
+			}
+			e.layer.unbindTooltip();
 		});
 
+		// When clusters expand/collapse, re-apply the highlight so a pin that
+		// un-clusters into view picks up an active hover/selection.
+		clusterGroupRef.on('animationend', () => applyHighlight());
+
 		for (const r of mappedRestaurants) {
-			const marker = L.marker([r.lat, r.lng], { icon: defaultIcon }).bindPopup(
-				`<div style="min-width:140px">
-					<strong>${r.name}</strong><br/>
-					${r.cuisine ? `<span style="color:#777;font-size:0.85em">${r.cuisine}</span><br/>` : ''}
-					<span style="color:#ff4500;font-weight:600">${r.aggregate_score} points</span>
-				</div>`
-			);
+			const marker = L.marker([r.lat, r.lng], {
+				icon: dotIcon,
+				keyboard: true,
+				title: r.name,
+				riseOnHover: true
+			});
 
 			marker.on('click', () => {
 				appState.selectedRestaurantSlug = r.slug;
 				appState.listScrollTarget = r;
 			});
 
+			// Debounced hover so a fast mouse sweep across pins doesn't flicker.
+			marker.on('mouseover', () => {
+				if (hoverTimer) clearTimeout(hoverTimer);
+				hoverTimer = setTimeout(() => {
+					appState.hoveredRestaurantSlug = r.slug;
+					hoverTimer = null;
+				}, 150);
+			});
+			marker.on('mouseout', () => {
+				if (hoverTimer) {
+					clearTimeout(hoverTimer);
+					hoverTimer = null;
+				}
+				if (appState.hoveredRestaurantSlug === r.slug) {
+					appState.hoveredRestaurantSlug = null;
+				}
+			});
+
+			// Keyboard focus drives the same highlight (no-op if unsupported).
+			marker.on('focus', () => {
+				appState.hoveredRestaurantSlug = r.slug;
+			});
+			marker.on('blur', () => {
+				if (appState.hoveredRestaurantSlug === r.slug) {
+					appState.hoveredRestaurantSlug = null;
+				}
+			});
+
+			(marker as any).restaurant = r;
 			markers.set(r.slug, marker);
 			clusterGroupRef.addLayer(marker);
 		}
 
 		leafletMap.addLayer(clusterGroupRef);
+
+		// Reassert any active highlight against the freshly built markers.
+		applyHighlight();
 	}
 
 	// Re-render markers when filtered restaurants change
@@ -165,9 +259,89 @@
 		return () => ro.disconnect();
 	});
 
+	// Teardown: clear pending timers and dispose the Leaflet map (which drops all
+	// markers, tooltips, and their DOM listeners) when the component unmounts.
+	$effect(() => {
+		return () => {
+			if (hoverTimer) clearTimeout(hoverTimer);
+			if (clusterHoverTimer) clearTimeout(clusterHoverTimer);
+			leafletMap?.remove();
+		};
+	});
+
 	function scrollToRestaurant(r: Restaurant) {
 		appState.selectedRestaurantSlug = r.slug;
 		appState.listScrollTarget = r;
+	}
+
+	function escapeHtml(value: string): string {
+		return value
+			.replace(/&/g, '&amp;')
+			.replace(/</g, '&lt;')
+			.replace(/>/g, '&gt;')
+			.replace(/"/g, '&quot;')
+			.replace(/'/g, '&#39;');
+	}
+
+	function tooltipHtml(r: Restaurant): string {
+		return `<div class="rec-tip-inner"><strong>${escapeHtml(r.name)}</strong>${
+			r.cuisine ? `<span class="rec-tip-cuisine">${escapeHtml(r.cuisine)}</span>` : ''
+		}<span class="rec-tip-score">${r.aggregate_score} points</span></div>`;
+	}
+
+	function clusterTooltipHtml(restaurants: Restaurant[]): string {
+		const CAP = 8;
+		const shown = restaurants.slice(0, CAP);
+		const extra = restaurants.length - shown.length;
+		const items = shown
+			.map(
+				(r) =>
+					`<li><span class="rec-clist-name">${escapeHtml(r.name)}</span><span class="rec-clist-score">${r.aggregate_score}</span></li>`
+			)
+			.join('');
+		return `<div class="rec-clist"><ul>${items}</ul>${
+			extra > 0 ? `<div class="rec-clist-more">+${extra} more</div>` : ''
+		}</div>`;
+	}
+
+	// Reconcile the on-map highlight with the current hovered/selected slug.
+	// Idempotent and safe to call from the effect, from updateMarkers, and from
+	// cluster 'animationend' (so a pin that un-clusters into view lights up).
+	function applyHighlight() {
+		if (!clusterGroupRef) return;
+		const active = appState.hoveredRestaurantSlug ?? appState.selectedRestaurantSlug;
+
+		// Revert the previously highlighted marker if it is no longer active.
+		if (appliedSlug && appliedSlug !== active) {
+			const prev = markers.get(appliedSlug);
+			if (prev) {
+				prev.setZIndexOffset(0);
+				prev.unbindTooltip();
+				prev.getElement()?.classList.remove('is-active');
+			}
+			appliedSlug = null;
+		}
+
+		if (!active || appliedSlug === active) return;
+
+		const next = markers.get(active);
+		if (!next) return;
+		// Only highlight a marker that is individually on the map. If it is inside a
+		// collapsed cluster, no-op now; 'animationend' retries when the cluster opens.
+		if (clusterGroupRef.getVisibleParent(next) !== next) return;
+
+		const r = (next as any).restaurant as Restaurant;
+		next.setZIndexOffset(1000);
+		next.getElement()?.classList.add('is-active');
+		next
+			.bindTooltip(tooltipHtml(r), {
+				permanent: true,
+				direction: 'top',
+				className: 'rec-tooltip',
+				opacity: 1
+			})
+			.openTooltip();
+		appliedSlug = active;
 	}
 </script>
 
@@ -328,6 +502,140 @@
 	@media (min-width: 1024px) {
 		.unmapped-list {
 			max-height: min(240px, 35%);
+		}
+	}
+
+	/* === Custom markers + hover tooltips ===
+	   Leaflet renders these into its own panes, outside this component's DOM,
+	   so every selector must be :global to escape Svelte's scoping. */
+	:global(.rec-marker) {
+		background: transparent;
+		border: none;
+	}
+
+	/* Resting state: small dot centered on the geo point */
+	:global(.rec-dot) {
+		position: absolute;
+		left: 8px;
+		top: 33px;
+		width: 14px;
+		height: 14px;
+		border-radius: 50%;
+		background: #ff4500;
+		border: 2px solid #fffcf8;
+		box-shadow: 0 1px 3px rgba(62, 44, 35, 0.4);
+		box-sizing: border-box;
+		transition: opacity 0.15s ease, transform 0.15s ease;
+	}
+
+	/* Active state: larger red pin whose tip sits on the geo point */
+	:global(.rec-pin) {
+		position: absolute;
+		left: 0;
+		top: 0;
+		width: 30px;
+		height: 42px;
+		opacity: 0;
+		transform: scale(0.4);
+		transform-origin: 15px 40px;
+		transition: opacity 0.15s ease, transform 0.15s ease;
+		filter: drop-shadow(0 2px 4px rgba(62, 44, 35, 0.4));
+		pointer-events: none;
+	}
+
+	:global(.rec-marker.is-active .rec-dot) {
+		opacity: 0;
+		transform: scale(0.3);
+	}
+
+	:global(.rec-marker.is-active .rec-pin) {
+		opacity: 1;
+		transform: scale(1);
+	}
+
+	/* Tooltip box above the pin / cluster (matches the app's cream palette) */
+	:global(.rec-tooltip.leaflet-tooltip) {
+		background: #fffcf8;
+		border: 1px solid #e0d6cc;
+		border-radius: 8px;
+		box-shadow: 0 2px 10px rgba(62, 44, 35, 0.18);
+		color: #3e2c23;
+		font-family: 'DM Sans', sans-serif;
+		font-size: 0.8rem;
+		padding: 6px 10px;
+		white-space: nowrap;
+	}
+
+	:global(.rec-tooltip.leaflet-tooltip-top::before) {
+		border-top-color: #fffcf8;
+	}
+	:global(.rec-tooltip.leaflet-tooltip-bottom::before) {
+		border-bottom-color: #fffcf8;
+	}
+	:global(.rec-tooltip.leaflet-tooltip-left::before) {
+		border-left-color: #fffcf8;
+	}
+	:global(.rec-tooltip.leaflet-tooltip-right::before) {
+		border-right-color: #fffcf8;
+	}
+
+	:global(.rec-tip-inner strong) {
+		display: block;
+		font-weight: 600;
+		color: #3e2c23;
+	}
+	:global(.rec-tip-cuisine) {
+		display: block;
+		color: #8a7866;
+		font-size: 0.78rem;
+	}
+	:global(.rec-tip-score) {
+		display: block;
+		color: #ff4500;
+		font-weight: 600;
+		font-size: 0.78rem;
+		margin-top: 2px;
+	}
+
+	/* Cluster popover list */
+	:global(.rec-tooltip--cluster) {
+		white-space: normal;
+	}
+	:global(.rec-clist) {
+		min-width: 150px;
+	}
+	:global(.rec-clist ul) {
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+	:global(.rec-clist li) {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		gap: 14px;
+		padding: 2px 0;
+		font-size: 0.78rem;
+	}
+	:global(.rec-clist-name) {
+		color: #3e2c23;
+	}
+	:global(.rec-clist-score) {
+		color: #ff4500;
+		font-weight: 600;
+	}
+	:global(.rec-clist-more) {
+		margin-top: 4px;
+		padding-top: 4px;
+		border-top: 1px solid #e0d6cc;
+		color: #8a7866;
+		font-size: 0.72rem;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		:global(.rec-dot),
+		:global(.rec-pin) {
+			transition: none !important;
 		}
 	}
 </style>
