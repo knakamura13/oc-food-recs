@@ -97,6 +97,18 @@
 		}
 	}
 
+	function setHovered(restaurant: Restaurant) {
+		appState.hoveredRestaurantSlug = restaurant.slug;
+	}
+
+	function clearHovered(restaurant: Restaurant) {
+		// Only clear if we still own the highlight — prevents a trailing
+		// mouseleave/blur from one row wiping the highlight a sibling just set.
+		if (appState.hoveredRestaurantSlug === restaurant.slug) {
+			appState.hoveredRestaurantSlug = null;
+		}
+	}
+
 	function showOnMap(restaurant: Restaurant) {
 		appState.mapTarget = restaurant;
 		const mapEl = document.querySelector('.map-container');
@@ -157,7 +169,7 @@
 		<span class="result-count" aria-live="polite">{restaurants.length} restaurants</span>
 	</div>
 
-	<div class="list-scroll">
+	<div class="list-scroll" role="region" aria-label="Restaurant results">
 		{#if sorted.length === 0}
 			<div class="empty-state">
 				<span class="empty-icon">&#x1F50D;</span>
@@ -171,8 +183,17 @@
 			{@const groups = groupEndorsements(restaurant)}
 			{@const primary = getPrimaryMention(restaurant)}
 
-			<div class="row" class:expanded={isOpen} id="restaurant-{slug}">
-				<button class="row-header" onclick={() => toggleRow(restaurant)} aria-expanded={isOpen} aria-controls={isOpen ? `drawer-${slug}` : undefined}>
+			<div class="row" class:expanded={isOpen} class:hovered={appState.hoveredRestaurantSlug === slug} id="restaurant-{slug}">
+				<button
+					class="row-header"
+					onclick={() => toggleRow(restaurant)}
+					onmouseenter={() => setHovered(restaurant)}
+					onmouseleave={() => clearHovered(restaurant)}
+					onfocus={() => setHovered(restaurant)}
+					onblur={() => clearHovered(restaurant)}
+					aria-expanded={isOpen}
+					aria-controls={isOpen ? `drawer-${slug}` : undefined}
+				>
 					<div class="row-main">
 						<span class="row-name">{restaurant.name}</span>
 						<div class="row-tags">
@@ -426,6 +447,17 @@
 
 	.row:hover {
 		border-left-color: #ff4500;
+	}
+
+	/* Reverse highlight: pin hover/focus on the map lights up the matching row */
+	.row.hovered {
+		border-left-color: #ff4500;
+		background: rgba(255, 69, 0, 0.04);
+	}
+
+	/* Selected row keeps its stronger cream fill even while hovered */
+	.row.expanded.hovered {
+		background: #faf7f2;
 	}
 
 	.row-main {

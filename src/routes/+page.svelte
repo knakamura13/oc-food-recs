@@ -358,6 +358,17 @@
 		outline-offset: 2px;
 	}
 
+	@media (prefers-reduced-motion: reduce) {
+		:global(*),
+		:global(*::before),
+		:global(*::after) {
+			transition-duration: 0.01ms !important;
+			animation-duration: 0.01ms !important;
+			animation-iteration-count: 1 !important;
+			scroll-behavior: auto !important;
+		}
+	}
+
 	/* Hero parallax fade — CSS scroll-driven, no JS */
 	@supports (animation-timeline: scroll()) {
 		.hero-section {
