@@ -212,6 +212,11 @@
 		color: #b5a99a;
 	}
 
+	/* Hover cue — kept before :focus so the focus state wins per-property */
+	input:hover {
+		border-color: #d8a48f;
+	}
+
 	input:focus {
 		border-color: #ff4500;
 		box-shadow: 0 0 0 3px rgba(255, 69, 0, 0.08);
