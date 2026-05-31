@@ -65,7 +65,7 @@
 		justify-content: center;
 		box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
 		transition: all 0.2s ease;
-		z-index: 900;
+		z-index: 1250;
 		padding: 6px;
 	}
 
