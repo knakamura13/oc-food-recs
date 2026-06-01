@@ -44,6 +44,12 @@ GENERATED_DATA_PATH = ROOT / "src" / "lib" / "data" / "generated" / "restaurants
 
 OLLAMA_URL = os.environ.get("OC_FOOD_RECS_OLLAMA_URL", "http://127.0.0.1:11434/api/chat")
 OLLAMA_MODEL = os.environ.get("OC_FOOD_RECS_OLLAMA_MODEL", "gemma4:latest")
+# Reasoning-capable tags (e.g. gemma4:26b) emit a chain-of-thought that consumes the
+# num_predict budget and leaves the JSON answer empty -- silently dropping the record.
+# Sending think=false makes every model answer directly; it is a no-op on non-thinking
+# tags like gemma4:latest. Override with OC_FOOD_RECS_OLLAMA_THINK=true|false|omit.
+_THINK_ENV = os.environ.get("OC_FOOD_RECS_OLLAMA_THINK", "false").strip().lower()
+OLLAMA_THINK = {"true": True, "false": False, "omit": None, "": None}.get(_THINK_ENV, False)
 
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 HEADERS = {"User-Agent": "oc-food-recs-pipeline/1.0 (personal project)"}
@@ -58,16 +64,27 @@ THREAD_FOLDER_PATTERN = "{subreddit}-{post_id}"
 SYSTEM_PROMPT = """You are a structured data extractor. Given a Reddit comment recommending food/drink spots, extract each establishment mentioned into a JSON array.
 
 For each establishment, return:
-- "name": the establishment name (required)
+- "name": the establishment's PROPER name (required) -- not a description of it. For "Ake Larry, a tiny Italian fusion spot", the name is "Ake Larry", not "Italian fusion spot".
 - "location": city or neighborhood if mentioned, else null
-- "cuisine": cuisine type if inferable, else null
+- "cuisine": cuisine type if inferable from the name or text, else null
 
 Include any food or drink establishment (restaurants, cafes, bakeries, ice cream shops, delis, food trucks, etc.).
-Expand common Orange County abbreviations: HB = Huntington Beach, CM = Costa Mesa, SA = Santa Ana, FV = Fountain Valley, GG = Garden Grove, CdM = Corona del Mar, DP = Dana Point, SJC = San Juan Capistrano, LB = Long Beach.
+A proper name IS a recommendation even if it does not sound food-related and even if it is terse: a bare name ("Keno's") or "Name in City" ("Pops in Santa Ana") must be extracted.
+Infer cuisine when the name or text makes it clear: "Peter's Burgers" -> Burgers, "Pho 79" -> Vietnamese, "Tama Sushi" -> Sushi, "El Farolito" -> Mexican, "Gina's Pizza" -> Pizza. Use null only when genuinely unclear.
+Do NOT invent names from generic phrases: "a wine tasting place", "a taco truck", "that breakfast spot" are not names -- skip them unless a proper name is given.
+Expand common Orange County abbreviations: HB = Huntington Beach, CM = Costa Mesa, SA/SNA = Santa Ana, FV = Fountain Valley, GG = Garden Grove, CdM = Corona del Mar, DP = Dana Point, SJC = San Juan Capistrano, LB = Long Beach, MV = Mission Viejo, LF = Lake Forest, RSM = Rancho Santa Margarita.
 
-If the comment is NOT recommending any food/drink establishment (e.g., a question, meta comment about the thread), return an empty array [].
+If the comment is NOT recommending any food/drink establishment (e.g., a question, a meta comment, or only a closed/defunct place being reminisced about), return an empty array [].
 
-Return ONLY valid JSON. No explanation, no markdown fences."""
+Examples:
+Comment: "Pops in Santa Ana"
+JSON: [{"name": "Pops", "location": "Santa Ana", "cuisine": null}]
+Comment: "Peter's Burgers in Tustin, best patty melt around"
+JSON: [{"name": "Peter's Burgers", "location": "Tustin", "cuisine": "Burgers"}]
+Comment: "Anyone know a good taco truck around here?"
+JSON: []
+
+Return ONLY a valid JSON array at the top level (e.g. [ {...} ]), never an object wrapper. No explanation, no markdown fences."""
 
 
 def text_of(tag: Any) -> str:
@@ -469,36 +486,85 @@ def init_thread(html_path: Path, threads_root: Path = THREADS_ROOT) -> Path:
     return thread_dir
 
 
+SENTINEL_NAMES = {"none", "null", "n/a", "na", "unknown", "none.", "n/a."}
+# Generic descriptions the model sometimes emits as if they were establishment names.
+GENERIC_NAMES = {
+    "wine tasting place", "wine tasting", "wine bar", "taco truck", "food truck",
+    "breakfast spot", "coffee shop", "sandwich shop", "pizza place", "burger place",
+    "dumpling place", "pho place", "pho places", "ice cream shop", "the place", "a place",
+}
+# Object envelopes some models wrap the array in, e.g. {"establishments": [...]}.
+_WRAPPER_KEYS = ("entities", "establishments", "restaurants", "places", "results", "items", "data")
+# Backfill cuisine from an unambiguous food word in the name (most specific first).
+_CUISINE_KEYWORDS = [
+    # concrete food-type words first (win over ethnonyms below)
+    ("pizzeria", "Pizza"), ("pizza", "Pizza"), ("taqueria", "Mexican"), ("taco", "Mexican"),
+    ("burrito", "Mexican"), ("birria", "Mexican"), ("cantina", "Mexican"), ("sushi", "Sushi"),
+    ("ramen", "Ramen"), ("izakaya", "Japanese"), ("teriyaki", "Japanese"), ("pho", "Vietnamese"),
+    ("delicatessen", "Deli"), ("deli", "Deli"), ("bakery", "Bakery"), ("bakehouse", "Bakery"),
+    ("patisserie", "Bakery"), ("creamery", "Ice Cream"), ("ice cream", "Ice Cream"),
+    ("custard", "Ice Cream"), ("gelato", "Ice Cream"), ("donut", "Donuts"), ("doughnut", "Donuts"),
+    ("barbecue", "BBQ"), ("bbq", "BBQ"), ("steakhouse", "Steakhouse"), ("burger", "Burgers"),
+    ("sandwich", "Sandwiches"), ("seafood", "Seafood"), ("trattoria", "Italian"),
+    ("ristorante", "Italian"), ("osteria", "Italian"), ("cucina", "Italian"),
+    ("cafe", "Cafe"), ("café", "Cafe"), ("coffee", "Coffee"),
+    # ethnonyms last (only fire when the word literally appears in the name)
+    ("thai", "Thai"), ("greek", "Greek"), ("persian", "Persian"), ("korean", "Korean"),
+    ("vietnamese", "Vietnamese"), ("mexican", "Mexican"), ("italian", "Italian"),
+    ("japanese", "Japanese"), ("chinese", "Chinese"), ("indian", "Indian"),
+    ("mediterranean", "Mediterranean"), ("peruvian", "Peruvian"), ("burmese", "Burmese"),
+]
+
+
+def cuisine_from_name(name: str) -> str | None:
+    """Infer a cuisine from an unambiguous food word in the establishment name."""
+    low = name.lower()
+    for keyword, cuisine in _CUISINE_KEYWORDS:
+        if keyword in low:
+            return cuisine
+    return None
+
+
 def normalize_extractor_result(result: Any) -> tuple[list[dict[str, Any]], str | None]:
     raw: str | None = None
-    entities: Any = result
-
     if isinstance(result, tuple) and len(result) == 2:
         entities, raw = result
-    elif isinstance(result, dict) and "entities" in result:
-        entities = result["entities"]
-        raw = result.get("raw")
+    else:
+        entities = result
 
-    if entities is None:
-        return [], raw
-
+    # Unwrap object envelopes some models emit (e.g. {"establishments": [...]});
+    # otherwise treat a lone {"name": ...} object as a single entity.
     if isinstance(entities, dict):
-        entities = [entities]
+        if not raw and isinstance(entities.get("raw"), str):
+            raw = entities.get("raw")
+        for key in _WRAPPER_KEYS:
+            if isinstance(entities.get(key), list):
+                entities = entities[key]
+                break
+        else:
+            entities = [entities] if entities.get("name") else []
+
+    if not isinstance(entities, list):
+        return [], raw
 
     cleaned: list[dict[str, Any]] = []
     for entity in entities:
         if not isinstance(entity, dict):
             continue
         name = normalize_text(str(entity.get("name", "")))
-        # The LLM occasionally emits sentinel non-names ("None", "N/A", etc.)
-        # when a comment mentions no establishment; drop them.
-        if not name or name.strip().lower() in {"none", "null", "n/a", "na", "unknown", "none."}:
+        low = name.strip().lower()
+        # Drop sentinel non-names ("None", "N/A") and generic descriptions
+        # ("a wine tasting place") the model sometimes emits as if they were names.
+        if not low or low in SENTINEL_NAMES or low in GENERIC_NAMES:
             continue
+        cuisine = normalize_text(str(entity["cuisine"])) if entity.get("cuisine") else None
+        if not cuisine:
+            cuisine = cuisine_from_name(name)
         cleaned.append(
             {
                 "name": name,
                 "location": normalize_text(str(entity["location"])) if entity.get("location") else None,
-                "cuisine": normalize_text(str(entity["cuisine"])) if entity.get("cuisine") else None,
+                "cuisine": cuisine,
             }
         )
     return cleaned, raw
@@ -514,6 +580,7 @@ def default_extract_entities(comment_text: str, comment: dict[str, Any] | None =
             ],
             "stream": False,
             "options": {"temperature": 0.0, "num_predict": 512},
+            **({"think": OLLAMA_THINK} if OLLAMA_THINK is not None else {}),
         }
     ).encode()
 
