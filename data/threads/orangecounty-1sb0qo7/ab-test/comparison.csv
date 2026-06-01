@@ -1,0 +1,130 @@
+comment_id,category,name_match,n_gemma,n_claude,only_gemma,only_claude,field_diffs
+oe04j5u,CUISINE_DIFF,Y,1,1,,,cui:El Farolito[g=None|c=Mexican]
+odzxgt4,MATCH,Y,1,1,,,
+oe049y7,CUISINE_DIFF,Y,1,1,,,cui:Confetti Italian Ice and Custard[g=None|c=Ice Cream]
+oe049di,MATCH,Y,1,1,,,
+oe007ij,MATCH,Y,1,1,,,
+odzzk9f,CUISINE_DIFF,Y,2,2,,,cui:Taste of Burma[g=None|c=Burmese]
+oe00mrp,GEMMA_EQUAL_OR_BETTER,Y,4,3,,,loc:Mitasie Vegan Cafe[g=Huntington Beach|c=Lake Forest]; cui:Mitasie Vegan Cafe[g=None|c=Vegan]
+oe01tku,CUISINE_DIFF,Y,1,1,,,cui:Volcano Burger[g=None|c=Burgers]
+oe002qo,CUISINE_DIFF,Y,1,1,,,cui:Peter's Burgers[g=None|c=Burgers]
+oe07b2t,CUISINE_DIFF,Y,1,1,,,cui:Roma Ditalia[g=None|c=Italian]
+oe0bga7,NAME_STYLE_DIFF,,1,1,Cortina'a pizzeria,Cortina's Pizzeria,
+odzzvni,CUISINE_DIFF,Y,1,1,,,cui:American Grub[g=None|c=American]
+oe03hrk,MATCH,Y,1,1,,,
+oe0tnzu,MATCH,Y,1,1,,,
+oe00gbw,CUISINE_DIFF,Y,2,2,,,cui:De simone deli[g=None|c=Deli]; loc:cafe cup[g=Huntington|c=Huntington Beach]; cui:cafe cup[g=None|c=Cafe]
+oe01we4,GEMMA_DROPPED_REC,,0,1,,Anepalco,
+odzyqxp,CUISINE_DIFF,Y,1,1,,,cui:Yogis Teriyaki[g=Japanese|c=Teriyaki]
+oe0183d,MATCH,Y,1,1,,,
+odzy75b,MATCH,Y,1,1,,,
+odzxsme,GEMMA_DROPPED_REC,,0,1,,Keno's,
+odzz1kc,CUISINE_DIFF,Y,1,1,,,cui:Molcajete[g=None|c=Mexican]
+oe0blvx,MATCH,Y,1,1,,,
+oe0na2b,MATCH,Y,2,2,,,
+oe00zie,CUISINE_DIFF,Y,2,2,,,loc:A's burgers[g=Dana Point / San Juan|c=Dana Point]; cui:A's burgers[g=None|c=Burgers]
+oe021f4,CUISINE_DIFF,Y,5,5,,,cui:Mo Ran Gak[g=Korean|c=Korean BBQ]; cui:Sushi Kizuna[g=Japanese|c=Sushi]; cui:El Paraiso[g=Papusas|c=Pupusas]; cui:Kawamata Seafood[g=None|c=Poke]
+oe031la,LOC_STYLE_DIFF,Y,1,1,,,loc:Itz A Deli[g=lake forest/foothill ranch|c=Lake Forest]
+odzyfji,MATCH,Y,1,1,,,
+oe027i4,MATCH,Y,1,1,,,
+oe051vr,MATCH,Y,1,1,,,
+oe02oyn,MATCH,Y,1,1,,,
+oe0ff2k,MATCH,Y,1,1,,,
+oe0cyby,MATCH,Y,1,1,,,
+odzzfj4,MATCH,Y,1,1,,,
+oe09n3a,CUISINE_DIFF,Y,2,2,,,cui:Ray's Pizza[g=None|c=Pizza]; cui:Gary's Deli[g=None|c=Deli]
+oe01y11,MATCH,Y,1,1,,,
+oe0ah5k,CUISINE_DIFF,Y,1,1,,,cui:Paradise Deli[g=None|c=Deli]
+oe0l8ty,AMBIGUOUS,,0,1,,Mexicasa,
+oe05mq8,CUISINE_DIFF,Y,2,2,,,cui:Jim's Super Burger[g=None|c=Burgers]
+oe07jvf,MATCH,Y,1,1,,,
+oe2h055,CUISINE_DIFF,Y,1,1,,,cui:Pepe's[g=None|c=Mexican]
+oe35oot,MATCH,Y,1,1,,,
+oe0gfgl,MATCH,Y,1,1,,,
+oe0syuo,CUISINE_DIFF,Y,2,2,,,cui:Moonlight Pizza[g=None|c=Pizza]; cui:Union Jacks[g=None|c=Fish and Chips]
+oe0wn65,MATCH,Y,1,1,,,
+oe0wuuz,MATCH,Y,1,1,,,
+oe06172,MATCH,Y,1,1,,,
+oe037zn,GEMMA_DROPPED_REC,,0,1,,Jin Cook,
+odzzlmr,CUISINE_DIFF,Y,3,3,,,cui:Roses Cantina[g=None|c=Mexican]; cui:Silverado Cafe[g=None|c=Cafe]
+oe0ai85,MATCH,Y,1,1,,,
+oe062lx,CUISINE_DIFF,Y,1,1,,,cui:Super Antojitos[g=None|c=Mexican]
+oe06l5g,CUISINE_DIFF,Y,1,1,,,loc:Himalayan Grill[g=Sunset Beach/Huntington Beach|c=Huntington Beach]; cui:Himalayan Grill[g=None|c=Himalayan]
+oe2485s,MATCH,Y,0,0,,,
+oe30upg,GEMMA_EQUAL_OR_BETTER,Y,1,1,,,cui:George's[g=Breakfast|c=None]
+odzz9qv,CUISINE_DIFF,Y,1,1,,,loc:Dads Sandwiches and Things[g=Missions Viejo|c=Mission Viejo]; cui:Dads Sandwiches and Things[g=None|c=Sandwiches]
+oe038zu,GEMMA_EQUAL_OR_BETTER,Y,1,1,,,cui:Tacos Madre[g=Mexican|c=Tacos]
+oe08ubp,AMBIGUOUS,,1,0,Mascarpone’s,,
+oe08y16,MATCH,Y,1,1,,,
+oe0a08p,CUISINE_DIFF,Y,8,8,,,cui:Sookdal[g=Korean|c=Korean BBQ]; cui:Sababa Falafel Shop[g=Middle Eastern|c=Falafel]; cui:Mo Ran Gak[g=Korean|c=Korean BBQ]; cui:Sushi Murasaki[g=Japanese|c=Sushi]; loc:Kaju Soft Tofu[g=Garden Grove or Buena Park|c=Garden Grove]; cui:Kaju Soft Tofu[g=None|c=Korean]
+oe212js,GEMMA_EQUAL_OR_BETTER,Y,2,2,,,cui:Wok-In[g=Vietnamese and Chinese|c=Vietnamese]
+oe1nwkl,MATCH,Y,1,1,,,
+oe42lnv,GEMMA_DROPPED_REC,,0,1,,The Green Chile,
+odzzoor,AMBIGUOUS,Y,3,3,,,cui:Sammy's Stackhouse[g=BBQ|c=None]
+oe01gp7,GEMMA_DROPPED_REC,,0,1,,B and C,
+oe0593y,CUISINE_DIFF,Y,2,2,,,cui:Cloud Cafe[g=None|c=Cafe]; cui:Sunny Dumpling House[g=None|c=Dumplings]
+oe0bh1q,CUISINE_DIFF,Y,2,2,,,cui:Fu Wing Low[g=None|c=Chinese]
+oe2nt52,MATCH,Y,1,1,,,
+oe3osmy,MATCH,Y,0,0,,,
+oe07tk6,GEMMA_FABRICATION,,1,1,Italian fusion restaurant,Ake Larry,
+oe086xx,AMBIGUOUS,Y,1,1,,,loc:Pho Veggie[g=Disneyland|c=None]
+oe01s2p,MATCH,Y,1,1,,,
+oe0d64i,MATCH,Y,1,1,,,
+oe1a7nk,MATCH,Y,1,1,,,
+oe1h0g4,NAME_STYLE_DIFF,,1,1,Paul's Place diner,Paul's Place,
+oe1j39p,NAME_STYLE_DIFF,,1,1,Plumeria Cafe by Stacks,Plumeria Cafe,
+oe1jamb,MATCH,Y,1,1,,,
+oe1oayp,GEMMA_FABRICATION,,2,1,wine tasting place,,
+oe3mpfw,MATCH,Y,1,1,,,
+oew313d,MATCH,Y,0,0,,,
+odzzai5,MATCH,Y,2,2,,,
+oe0i7z7,GEMMA_DROPPED_REC,,0,1,,Choice Burgers,
+oe2ymx3,AMBIGUOUS,Y,3,3,,,loc:Mitasie[g=LF|c=None]; loc:Nice Burger[g=MV|c=Mission Viejo]; cui:Nice Burger[g=Vegan|c=Burgers]; loc:King's Donuts[g=MV|c=Mission Viejo]; cui:King's Donuts[g=Latino/Breakfast|c=Donuts]
+oe65aa3,MATCH,Y,0,0,,,
+oe02ht7,MATCH,Y,2,2,,,
+oe03zld,GEMMA_DROPPED_REC,,0,2,,Trieu Chau; mi la cay,
+oe04hn4,CUISINE_DIFF,Y,1,1,,,cui:Ranch Enchilada[g=None|c=Mexican]
+oe05oit,MATCH,Y,2,2,,,
+oe06f3n,MATCH,Y,1,1,,,
+oe0707i,MATCH,Y,1,1,,,
+oe0byza,MATCH,Y,1,1,,,
+oe0h84g,CUISINE_DIFF,Y,1,1,,,cui:Katsuyaki[g=None|c=Japanese]
+oe0hurq,CUISINE_DIFF,Y,1,1,,,cui:El Maguey[g=None|c=Mexican]
+oe0ku1k,CUISINE_DIFF,Y,1,1,,,cui:Pocket Burger[g=None|c=Burgers]
+oe0pnjh,CUISINE_DIFF,Y,1,1,,,cui:Magnolia Cafe[g=None|c=Cafe]
+oe0pxoh,MATCH,Y,2,2,,,
+oe0qw4r,MATCH,Y,1,1,,,
+oe0udpr,MATCH,Y,1,1,,,
+oe15ozt,MATCH,Y,1,1,,,
+oe19rlt,GEMMA_PARTIAL_MISS+LOCERR,,8,11,Fuji’s,Mitasie; Deli-licious; Fuji's Famous Burgers; Kabab and Curry,loc:Pour Co.[g=Mitasie|c=None]; cui:Bandoleros Cafe[g=None|c=Cafe]; cui:Cafe Cup[g=None|c=Cafe]; cui:Katella Deli and Bakery[g=Deli/Bakery|c=Deli]
+oe1a5bh,MATCH,Y,1,1,,,
+oe1qohb,CUISINE_DIFF,Y,1,1,,,cui:Gary's Deli[g=None|c=Deli]
+oe1wf8u,MATCH,Y,1,1,,,
+oe2oluo,LOC_STYLE_DIFF,Y,1,1,,,loc:Nicks Burritos[g=Seal Beach or Los Alamitos|c=Seal Beach]
+oe2sq9n,MATCH,Y,3,3,,,
+oe38bqx,CUISINE_DIFF,Y,7,7,,,cui:Romano Cucina[g=None|c=Italian]; cui:Saffron Bakery[g=None|c=Bakery]
+oe3a3x4,ORACLE_OVERREACH,,2,3,,Sabatino's,cui:El Farolito[g=None|c=Mexican]
+oe3cgzv,MATCH,Y,1,1,,,
+oe3da9r,MATCH,Y,1,1,,,
+oe3wtxo,MATCH,Y,1,1,,,
+oe40jn0,GEMMA_DROPPED_REC,,0,1,,Yoo's Place,
+oe4jt4y,CUISINE_DIFF,Y,1,1,,,cui:Tama Sushi[g=None|c=Sushi]
+oe4l71r,MATCH,Y,1,1,,,
+oe4mvnh,CUISINE_DIFF,Y,1,1,,,loc:Sushi Kizuna[g=Aliso|c=Aliso Viejo]; cui:Sushi Kizuna[g=Japanese|c=Sushi]
+oe4rlij,GEMMA_EQUAL_OR_BETTER,Y,1,1,,,cui:Okazya Kitchen[g=Japanese|c=None]
+oeaty1s,GEMMA_EQUAL_OR_BETTER,,1,1,Alebriges taco truck,Alebriges,
+oee7dci,GEMMA_DROPPED_REC,,0,1,,Kimmies,
+oeesk2p,MATCH,Y,1,1,,,
+ofc232b,MATCH,Y,0,0,,,
+oe0d6ar,MATCH,Y,1,1,,,
+oe037fs,CUISINE_DIFF,Y,1,1,,,cui:Il Barone[g=None|c=Italian]
+oe06xyh,AMBIGUOUS,,0,1,,Double bamboo,
+oe07ee8,CUISINE_DIFF,Y,1,1,,,cui:El camino café[g=None|c=Mexican]
+oe0d848,GEMMA_DROPPED_REC,,0,1,,Captain Mauri's,
+oe0do32,GEMMA_DROPPED_REC,,0,1,,Pops,
+oe0e1h8,CUISINE_DIFF,Y,1,1,,,cui:Casa Franco[g=None|c=Mexican]
+oe0gfcl,MATCH,Y,1,1,,,
+oe0ghnx,MATCH,Y,1,1,,,
+oe0glvg,AMBIGUOUS,,0,1,,Xe com tam,
+oe0hcu1,CUISINE_DIFF,Y,1,1,,,cui:Twenty Eight Restaurant[g=None|c=Steakhouse]
+oe0mhy3,MATCH,Y,1,1,,,
