@@ -57,6 +57,7 @@ class NegativeCacheTests(unittest.TestCase):
                 rp.GEOCODE_CACHE_PATH = Path(tmp) / "cache.json"
                 rp._geocode_cache = None
                 rp._last_geocode_ts = 0.0
+                rp._mapbox_token_value = ""  # disable Mapbox fallback to isolate Nominatim
                 with mock.patch.object(rp.urllib.request, "urlopen", fake_urlopen):
                     r1 = rp.default_geocode("Nonexistent Spot", "Santa Ana")
                     r2 = rp.default_geocode("Nonexistent Spot", "Santa Ana")
@@ -67,6 +68,48 @@ class NegativeCacheTests(unittest.TestCase):
                 rp.GEOCODE_CACHE_PATH = orig
                 rp._geocode_cache = None
                 rp._last_geocode_ts = 0.0
+                rp._mapbox_token_value = None
+
+
+class MapboxAcceptGateTests(unittest.TestCase):
+    """The name+city gate must accept correct matches and reject fuzzy ones."""
+
+    def test_name_score_subset_and_dissimilar(self):
+        self.assertGreaterEqual(rp._name_score("El Indio", "El Indio Botanas y Cerveza"), 0.9)
+        self.assertLess(rp._name_score("Sabroso Mexican Kitchen",
+                                       "US Home Kitchen & Bathroom Remodeling"), 0.5)
+
+    def test_accepts_correct_matches(self):
+        self.assertTrue(rp._mapbox_accept("Burritos La Palma", "santaana",
+                                          "Burritos La Palma", "410 N Bristol St, Santa Ana, CA"))
+        self.assertTrue(rp._mapbox_accept("El Indio", "irvine",
+                                          "El Indio Botanas y Cerveza", "Some St, Anaheim, CA"))
+        self.assertTrue(rp._mapbox_accept("Los Grandes", "santaana",
+                                          "Taqueria Los Grandes", "5th St, Santa Ana, CA"))
+
+    def test_rejects_fuzzy_false_positives(self):
+        self.assertFalse(rp._mapbox_accept("Sabroso Mexican Kitchen", "gardengrove",
+                                           "US Home Kitchen & Bathroom Remodeling",
+                                           "Park Ave, Garden Grove, CA"))
+        self.assertFalse(rp._mapbox_accept("Bunz Burger Joint", "huntingtonbeach",
+                                           "Burt's Burgers Huntington Beach",
+                                           "221 Main St, Huntington Beach, CA"))
+        self.assertFalse(rp._mapbox_accept("Greek Bistro", "lakeforest",
+                                           "Lake Forest Preschool", "Lake Forest, CA"))
+
+    def test_pick_prefers_city_match_for_chains(self):
+        cands = [
+            (33.60, -117.86, "Claro's Italian Market & Deli", "2795 Cabot Dr, Corona del Mar, CA"),
+            (33.74, -117.81, "Claro's Italian Market & Deli", "1095 Old Town, Tustin, CA"),
+        ]
+        picked = rp._mapbox_pick(cands, "Claro's Italian Deli", "tustin")
+        self.assertIn("Tustin", picked[3])  # the Tustin branch, not Corona del Mar
+
+    def test_pick_falls_back_to_best_name_without_city(self):
+        cands = [(33.80, -117.92, "Puesto Anaheim", "1040 W Katella Ave, Anaheim, CA")]
+        picked = rp._mapbox_pick(cands, "Puesto", "sanjuan")  # city won't match
+        self.assertEqual(picked[2], "Puesto Anaheim")
+        self.assertIsNone(rp._mapbox_pick([], "X", "y"))
 
 
 if __name__ == "__main__":
