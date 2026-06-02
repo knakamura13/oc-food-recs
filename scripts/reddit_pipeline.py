@@ -54,7 +54,9 @@ OLLAMA_THINK = {"true": True, "false": False, "omit": None, "": None}.get(_THINK
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 HEADERS = {"User-Agent": "oc-food-recs-pipeline/1.0 (personal project)"}
 OC_BOUNDS = {
-    "viewbox": "-118.1,33.38,-117.4,33.95",
+    # viewbox is aligned with the post-filter box in default_geocode so bounded=1
+    # doesn't reject edge cities (Long Beach/Seal Beach) the post-filter accepts.
+    "viewbox": "-118.2,33.3,-117.3,34.0",
     "bounded": "1",
 }
 
@@ -909,7 +911,58 @@ def _subreddit_city(subreddit: str | None) -> str | None:
     return SUBREDDIT_CITY.get((subreddit or "").strip().lower())
 
 
+# Canonical OC city names + aliases for normalizing a free-text "location" before
+# geocoding: expand abbreviations ("HB"), partials ("Newport"), neighborhoods/streets
+# ("Old Town Tustin", "Anaheim Blvd"), and multi-city strings ("Santa Ana/Garden Grove").
+_OC_CITIES = sorted(
+    set(SUBREDDIT_CITY.values())
+    | {"Corona del Mar", "Sunset Beach", "Anaheim Hills", "Foothill Ranch",
+       "Newport Beach", "Long Beach", "Cerritos", "Norwalk", "Artesia"},
+    key=len,
+    reverse=True,  # match longer names first ("Anaheim Hills" before "Anaheim")
+)
+_LOCATION_ALIASES = {
+    "hb": "Huntington Beach", "huntington": "Huntington Beach", "cm": "Costa Mesa",
+    "sa": "Santa Ana", "sna": "Santa Ana", "fv": "Fountain Valley", "gg": "Garden Grove",
+    "cdm": "Corona del Mar", "dp": "Dana Point", "sjc": "San Juan Capistrano",
+    "lb": "Long Beach", "mv": "Mission Viejo", "lf": "Lake Forest",
+    "rsm": "Rancho Santa Margarita", "newport": "Newport Beach", "aliso": "Aliso Viejo",
+    "fhr": "Foothill Ranch", "foothillranch": "Foothill Ranch",
+    "uci": "Irvine", "ucitowncenter": "Irvine", "csuf": "Fullerton",
+}
+
+
+def _loc_key(s: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", s.lower())
+
+
+def normalize_location(location: str | None) -> str | None:
+    """Normalize a free-text location to a canonical OC city for geocoding.
+
+    Takes the first city of a multi-city string, expands abbreviations/partials, and
+    maps a neighborhood/street that names a known city to that city. Falls back to a
+    title-cased best effort, or None when empty.
+    """
+    if not location or not location.strip():
+        return None
+    first = re.split(r"\s*(?:/|,|&|\bor\b|\band\b)\s*", location.strip(), maxsplit=1)[0].strip()
+    if not first:
+        return None
+    key = _loc_key(first)
+    if key in _LOCATION_ALIASES:
+        return _LOCATION_ALIASES[key]
+    for city in _OC_CITIES:
+        if _loc_key(city) == key:
+            return city
+    low = first.lower()
+    for city in _OC_CITIES:
+        if re.search(rf"\b{re.escape(city.lower())}\b", low):
+            return city
+    return first.title()
+
+
 def default_geocode(name: str, location: str | None) -> tuple[float | None, float | None, str]:
+    location = normalize_location(location)
     if not location:
         return None, None, "missing location"
 
@@ -960,10 +1013,12 @@ def default_geocode(name: str, location: str | None) -> tuple[float | None, floa
         else:
             result = (lat, lng, display_name)
 
-    # Cache definitive outcomes (including "no results"/"out of bounds") so we never
-    # pay the 1s rate-limit for the same query twice.
-    cache[key] = list(result)
-    _save_geocode_cache()
+    # Cache only positive resolutions. Negatives ("no results"/out-of-bounds) are left
+    # uncached so a later run retries them (e.g. once a POI lands in OSM, or the location
+    # normalizes to a resolvable city) instead of being pinned to a failure forever.
+    if result[0] is not None:
+        cache[key] = list(result)
+        _save_geocode_cache()
     return result
 
 
