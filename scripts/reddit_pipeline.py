@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+import difflib
 import html as html_mod
 import json
 import os
@@ -961,6 +962,112 @@ def normalize_location(location: str | None) -> str | None:
     return first.title()
 
 
+# --- Mapbox Search Box fallback ---------------------------------------------
+# OSM/Nominatim misses many small OC restaurants (they aren't mapped as POIs).
+# When it returns nothing, fall back to Mapbox's POI-rich Search Box API -- but
+# Search Box fuzzy-matches and will confidently return the WRONG place, so accept
+# a result only when its name strongly matches (token-subset or high ratio) and,
+# for weaker matches, the city agrees. Token from env or .env (MAPBOX_TOKEN);
+# absent token => fallback silently disabled.
+MAPBOX_SEARCHBOX_URL = "https://api.mapbox.com/search/searchbox/v1/forward"
+MAPBOX_MIN_INTERVAL_S = 0.2
+_last_mapbox_ts = 0.0
+_mapbox_token_value: str | None = None
+_NAME_STOPWORDS = {"the", "a", "and", "restaurant", "cafe", "kitchen", "grill",
+                   "grille", "bar", "taqueria", "co", "llc"}
+
+
+def _mapbox_token() -> str:
+    global _mapbox_token_value
+    if _mapbox_token_value is None:
+        token = os.environ.get("MAPBOX_TOKEN", "")
+        env_path = ROOT / ".env"
+        if not token and env_path.exists():
+            for line in env_path.read_text(encoding="utf-8").splitlines():
+                if line.startswith("MAPBOX_TOKEN="):
+                    token = line.split("=", 1)[1].strip().strip('"').strip("'")
+                    break
+        _mapbox_token_value = token or ""
+    return _mapbox_token_value
+
+
+def _name_tokens(s: str) -> set[str]:
+    toks = re.sub(r"[^a-z0-9]+", " ", (s or "").lower()).split()
+    return {t for t in toks if len(t) >= 2 and t not in _NAME_STOPWORDS}
+
+
+def _name_score(query_name: str, result_name: str) -> float:
+    """0..1 name similarity; a token-subset (query tokens ⊆ result tokens) scores
+    high so 'El Indio' matches 'El Indio Botanas y Cerveza'."""
+    ratio = difflib.SequenceMatcher(None, _loc_key(query_name), _loc_key(result_name)).ratio()
+    qt = _name_tokens(query_name)
+    subset = bool(qt) and qt <= _name_tokens(result_name)
+    return max(ratio, 0.9 if subset else 0.0)
+
+
+def _mapbox_accept(query_name: str, city_key: str, feat_name: str, feat_addr: str) -> bool:
+    """Accept a Mapbox candidate only on a strong name match, or a decent name
+    match confirmed by the city -- the gate that blocks fuzzy false positives."""
+    score = _name_score(query_name, feat_name)
+    city_match = bool(city_key) and city_key in _loc_key(feat_addr)
+    return score >= 0.85 or (score >= 0.6 and city_match)
+
+
+def _mapbox_pick(cands: list, query_name: str, city_key: str):
+    """Choose among in-OC candidates: prefer one whose city matches the query (so a
+    multi-branch chain resolves to the right city), else the best name match."""
+    if not cands:
+        return None
+    scored = [(_name_score(query_name, f[2]), bool(city_key) and city_key in _loc_key(f[3]), f)
+              for f in cands]
+    city_hits = [s for s in scored if s[0] >= 0.6 and s[1]]
+    pool = city_hits or scored
+    return max(pool, key=lambda s: s[0])[2]
+
+
+def _mapbox_geocode(name: str, location: str) -> tuple[float | None, float | None, str]:
+    token = _mapbox_token()
+    if not token:
+        return None, None, "mapbox: no token"
+    params = urllib.parse.urlencode({
+        "q": f"{name} {location}",
+        "access_token": token,
+        "proximity": "-117.8,33.7",
+        "bbox": OC_BOUNDS["viewbox"],
+        "types": "poi",
+        "limit": "5",
+    })
+    global _last_mapbox_ts
+    wait = MAPBOX_MIN_INTERVAL_S - (time.monotonic() - _last_mapbox_ts)
+    if wait > 0:
+        time.sleep(wait)
+    _last_mapbox_ts = time.monotonic()
+    try:
+        with urllib.request.urlopen(f"{MAPBOX_SEARCHBOX_URL}?{params}", timeout=10) as response:
+            data = json.loads(response.read())
+    except Exception as exc:
+        return None, None, f"mapbox error: {exc}"  # transient -> not cached
+
+    city_key = _loc_key(location)
+    cands = []
+    for feat in data.get("features") or []:
+        coords = (feat.get("geometry") or {}).get("coordinates") or [None, None]
+        lng, lat = coords[0], coords[1]
+        if lat is None or not (33.3 <= lat <= 34.0 and -118.2 <= lng <= -117.3):
+            continue
+        props = feat.get("properties") or {}
+        fname = props.get("name", "")
+        faddr = props.get("full_address", "") or props.get("place_formatted", "") or ""
+        cands.append((lat, lng, fname, faddr))
+    best = _mapbox_pick(cands, name, city_key)
+    if not best:
+        return None, None, "mapbox: no in-OC result"
+    lat, lng, fname, faddr = best
+    if _mapbox_accept(name, city_key, fname, faddr):
+        return lat, lng, f"mapbox: {fname}, {faddr}"
+    return None, None, f"mapbox: rejected ({fname})"
+
+
 def default_geocode(name: str, location: str | None) -> tuple[float | None, float | None, str]:
     location = normalize_location(location)
     if not location:
@@ -1013,9 +1120,15 @@ def default_geocode(name: str, location: str | None) -> tuple[float | None, floa
         else:
             result = (lat, lng, display_name)
 
-    # Cache only positive resolutions. Negatives ("no results"/out-of-bounds) are left
-    # uncached so a later run retries them (e.g. once a POI lands in OSM, or the location
-    # normalizes to a resolvable city) instead of being pinned to a failure forever.
+    # Fallback: when Nominatim has no in-OC hit, try Mapbox's POI-rich Search Box
+    # (accepting only a strongly name+city-matched result -- see _mapbox_accept).
+    if result[0] is None:
+        mb = _mapbox_geocode(name, location)
+        if mb[0] is not None:
+            result = mb
+
+    # Cache only positive resolutions (from either provider). Negatives are left
+    # uncached so a later run retries them instead of being pinned to failure forever.
     if result[0] is not None:
         cache[key] = list(result)
         _save_geocode_cache()
