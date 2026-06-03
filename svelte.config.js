@@ -1,4 +1,7 @@
-import adapter from '@sveltejs/adapter-node';
+import adapterNode from '@sveltejs/adapter-node';
+import adapterStatic from '@sveltejs/adapter-static';
+
+const isSitesBuild = process.env.SITES_BUILD === '1';
 
 /** @type {import('@sveltejs/kit').Config} */
 const config = {
@@ -6,7 +9,14 @@ const config = {
 		runes: ({ filename }) => (filename.split(/[/\\]/).includes('node_modules') ? undefined : true)
 	},
 	kit: {
-		adapter: adapter()
+		adapter: isSitesBuild
+			? adapterStatic({
+					pages: 'dist/client',
+					assets: 'dist/client',
+					fallback: undefined,
+					strict: false
+				})
+			: adapterNode()
 	}
 };
 
