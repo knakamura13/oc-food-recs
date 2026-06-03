@@ -55,6 +55,11 @@
 	let controlsBarEl = $state<HTMLDivElement | undefined>(undefined);
 	/** Subscribed by mobile-map $effect so resize clears scroll lock when crossing the breakpoint */
 	let viewportWidth = $state(0);
+	// True only while the window is actively resizing; gates off the map-pane transition so
+	// the desktop/mobile breakpoint switch is instant instead of morphing (the transition is
+	// meant only for the tap-to-expand toggle, which never involves a resize).
+	let suppressMapTransition = $state(false);
+	let resizeSettleTimer: ReturnType<typeof setTimeout> | undefined;
 
 	const MOBILE_MAX_PX = 1023;
 
@@ -196,9 +201,19 @@
 		viewportWidth = window.innerWidth;
 		const onResize = () => {
 			viewportWidth = window.innerWidth;
+			// Kill the map-pane transition for the duration of the resize so crossing the
+			// 1024px breakpoint switches layouts instantly; re-enable once the drag settles.
+			suppressMapTransition = true;
+			clearTimeout(resizeSettleTimer);
+			resizeSettleTimer = setTimeout(() => {
+				suppressMapTransition = false;
+			}, 200);
 		};
 		window.addEventListener('resize', onResize, { passive: true });
-		return () => window.removeEventListener('resize', onResize);
+		return () => {
+			window.removeEventListener('resize', onResize);
+			clearTimeout(resizeSettleTimer);
+		};
 	});
 
 	// Sync URL params -> state on mount
@@ -288,6 +303,7 @@
 		<div
 			class="map-pane"
 			class:portal-expanded={mapExpanded}
+			class:no-map-transition={suppressMapTransition}
 			onpointerdown={() => {
 				if (mapExpanded) return;
 				if (typeof window !== 'undefined' && window.innerWidth <= MOBILE_MAX_PX) {
@@ -415,6 +431,13 @@
 		position: relative;
 		isolation: isolate;
 		overflow: hidden;
+	}
+
+	/* While the window is resizing, suppress the map-pane transition so crossing the
+	   desktop/mobile breakpoint switches instantly (no jump / full-height / circle morph).
+	   Two classes outrank the single-class `.map-pane` rules in both media queries. */
+	.map-pane.no-map-transition {
+		transition: none !important;
 	}
 
 	/* ── Desktop: CSS :has() hover morph (≥ 1024px) ─────────────────────── */
