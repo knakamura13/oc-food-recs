@@ -1,0 +1,1 @@
+ALTER TABLE "mentions" ADD COLUMN "comment_date" timestamp with time zone;

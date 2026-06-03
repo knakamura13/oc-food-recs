@@ -73,6 +73,7 @@ export const mentions = pgTable(
 		score: integer('score').notNull(),
 		role: text('role').notNull(), // 'primary' | 'endorsement'
 		classification: text('classification'), // 'dish_rec' | 'personal_story' | 'endorsement' | 'filler' | 'question' | NULL (primaries)
+		commentDate: timestamp('comment_date', { withTimezone: true }), // when the Reddit comment was authored (NULL for legacy rows awaiting backfill)
 		createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 	},
 	(table) => ({

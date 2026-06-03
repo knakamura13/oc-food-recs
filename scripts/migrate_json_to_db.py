@@ -18,6 +18,7 @@ import json
 import os
 import re
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -58,6 +59,23 @@ def assign_slugs(restaurants: list[dict[str, Any]]) -> list[tuple[dict[str, Any]
         used.add(slug)
         out.append((r, slug))
     return out
+
+
+def parse_comment_date(created_utc: Any) -> datetime | None:
+    """Convert a Reddit created_utc value (Unix float or ISO 8601 string) to a tz-aware datetime."""
+    if not created_utc:
+        return None
+    val = str(created_utc).strip()
+    if not val:
+        return None
+    try:
+        return datetime.fromtimestamp(float(val), tz=timezone.utc)
+    except (ValueError, OSError, OverflowError):
+        pass
+    try:
+        return datetime.fromisoformat(val.replace('+0000', '+00:00').replace('Z', '+00:00'))
+    except ValueError:
+        return None
 
 
 def synthesize_endorsement_id(thread_id: str, author: str, body: str) -> str:
@@ -198,14 +216,15 @@ def main() -> int:
 
                 cur.execute(
                     """
-                    INSERT INTO mentions (restaurant_id, thread_id, comment_id, permalink, author, body, score, role, classification)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, 'primary', NULL)
+                    INSERT INTO mentions (restaurant_id, thread_id, comment_id, permalink, author, body, score, role, classification, comment_date)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, 'primary', NULL, %s)
                     ON CONFLICT (thread_id, comment_id, restaurant_id) DO UPDATE SET
                         restaurant_id = EXCLUDED.restaurant_id,
                         permalink = EXCLUDED.permalink,
                         author = EXCLUDED.author,
                         body = EXCLUDED.body,
-                        score = EXCLUDED.score
+                        score = EXCLUDED.score,
+                        comment_date = EXCLUDED.comment_date
                     """,
                     (
                         restaurant_id,
@@ -215,6 +234,7 @@ def main() -> int:
                         primary["author"],
                         primary["body"],
                         primary["score"],
+                        parse_comment_date(primary.get("created_utc")),
                     ),
                 )
                 mentions_inserted += 1
@@ -235,14 +255,15 @@ def main() -> int:
                     )
                     cur.execute(
                         """
-                        INSERT INTO mentions (restaurant_id, thread_id, comment_id, permalink, author, body, score, role, classification)
-                        VALUES (%s, %s, %s, NULL, %s, %s, %s, 'endorsement', %s)
+                        INSERT INTO mentions (restaurant_id, thread_id, comment_id, permalink, author, body, score, role, classification, comment_date)
+                        VALUES (%s, %s, %s, NULL, %s, %s, %s, 'endorsement', %s, %s)
                         ON CONFLICT (thread_id, comment_id, restaurant_id) DO UPDATE SET
                             restaurant_id = EXCLUDED.restaurant_id,
                             author = EXCLUDED.author,
                             body = EXCLUDED.body,
                             score = EXCLUDED.score,
-                            classification = EXCLUDED.classification
+                            classification = EXCLUDED.classification,
+                            comment_date = EXCLUDED.comment_date
                         """,
                         (
                             restaurant_id,
@@ -252,6 +273,7 @@ def main() -> int:
                             endorsement["body"],
                             endorsement["score"],
                             endorsement.get("type"),
+                            parse_comment_date(endorsement.get("created_utc")),
                         ),
                     )
                     mentions_inserted += 1
