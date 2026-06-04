@@ -91,7 +91,8 @@ export const load: PageServerLoad = async (): Promise<{ dataset: RestaurantData 
 							'body', rm.body,
 							'score', rm.score,
 							'role', rm.role,
-							'classification', rm.classification
+							'classification', rm.classification,
+							'comment_date', rm.comment_date
 						)
 						ORDER BY
 							CASE WHEN rm.role = 'primary' THEN 0 ELSE 1 END,
@@ -137,7 +138,8 @@ export const load: PageServerLoad = async (): Promise<{ dataset: RestaurantData 
 			body: m.body,
 			score: m.score,
 			role: m.role,
-			classification: m.classification
+			classification: m.classification,
+			comment_date: m.comment_date
 		}))
 	}));
 
