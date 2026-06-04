@@ -353,6 +353,7 @@ class WriteToDbTest(unittest.TestCase):
                 "userA",
                 "Taqueria de Anda is the best",
                 50,
+                None,
             ),
         )
 
@@ -371,6 +372,7 @@ class WriteToDbTest(unittest.TestCase):
                 "seconded",
                 10,
                 "endorsement",
+                None,
             ),
         )
 
