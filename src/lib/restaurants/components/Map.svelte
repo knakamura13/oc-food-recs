@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import type { Restaurant } from '$lib/restaurants/types';
 	import { appState } from '$lib/restaurants/stores.svelte';
 
@@ -20,14 +20,54 @@
 	let mappedRestaurants = $derived(restaurants.filter((r) => r.lat !== null && r.lng !== null));
 
 	$effect(() => {
-		if (appState.mapTarget && leafletMap) {
-			const r = appState.mapTarget;
-			if (r.lat && r.lng) {
-				leafletMap.setView([r.lat, r.lng], 15, { animate: true });
-			}
+		const target = appState.mapTarget;
+		if (target && leafletMap) {
 			appState.mapTarget = null;
+			if (target.lat != null && target.lng != null) {
+				focusOnRestaurant(target.slug, target.lat, target.lng);
+			}
 		}
 	});
+
+	// Bumped per selection so a stale, slow-firing moveend callback from a previous focus
+	// can bail out instead of spiderfying the wrong (now off-screen) cluster.
+	let focusToken = 0;
+
+	// Center + zoom all the way in on a selected restaurant, then guarantee its individual pin
+	// is visible — spiderfying its cluster when near-duplicate coordinates keep it grouped even
+	// at max zoom — and highlight it. The reveal is driven here rather than relying on an
+	// incidental mouse move or cluster animation, so the pin + tooltip appear on the first
+	// click from the list/search whether or not the restaurant was part of a cluster.
+	function focusOnRestaurant(slug: string, lat: number, lng: number) {
+		if (!leafletMap) return;
+		const token = ++focusToken;
+		const marker = markers.get(slug);
+		if (!marker || !clusterGroupRef) {
+			leafletMap.setView([lat, lng], leafletMap.getMaxZoom(), { animate: true });
+			return;
+		}
+
+		// Reveal + highlight once the view settles. A large zoom jump fires no cluster
+		// 'animationend', and a spiderfy() issued before markercluster finishes re-clustering
+		// is silently dropped — so poll: re-issue spiderfy() until the marker is individually
+		// visible (lone, or fanned out of its cluster), then highlight it (pin + tooltip).
+		let tries = 0;
+		const reveal = () => {
+			if (token !== focusToken) return;
+			const parent = clusterGroupRef.getVisibleParent(marker);
+			if (parent === marker || clusterGroupRef._spiderfied) {
+				applyHighlight();
+				return;
+			}
+			if (parent && typeof parent.spiderfy === 'function') parent.spiderfy();
+			if (++tries < 15) setTimeout(reveal, 80);
+			else applyHighlight();
+		};
+		// Register before setView: a large zoom jump fires 'moveend' synchronously inside
+		// setView, so a listener attached afterward would miss it.
+		leafletMap.once('moveend', () => setTimeout(reveal, 0));
+		leafletMap.setView([lat, lng], leafletMap.getMaxZoom(), { animate: true });
+	}
 
 	// Highlight the hovered (preferred) or selected restaurant's pin. This is the
 	// single source of truth shared with the list via appState — both list-hover
@@ -227,10 +267,14 @@
 
 	// Re-render markers when filtered restaurants change
 	$effect(() => {
-		// Access mappedRestaurants to track the dependency
-		const _mapped = mappedRestaurants;
+		// Track only the restaurant data so a real filter change rebuilds the markers.
+		void mappedRestaurants;
+		// updateMarkers() ends by calling applyHighlight(), which reads the hovered/selected
+		// slug. Without untrack, those reads would make this rebuild effect re-run on every
+		// hover/selection — tearing down and recreating all markers (and collapsing any open
+		// spiderfy). untrack keeps the rebuild bound to data changes only.
 		if (leafletMap && L) {
-			updateMarkers();
+			untrack(() => updateMarkers());
 		}
 	});
 
