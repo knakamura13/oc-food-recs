@@ -932,7 +932,7 @@ SUBREDDIT_CITY = {
     # unincorporated communities
     "laderaranch": "Ladera Ranch", "cotodecaza": "Coto de Caza", "rossmoor": "Rossmoor",
     "northtustin": "North Tustin", "midwaycity": "Midway City", "trabucocanyon": "Trabuco Canyon",
-    "silverado": "Silverado", "sunsetbeach": "Huntington Beach",
+    "silverado": "Silverado Canyon", "sunsetbeach": "Sunset Beach",
     # campuses → nearest city
     "uci": "Irvine", "csuf": "Fullerton", "calstatefullerton": "Fullerton",
     "chapman": "Orange", "saddleback": "Mission Viejo",
@@ -948,21 +948,54 @@ def _subreddit_city(subreddit: str | None) -> str | None:
 # Canonical OC city names + aliases for normalizing a free-text "location" before
 # geocoding: expand abbreviations ("HB"), partials ("Newport"), neighborhoods/streets
 # ("Old Town Tustin", "Anaheim Blvd"), and multi-city strings ("Santa Ana/Garden Grove").
-_OC_CITIES = sorted(
-    set(SUBREDDIT_CITY.values())
-    | {"Corona del Mar", "Sunset Beach", "Anaheim Hills", "Foothill Ranch",
-       "Newport Beach", "Long Beach", "Cerritos", "Norwalk", "Artesia"},
+# Hard-coded so the pipeline never silently accepts a new made-up "city" name.
+_OC_CITIES: list[str] = sorted(
+    [
+        # 34 officially incorporated OC cities (source: ocgov.com)
+        "Aliso Viejo", "Anaheim", "Brea", "Buena Park", "Costa Mesa", "Cypress",
+        "Dana Point", "Fountain Valley", "Fullerton", "Garden Grove",
+        "Huntington Beach", "Irvine", "La Habra", "La Palma", "Laguna Beach",
+        "Laguna Hills", "Laguna Niguel", "Laguna Woods", "Lake Forest",
+        "Los Alamitos", "Mission Viejo", "Newport Beach", "Orange", "Placentia",
+        "Rancho Santa Margarita", "San Clemente", "San Juan Capistrano",
+        "Santa Ana", "Seal Beach", "Stanton", "Tustin", "Villa Park",
+        "Westminster", "Yorba Linda",
+        # unincorporated communities, master-planned areas, and county islands
+        # source: OC Planning / community plans
+        "Anaheim Hills", "Bolsa Chica", "Corona del Mar", "Coto de Caza",
+        "El Modena", "Emerald Bay", "Foothill Ranch", "Las Flores",
+        "Ladera Ranch", "Midway City", "Modjeska Canyon", "North Tustin",
+        "Olive Heights", "Orange Park Acres", "Rancho Mission Viejo", "Rossmoor",
+        "Santa Ana Heights", "Santiago Canyon", "Silverado Canyon",
+        "Sunset Beach", "Trabuco Canyon", "Wagon Wheel",
+        # nearby LA-county cities that appear in OC food discussions
+        "Artesia", "Cerritos", "Long Beach", "Norwalk",
+    ],
     key=len,
     reverse=True,  # match longer names first ("Anaheim Hills" before "Anaheim")
 )
-_LOCATION_ALIASES = {
-    "hb": "Huntington Beach", "huntington": "Huntington Beach", "cm": "Costa Mesa",
-    "sa": "Santa Ana", "sna": "Santa Ana", "fv": "Fountain Valley", "gg": "Garden Grove",
+_LOCATION_ALIASES: dict[str, str] = {
+    # common abbreviations
+    "hb": "Huntington Beach", "cm": "Costa Mesa", "sa": "Santa Ana",
+    "sna": "Santa Ana", "fv": "Fountain Valley", "gg": "Garden Grove",
     "cdm": "Corona del Mar", "dp": "Dana Point", "sjc": "San Juan Capistrano",
     "lb": "Long Beach", "mv": "Mission Viejo", "lf": "Lake Forest",
-    "rsm": "Rancho Santa Margarita", "newport": "Newport Beach", "aliso": "Aliso Viejo",
+    "rsm": "Rancho Santa Margarita", "bp": "Buena Park",
+    # partials / informal names
+    "newport": "Newport Beach", "huntington": "Huntington Beach",
+    "aliso": "Aliso Viejo", "sanjuan": "San Juan Capistrano",
     "fhr": "Foothill Ranch", "foothillranch": "Foothill Ranch",
+    "anaheimhills": "Anaheim Hills",
+    # university campuses → host city
     "uci": "Irvine", "ucitowncenter": "Irvine", "csuf": "Fullerton",
+    # landmarks / neighborhoods → city
+    "disneyland": "Anaheim", "downtowndisney": "Anaheim",
+    "littlearabia": "Anaheim",
+    "fashionisland": "Newport Beach", "crystalcove": "Newport Beach",
+    # unincorporated community shorthands
+    "silverado": "Silverado Canyon", "modjeska": "Modjeska Canyon",
+    "trabuco": "Trabuco Canyon",
+    "rmv": "Rancho Mission Viejo", "ranchomv": "Rancho Mission Viejo",
 }
 
 
@@ -970,12 +1003,28 @@ def _loc_key(s: str) -> str:
     return re.sub(r"[^a-z0-9]+", "", s.lower())
 
 
+def _city_from_address_string(s: str) -> str | None:
+    """Return the first recognized OC city/community found in a geocoder address string.
+
+    Works on Nominatim display_name ("Taco Place, Santa Ana, California, ...") and
+    Mapbox full_address ("1234 Main St, Santa Ana, CA 92703"). Returns None when no
+    known city is present (e.g. an error detail string or an out-of-OC address).
+    Iterates _OC_CITIES longest-first so "Rancho Santa Margarita" wins over "Santa Ana".
+    """
+    if not s:
+        return None
+    for city in _OC_CITIES:
+        if re.search(rf"\b{re.escape(city)}\b", s, re.IGNORECASE):
+            return city
+    return None
+
+
 def normalize_location(location: str | None) -> str | None:
     """Normalize a free-text location to a canonical OC city for geocoding.
 
     Takes the first city of a multi-city string, expands abbreviations/partials, and
-    maps a neighborhood/street that names a known city to that city. Falls back to a
-    title-cased best effort, or None when empty.
+    maps a neighborhood/street that names a known city to that city. Returns None for
+    unrecognized input — conservative: unmapped is better than an invented city name.
     """
     if not location or not location.strip():
         return None
@@ -992,7 +1041,7 @@ def normalize_location(location: str | None) -> str | None:
     for city in _OC_CITIES:
         if re.search(rf"\b{re.escape(city.lower())}\b", low):
             return city
-    return first.title()
+    return None  # unrecognized → unmapped rather than inventing a city name
 
 
 # --- Mapbox Search Box fallback ---------------------------------------------
@@ -1101,10 +1150,18 @@ def _mapbox_geocode(name: str, location: str) -> tuple[float | None, float | Non
     return None, None, f"mapbox: rejected ({fname})"
 
 
-def default_geocode(name: str, location: str | None) -> tuple[float | None, float | None, str]:
+def default_geocode(
+    name: str, location: str | None
+) -> tuple[float | None, float | None, str, str | None]:
+    """Geocode a restaurant by name + location hint.
+
+    Returns (lat, lng, detail, geocoded_city) where geocoded_city is the canonical
+    OC city/community extracted from the geocoder's address string, or None when
+    geocoding fails or the result address doesn't contain a recognized OC place.
+    """
     location = normalize_location(location)
     if not location:
-        return None, None, "missing location"
+        return None, None, "missing location", None
 
     # Cache hit: skip both the network round-trip and the rate-limit sleep. Many
     # restaurants recur across threads, so this is the dominant throughput win.
@@ -1112,7 +1169,8 @@ def default_geocode(name: str, location: str | None) -> tuple[float | None, floa
     key = _geocode_key(name, location)
     if key in cache:
         lat, lng, detail = cache[key]
-        return lat, lng, detail
+        geocoded_city = _city_from_address_string(detail) if lat is not None else None
+        return lat, lng, detail, geocoded_city
 
     query = f"{name}, {location}, Orange County, CA"
     params = urllib.parse.urlencode(
@@ -1162,16 +1220,21 @@ def default_geocode(name: str, location: str | None) -> tuple[float | None, floa
 
     # Cache only positive resolutions (from either provider). Negatives are left
     # uncached so a later run retries them instead of being pinned to failure forever.
+    # Cache stores the 3-element (lat, lng, detail) tuple — geocoded_city is derived
+    # from detail on every read so adding cities to _OC_CITIES retroactively improves
+    # cached results without needing a cache migration.
     if result[0] is not None:
         cache[key] = list(result)
         _save_geocode_cache()
-    return result
+    lat, lng, detail = result
+    geocoded_city = _city_from_address_string(detail) if lat is not None else None
+    return lat, lng, detail, geocoded_city
 
 
 def build_thread(
     thread_dir: Path,
     extract_entities_fn: Callable[..., Any] = default_extract_entities,
-    geocode_fn: Callable[..., tuple[float | None, float | None, str]] = default_geocode,
+    geocode_fn: Callable[..., tuple[float | None, float | None, str, str | None]] = default_geocode,
 ) -> dict[str, Any]:
     manifest_path = thread_dir / "manifest.json"
     raw_html_path = thread_dir / "raw" / "thread.html"
@@ -1218,12 +1281,13 @@ def build_thread(
     unresolved: list[dict[str, Any]] = []
     restaurants = copy.deepcopy(thread_dataset["restaurants"])
     for restaurant in restaurants:
-        lat, lng, detail = geocode_fn(
-            restaurant["name"],
-            restaurant.get("location") or _subreddit_city(manifest["subreddit"]),
-        )
+        raw_location = restaurant.get("location") or _subreddit_city(manifest["subreddit"])
+        lat, lng, detail, geocoded_city = geocode_fn(restaurant["name"], raw_location)
         restaurant["lat"] = lat
         restaurant["lng"] = lng
+        # Authoritative city: geocoder-confirmed address wins; fall back to normalizing
+        # the LLM-extracted hint; None if both fail (restaurant will be unmapped).
+        restaurant["location"] = geocoded_city or normalize_location(raw_location)
         if lat is not None and lng is not None:
             geocoded_count += 1
         else:
