@@ -7,6 +7,8 @@ export interface Mention {
 	score: number;
 	role: 'primary' | 'endorsement';
 	classification: 'dish_rec' | 'personal_story' | 'endorsement' | 'filler' | 'question' | null;
+	/** ISO 8601 timestamp the Reddit comment was authored, or null for legacy rows without a source date. */
+	comment_date: string | null;
 }
 
 export interface Restaurant {
