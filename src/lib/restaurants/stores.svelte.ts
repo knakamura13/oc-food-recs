@@ -8,6 +8,7 @@ export const appState = $state({
 	// Comment-recency filter: epoch-ms cutoff; only mentions on/after it are kept.
 	// null = "All time" (filter inactive). Mentions with a null comment_date are always kept.
 	freshnessCutoff: null as number | null,
+	showUnmapped: false,
 	sortKey: 'score' as SortKey,
 	sortDirection: 'desc' as 'asc' | 'desc',
 	selectedRestaurantSlug: null as string | null,
