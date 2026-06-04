@@ -395,6 +395,22 @@ def slugify(value: str) -> str:
     return re.sub(r"(^-|-$)", "", re.sub(r"[^a-z0-9]+", "-", value.lower()))
 
 
+def assign_slugs(restaurants: list[dict[str, Any]]) -> list[tuple[dict[str, Any], str]]:
+    """Assign each restaurant a URL slug from its name, suffixing -2/-3/... on collisions."""
+    used: set[str] = set()
+    out: list[tuple[dict[str, Any], str]] = []
+    for r in restaurants:
+        base = slugify(r["name"])
+        slug = base
+        n = 2
+        while slug in used:
+            slug = f"{base}-{n}"
+            n += 1
+        used.add(slug)
+        out.append((r, slug))
+    return out
+
+
 def thread_folder_name(parsed_thread: dict[str, Any]) -> str:
     post = parsed_thread["post"]
     post_id = post["id"] or slugify(post["title"])
@@ -1237,19 +1253,6 @@ def build_thread(
     return geocoded_dataset
 
 
-def _load_assign_slugs() -> Callable[[list[dict[str, Any]]], list[tuple[dict[str, Any], str]]]:
-    """Lazily import `assign_slugs` from migrate_json_to_db (same scripts/ dir).
-
-    Lazy + path-injecting so existing subcommands that never call write_to_db
-    don't pay the import cost or break if migrate_json_to_db itself can't load.
-    """
-    scripts_dir = str(Path(__file__).resolve().parent)
-    if scripts_dir not in sys.path:
-        sys.path.insert(0, scripts_dir)
-    from migrate_json_to_db import assign_slugs  # type: ignore[import-not-found]
-    return assign_slugs
-
-
 def write_to_db(
     parsed_thread: dict[str, Any],
     restaurants_with_geocodes: list[dict[str, Any]],
@@ -1276,7 +1279,6 @@ def write_to_db(
     if not database_url:
         raise RuntimeError("DATABASE_URL is not set; cannot write to Postgres")
 
-    assign_slugs = _load_assign_slugs()
     thread_id = manifest["id"]
 
     restaurants_inserted = 0
@@ -1310,7 +1312,7 @@ def write_to_db(
                 ),
             )
 
-            # 2. Restaurants — assign collision-safe slugs (imported from migrate_json_to_db)
+            # 2. Restaurants — assign collision-safe slugs
             for restaurant, slug in assign_slugs(restaurants_with_geocodes):
                 cur.execute(
                     """
