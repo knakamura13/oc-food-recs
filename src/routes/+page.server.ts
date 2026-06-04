@@ -27,12 +27,7 @@ interface ThreadRow {
 }
 
 interface StatsRow {
-	total_restaurants: number;
 	total_comments_processed: number;
-	geocoded_count: number;
-	unmapped_count: number;
-	kept_endorsement_types: string[];
-	generated_at: string;
 }
 
 export const load: PageServerLoad = async (): Promise<{ dataset: RestaurantData }> => {
@@ -168,64 +163,18 @@ export const load: PageServerLoad = async (): Promise<{ dataset: RestaurantData 
 		restaurant_count: row.restaurant_count
 	}));
 
-	// Aggregate stats over the published slice — total comments processed sums
-	// the per-thread comment_count, the distinct classifications observed, and
-	// the geocoded / unmapped restaurant counts.
+	// Total comments processed = sum of per-thread comment_count over published threads.
 	const statsResult = await db.execute(sql`
-		SELECT
-			(
-				SELECT COUNT(DISTINCT r.id)::int
-				FROM restaurants r
-				INNER JOIN mentions m ON m.restaurant_id = r.id
-				INNER JOIN threads t ON t.id = m.thread_id
-				WHERE t.included_in_publish = true
-			) AS total_restaurants,
-			(
-				SELECT COALESCE(SUM(t.comment_count), 0)::int
-				FROM threads t
-				WHERE t.included_in_publish = true
-			) AS total_comments_processed,
-			(
-				SELECT COUNT(DISTINCT r.id)::int
-				FROM restaurants r
-				INNER JOIN mentions m ON m.restaurant_id = r.id
-				INNER JOIN threads t ON t.id = m.thread_id
-				WHERE t.included_in_publish = true
-					AND r.lat IS NOT NULL
-					AND r.lng IS NOT NULL
-			) AS geocoded_count,
-			(
-				SELECT COUNT(DISTINCT r.id)::int
-				FROM restaurants r
-				INNER JOIN mentions m ON m.restaurant_id = r.id
-				INNER JOIN threads t ON t.id = m.thread_id
-				WHERE t.included_in_publish = true
-					AND (r.lat IS NULL OR r.lng IS NULL)
-			) AS unmapped_count,
-			COALESCE(
-				(
-					SELECT ARRAY_AGG(DISTINCT m.classification)
-					FROM mentions m
-					INNER JOIN threads t ON t.id = m.thread_id
-					WHERE t.included_in_publish = true
-						AND m.classification IS NOT NULL
-				),
-				ARRAY[]::text[]
-			) AS kept_endorsement_types,
-			NOW()::text AS generated_at
+		SELECT COALESCE(SUM(t.comment_count), 0)::int AS total_comments_processed
+		FROM threads t
+		WHERE t.included_in_publish = true
 	`);
 
 	const statsRow = (statsResult.rows[0] ?? {}) as Partial<StatsRow>;
 
 	const meta: RestaurantData['meta'] = {
 		source_threads: sourceThreads,
-		total_restaurants: statsRow.total_restaurants ?? restaurants.length,
-		total_comments_processed: statsRow.total_comments_processed ?? 0,
-		model_used: '',
-		generated_at: statsRow.generated_at ?? new Date().toISOString(),
-		kept_endorsement_types: statsRow.kept_endorsement_types ?? [],
-		geocoded_count: statsRow.geocoded_count ?? 0,
-		unmapped_count: statsRow.unmapped_count ?? 0
+		total_comments_processed: statsRow.total_comments_processed ?? 0
 	};
 
 	return {
