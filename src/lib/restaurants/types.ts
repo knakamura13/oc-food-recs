@@ -41,13 +41,7 @@ export interface RestaurantData {
 	restaurants: Restaurant[];
 	meta: {
 		source_threads: ThreadSummary[];
-		total_restaurants: number;
 		total_comments_processed: number;
-		model_used: string;
-		generated_at: string;
-		kept_endorsement_types: string[];
-		geocoded_count: number;
-		unmapped_count: number;
 	};
 }
 

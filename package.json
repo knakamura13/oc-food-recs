@@ -20,12 +20,10 @@
 		"pipeline:init:thread-01": "python3 scripts/reddit_pipeline.py init-thread --html tests/fixtures/thread-01.html",
 		"pipeline:init:thread-02": "python3 scripts/reddit_pipeline.py init-thread --html tests/fixtures/thread-02.html",
 		"pipeline:build:thread-01": "python3 scripts/reddit_pipeline.py build-thread --thread orangecounty-1sb0qo7",
-		"pipeline:build:thread-02": "python3 scripts/reddit_pipeline.py build-thread --thread orangecounty-1slszch",
-		"pipeline:publish": "python3 scripts/reddit_pipeline.py publish"
+		"pipeline:build:thread-02": "python3 scripts/reddit_pipeline.py build-thread --thread orangecounty-1slszch"
 	},
 	"devDependencies": {
 		"@playwright/test": "^1.59.1",
-		"@sveltejs/adapter-auto": "^7.0.1",
 		"@sveltejs/adapter-node": "^5.5.4",
 		"@sveltejs/adapter-static": "^3.0.10",
 		"@sveltejs/kit": "^2.57.0",
