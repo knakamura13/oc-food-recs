@@ -395,18 +395,49 @@ def slugify(value: str) -> str:
     return re.sub(r"(^-|-$)", "", re.sub(r"[^a-z0-9]+", "-", value.lower()))
 
 
-def assign_slugs(restaurants: list[dict[str, Any]]) -> list[tuple[dict[str, Any], str]]:
-    """Assign each restaurant a URL slug from its name, suffixing -2/-3/... on collisions."""
-    used: set[str] = set()
+def assign_slugs(
+    restaurants: list[dict[str, Any]],
+    existing: list[dict[str, Any]] | None = None
+) -> list[tuple[dict[str, Any], str]]:
+    """Assign each restaurant a URL slug from its name, deduplicating against
+    existing entries and suffixing -2/-3/... on true name collisions.
+    """
+    existing = existing or []
+    used_slugs = {e["slug"] for e in existing}
     out: list[tuple[dict[str, Any], str]] = []
+
     for r in restaurants:
-        base = slugify(r["name"])
-        slug = base
-        n = 2
-        while slug in used:
-            slug = f"{base}-{n}"
-            n += 1
-        used.add(slug)
+        matched_slug = None
+        r_norm = normalize_name(r["name"])
+
+        for e in existing:
+            if r_norm == normalize_name(e["name"]):
+                # Same normalized name. Check for location/proximity to deduplicate.
+                loc_match = bool(r.get("location")) and r.get("location") == e.get("location")
+                dist_match = False
+                if r.get("lat") is not None and r.get("lng") is not None and \
+                   e.get("lat") is not None and e.get("lng") is not None:
+                    dlat = float(r["lat"]) - float(e["lat"])
+                    dlng = float(r["lng"]) - float(e["lng"])
+                    # ~200m threshold (0.002 degrees is very rough but okay for OC)
+                    if (dlat**2 + dlng**2)**0.5 < 0.002:
+                        dist_match = True
+
+                if loc_match or dist_match:
+                    matched_slug = e["slug"]
+                    break
+
+        if matched_slug:
+            slug = matched_slug
+        else:
+            base = slugify(r["name"])
+            slug = base
+            n = 2
+            while slug in used_slugs:
+                slug = f"{base}-{n}"
+                n += 1
+            used_slugs.add(slug)
+
         out.append((r, slug))
     return out
 
@@ -768,8 +799,9 @@ def classify_reply(body_text: str) -> str:
 def normalize_name(name: str) -> str:
     normalized = name.lower().strip()
     normalized = re.sub(r"['’]s$", "", normalized)
-    normalized = re.sub(r"[^\w\s&]", "", normalized)
-    normalized = re.sub(r"\s+", " ", normalized).strip()
+    # Aggressive normalization: strip all whitespace and non-alphanumeric (except &)
+    # to catch 'Mo Ran Gak' vs 'Morangak'.
+    normalized = re.sub(r"[^a-z0-9&]", "", normalized)
     return normalized
 
 
@@ -1376,8 +1408,28 @@ def write_to_db(
                 ),
             )
 
-            # 2. Restaurants — assign collision-safe slugs
-            for restaurant, slug in assign_slugs(restaurants_with_geocodes):
+            # Fetch existing restaurants for cross-thread deduplication
+            cur.execute("SELECT name, slug, location, lat, lng FROM restaurants")
+            # psycopg 3 cursor returns tuples by default unless a row_factory is used.
+            # We use column indices to ensure compatibility with any row_factory.
+            desc = cur.description
+            col_name = {d[0]: i for i, d in enumerate(desc)} if desc else {}
+
+            existing = []
+            for row in cur.fetchall():
+                if isinstance(row, dict):
+                    existing.append(row)
+                else:
+                    existing.append({
+                        "name": row[col_name["name"]],
+                        "slug": row[col_name["slug"]],
+                        "location": row[col_name["location"]],
+                        "lat": row[col_name["lat"]],
+                        "lng": row[col_name["lng"]]
+                    })
+
+            # 2. Restaurants — assign collision-safe slugs (with deduplication)
+            for restaurant, slug in assign_slugs(restaurants_with_geocodes, existing=existing):
                 cur.execute(
                     """
                     INSERT INTO restaurants (name, slug, location, cuisine, lat, lng)
