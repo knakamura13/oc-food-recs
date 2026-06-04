@@ -10,6 +10,7 @@ import type { EntryGenerator, RequestHandler } from './$types';
 export const prerender = process.env.SITES_BUILD === '1';
 
 export const entries: EntryGenerator = async () => {
+	if (process.env.SITES_BUILD !== '1') return [];
 	const res = await db.execute(sql`
 		SELECT DISTINCT r.slug
 		FROM restaurants r
