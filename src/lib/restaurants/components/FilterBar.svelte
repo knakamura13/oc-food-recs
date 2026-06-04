@@ -283,8 +283,6 @@
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
-		max-width: 1200px;
-		margin: 0 auto;
 	}
 
 	.dropdown-wrapper {
