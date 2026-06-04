@@ -3,7 +3,7 @@ import type { Mention, Restaurant, RestaurantData, ThreadSummary } from '$lib/re
 import { sql } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
 
-export const prerender = true;
+export const prerender = process.env.SITES_BUILD === '1';
 
 interface RestaurantRow {
 	name: string;
