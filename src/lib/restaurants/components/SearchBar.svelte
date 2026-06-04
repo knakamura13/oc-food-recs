@@ -1,5 +1,4 @@
 <script lang="ts">
-	import Fuse from 'fuse.js';
 	import type { Restaurant } from '$lib/restaurants/types';
 	import { appState, findFilterMatch } from '$lib/restaurants/stores.svelte';
 
@@ -15,19 +14,26 @@
 	let showDropdown = $state(false);
 	let highlightIndex = $state(-1);
 
-	let fuse = $derived.by(
-		() =>
-			new Fuse(restaurants, {
-				keys: ['name', 'cuisine', 'location'],
-				threshold: 0.4,
-				distance: 200,
-				includeScore: true
-			})
+	let FuseCtor = $state<typeof import('fuse.js').default | null>(null);
+	async function ensureFuse() {
+		if (!FuseCtor) FuseCtor = (await import('fuse.js')).default;
+	}
+
+	let fuse = $derived.by(() =>
+		FuseCtor
+			? new FuseCtor(restaurants, {
+					keys: ['name', 'cuisine', 'location'],
+					threshold: 0.4,
+					distance: 200,
+					includeScore: true
+				})
+			: null
 	);
 
 	let results = $derived.by(() => {
-		if (!appState.searchQuery.trim()) return [];
-		return fuse.search(appState.searchQuery).slice(0, 10);
+		const q = appState.searchQuery.trim();
+		if (!fuse || !q) return [];
+		return fuse.search(q).slice(0, 10);
 	});
 
 	function selectResult(restaurant: Restaurant) {
@@ -35,9 +41,9 @@
 		showDropdown = false;
 		highlightIndex = -1;
 		appState.selectedRestaurantSlug = restaurant.slug;
-		appState.listScrollTarget = restaurant;
+		appState.listScrollTarget = restaurant.slug;
 		if (restaurant.lat && restaurant.lng) {
-			appState.mapTarget = restaurant;
+			appState.mapTarget = { slug: restaurant.slug, lat: restaurant.lat, lng: restaurant.lng };
 		}
 	}
 
@@ -99,6 +105,7 @@
 	}
 
 	function handleInput() {
+		ensureFuse();
 		showDropdown = true;
 		highlightIndex = -1;
 	}
@@ -112,12 +119,18 @@
 		</svg>
 		<input
 			bind:this={inputEl}
-			type="text"
+			type="search"
+			inputmode="search"
+			enterkeyhint="search"
+			autocapitalize="none"
+			autocorrect="off"
+			autocomplete="off"
+			spellcheck="false"
 			placeholder="Search restaurants, cuisines, or cities..."
 			bind:value={appState.searchQuery}
 			oninput={handleInput}
 			onkeydown={handleKeydown}
-			onfocus={() => (showDropdown = true)}
+			onfocus={() => { ensureFuse(); showDropdown = true; }}
 			onblur={() => setTimeout(() => (showDropdown = false), 200)}
 			role="combobox"
 			aria-expanded={showDropdown && results.length > 0}
@@ -212,6 +225,10 @@
 		color: #b5a99a;
 	}
 
+	input[type='search']::-webkit-search-cancel-button {
+		display: none;
+	}
+
 	/* Hover cue — kept before :focus so the focus state wins per-property */
 	input:hover {
 		border-color: #d8a48f;
@@ -224,7 +241,7 @@
 
 	.clear-btn {
 		position: absolute;
-		right: 8px;
+		right: 4px;
 		top: 50%;
 		transform: translateY(-50%);
 		background: none;
@@ -232,7 +249,7 @@
 		font-size: 1.3rem;
 		color: #7a6e63;
 		cursor: pointer;
-		padding: 0 4px;
+		padding: 6px;
 		line-height: 1;
 	}
 

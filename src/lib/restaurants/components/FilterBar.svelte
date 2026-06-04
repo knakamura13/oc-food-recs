@@ -337,6 +337,7 @@
 
 	.filter-controls {
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
 		gap: 0.5rem;
 	}
@@ -393,7 +394,7 @@
 		position: absolute;
 		top: calc(100% + 4px);
 		left: 0;
-		min-width: 220px;
+		min-width: min(220px, calc(100vw - 2rem));
 		max-height: 320px;
 		overflow-y: auto;
 		background: #fffcf8;
@@ -460,7 +461,7 @@
 	.active-pills {
 		display: flex;
 		flex-wrap: wrap;
-		gap: 0.3rem;
+		gap: 0.5rem;
 		margin-top: 0.4rem;
 		max-width: 1200px;
 		margin-left: auto;
@@ -471,7 +472,7 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 3px;
-		padding: 3px 10px;
+		padding: 5px 10px;
 		border-radius: 12px;
 		font-size: 0.75rem;
 		cursor: pointer;

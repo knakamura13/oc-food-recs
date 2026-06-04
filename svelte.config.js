@@ -14,9 +14,10 @@ const config = {
 					pages: 'dist/client',
 					assets: 'dist/client',
 					fallback: undefined,
-					strict: false
+					strict: false,
+					precompress: true
 				})
-			: adapterNode()
+			: adapterNode({ precompress: true })
 	}
 };
 
