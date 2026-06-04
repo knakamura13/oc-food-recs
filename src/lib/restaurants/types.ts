@@ -11,6 +11,9 @@ export interface Mention {
 	comment_date: string | null;
 }
 
+/** The subset of Mention fields shipped in the page payload; the rest load on demand. */
+export type ListMention = Pick<Mention, 'comment_date' | 'thread_id' | 'score' | 'author' | 'role'>;
+
 export interface Restaurant {
 	name: string;
 	slug: string;
@@ -20,7 +23,7 @@ export interface Restaurant {
 	mention_count: number;
 	lat: number | null;
 	lng: number | null;
-	mentions: Mention[];
+	mentions: ListMention[];
 	source_threads: string[];
 }
 

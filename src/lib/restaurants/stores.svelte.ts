@@ -1,4 +1,4 @@
-import type { Mention, Restaurant, SortKey } from './types';
+import type { ListMention, Restaurant, SortKey } from './types';
 
 export const appState = $state({
 	searchQuery: '',
@@ -12,9 +12,9 @@ export const appState = $state({
 	sortDirection: 'desc' as 'asc' | 'desc',
 	selectedRestaurantSlug: null as string | null,
 	hoveredRestaurantSlug: null as string | null,
-	mapTarget: null as Restaurant | null,
-	listScrollTarget: null as Restaurant | null,
-	fitBoundsTarget: null as Restaurant[] | null
+	mapTarget: null as { slug: string; lat: number; lng: number } | null,
+	listScrollTarget: null as string | null,
+	fitBoundsTarget: null as Array<{ lat: number; lng: number }> | null
 });
 
 export function slugify(name: string): string {
@@ -202,11 +202,11 @@ const ANONYMOUS_AUTHORS = new Set(['[deleted]', '[removed]', '']);
  * ([deleted]/[removed]/blank) are each treated as a distinct voice.
  * mention_count = number of distinct contributors (rank-1 mentions).
  */
-export function weightedAggregates(mentions: Mention[]): {
+export function weightedAggregates(mentions: ListMention[]): {
 	aggregate_score: number;
 	mention_count: number;
 } {
-	const byAuthor = new Map<string, Mention[]>();
+	const byAuthor = new Map<string, ListMention[]>();
 	let score = 0;
 	let count = 0;
 	for (const m of mentions) {
@@ -312,7 +312,7 @@ export function dateExtentOf(restaurants: Restaurant[]): { min: number; max: num
  * count per bin. Null/invalid dates are skipped. A non-positive span yields all-zero bins.
  */
 export function buildDateHistogram(
-	mentions: Mention[],
+	mentions: ListMention[],
 	extent: { min: number; max: number },
 	binCount: number
 ): number[] {

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onDestroy, untrack } from 'svelte';
-	import type { Mention } from '$lib/restaurants/types';
+	import type { ListMention } from '$lib/restaurants/types';
 	import {
 		appState,
 		buildDateHistogram,
@@ -10,7 +10,7 @@
 
 	interface Props {
 		/** Dated mentions for the current selection (already filtered by every OTHER filter). */
-		mentions: Mention[];
+		mentions: ListMention[];
 		/** Full-dataset comment-date range in epoch ms; the fixed slider/axis extent. */
 		extent: { min: number; max: number };
 	}

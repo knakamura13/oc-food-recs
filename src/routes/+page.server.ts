@@ -130,15 +130,13 @@ export const load: PageServerLoad = async (): Promise<{ dataset: RestaurantData 
 		aggregate_score: row.aggregate_score,
 		mention_count: row.mention_count,
 		source_threads: row.source_threads ?? [],
+		// List view ships only fields the recency + subreddit filters and row counts need;
+		// body/permalink/comment_id/classification load on demand from /api/r/[slug].json.
 		mentions: (row.mentions ?? []).map((m) => ({
-			comment_id: m.comment_id,
 			thread_id: m.thread_id,
-			permalink: m.permalink,
 			author: m.author,
-			body: m.body,
 			score: m.score,
 			role: m.role,
-			classification: m.classification,
 			comment_date: m.comment_date
 		}))
 	}));

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount, tick } from 'svelte';
+	import { replaceState } from '$app/navigation';
 	import type { Restaurant } from '$lib/restaurants/types';
 	import {
 		appState,
@@ -220,10 +221,10 @@
 				appState.activeSubreddits.length > 0
 			) {
 				// Trigger map zoom to filtered restaurants
-				appState.fitBoundsTarget = filteredRestaurants;
+				appState.fitBoundsTarget = filteredRestaurants.filter((r) => r.lat != null && r.lng != null).map((r) => ({ lat: r.lat as number, lng: r.lng as number }));
 			} else {
 				// Reset to full OC view
-				appState.fitBoundsTarget = allRestaurants;
+				appState.fitBoundsTarget = allRestaurants.filter((r) => r.lat != null && r.lng != null).map((r) => ({ lat: r.lat as number, lng: r.lng as number }));
 			}
 		}
 	});
@@ -246,7 +247,7 @@
 				appState.activeCities.length > 0 ||
 				appState.activeSubreddits.length > 0 ||
 				appState.freshnessCutoff !== null;
-			appState.fitBoundsTarget = anyFilter ? filteredRestaurants : allRestaurants;
+			appState.fitBoundsTarget = (anyFilter ? filteredRestaurants : allRestaurants).filter((r) => r.lat != null && r.lng != null).map((r) => ({ lat: r.lat as number, lng: r.lng as number }));
 		}, 250);
 		return () => clearTimeout(mapFreshnessTimer);
 	});
@@ -306,9 +307,9 @@
 			appState.selectedRestaurantSlug = restaurant;
 			const match = allRestaurants.find((r) => r.slug === restaurant);
 			if (match) {
-				appState.listScrollTarget = match;
+				appState.listScrollTarget = match.slug;
 				if (match.lat && match.lng) {
-					appState.mapTarget = match;
+					appState.mapTarget = { slug: match.slug, lat: match.lat, lng: match.lng };
 				}
 			}
 		}
@@ -335,7 +336,7 @@
 		const newUrl = qs ? `?${qs}` : window.location.pathname;
 
 		if (window.location.search !== (qs ? `?${qs}` : '')) {
-			history.replaceState(null, '', newUrl);
+			replaceState(newUrl, {});
 		}
 	});
 </script>
@@ -434,6 +435,12 @@
 
 	:global(*) {
 		box-sizing: border-box;
+	}
+
+	:global(button),
+	:global(a),
+	:global([role='button']) {
+		touch-action: manipulation;
 	}
 
 	:global(*:focus-visible) {
@@ -679,10 +686,10 @@
 
 		.map-close-btn {
 			position: absolute;
-			top: 12px;
-			right: 12px;
-			width: 36px;
-			height: 36px;
+			top: max(12px, env(safe-area-inset-top, 0px));
+			right: max(12px, env(safe-area-inset-right, 0px));
+			width: 44px;
+			height: 44px;
 			border-radius: 50%;
 			border: none;
 			background: rgba(255, 255, 255, 0.92);
