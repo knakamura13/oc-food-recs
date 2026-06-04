@@ -69,14 +69,6 @@
 			.map(([name, count]) => ({ name, count }));
 	});
 
-	export function getCuisineNames() {
-		return cuisineCounts.map((c) => c.name);
-	}
-
-	export function getCityNames() {
-		return cityCounts.map((c) => c.name);
-	}
-
 	function toggleCuisine(cuisine: string) {
 		const idx = appState.activeCuisines.indexOf(cuisine);
 		if (idx >= 0) {

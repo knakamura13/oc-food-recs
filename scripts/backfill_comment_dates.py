@@ -19,9 +19,8 @@ from __future__ import annotations
 
 import argparse
 import sys
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
-from typing import Any
 
 try:
     from bs4 import BeautifulSoup
@@ -35,24 +34,11 @@ except ImportError:
     print("psycopg is not installed. Run: pip install 'psycopg[binary]>=3.2'", file=sys.stderr)
     sys.exit(1)
 
+# parse_comment_date is shared with the ingest pipeline (single source of truth).
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from reddit_pipeline import parse_comment_date  # noqa: E402
+
 THREADS_ROOT = Path(__file__).parent.parent / "data" / "threads"
-
-
-def parse_comment_date(created_utc: Any) -> datetime | None:
-    """Convert a Reddit created_utc value (Unix float or ISO 8601 string) to a tz-aware datetime."""
-    if not created_utc:
-        return None
-    val = str(created_utc).strip()
-    if not val:
-        return None
-    try:
-        return datetime.fromtimestamp(float(val), tz=timezone.utc)
-    except (ValueError, OSError, OverflowError):
-        pass
-    try:
-        return datetime.fromisoformat(val.replace('+0000', '+00:00').replace('Z', '+00:00'))
-    except ValueError:
-        return None
 
 
 def extract_dates_from_html(html_path: Path) -> dict[str, datetime]:

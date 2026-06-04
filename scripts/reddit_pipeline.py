@@ -21,7 +21,7 @@ from typing import Any, Callable
 from bs4 import BeautifulSoup, NavigableString
 
 # psycopg is only required by the `ingest` subcommand. Keep the import optional
-# so the rest of the pipeline (init-thread, build-thread, publish) continues to
+# so the rest of the pipeline (init-thread, build-thread) continues to
 # work in environments where psycopg isn't installed.
 try:
     import psycopg  # type: ignore[import-not-found]
@@ -40,8 +40,6 @@ GEOCODE_MIN_INTERVAL_S = 1.05  # Nominatim usage policy: max ~1 request/second
 # Keyed by normalized (name, location) so repeat restaurants across threads are free.
 _geocode_cache: dict[str, list] | None = None
 _last_geocode_ts = 0.0
-OVERRIDES_PATH = DATA_ROOT / "overrides" / "restaurants.json"
-GENERATED_DATA_PATH = ROOT / "src" / "lib" / "data" / "generated" / "restaurants.json"
 
 OLLAMA_URL = os.environ.get("OC_FOOD_RECS_OLLAMA_URL", "http://127.0.0.1:11434/api/chat")
 OLLAMA_MODEL = os.environ.get("OC_FOOD_RECS_OLLAMA_MODEL", "gemma4:latest")
@@ -395,6 +393,22 @@ def flatten_comment_tree(nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 def slugify(value: str) -> str:
     return re.sub(r"(^-|-$)", "", re.sub(r"[^a-z0-9]+", "-", value.lower()))
+
+
+def assign_slugs(restaurants: list[dict[str, Any]]) -> list[tuple[dict[str, Any], str]]:
+    """Assign each restaurant a URL slug from its name, suffixing -2/-3/... on collisions."""
+    used: set[str] = set()
+    out: list[tuple[dict[str, Any], str]] = []
+    for r in restaurants:
+        base = slugify(r["name"])
+        slug = base
+        n = 2
+        while slug in used:
+            slug = f"{base}-{n}"
+            n += 1
+        used.add(slug)
+        out.append((r, slug))
+    return out
 
 
 def thread_folder_name(parsed_thread: dict[str, Any]) -> str:
@@ -1239,179 +1253,6 @@ def build_thread(
     return geocoded_dataset
 
 
-def load_overrides(overrides_path: Path = OVERRIDES_PATH) -> dict[str, Any]:
-    data = load_json(overrides_path, default=None)
-    if data is None:
-        return {
-            "aliases": {},
-            "thread_overrides": {},
-            "restaurant_overrides": {},
-        }
-    return {
-        "aliases": data.get("aliases", {}),
-        "thread_overrides": data.get("thread_overrides", {}),
-        "restaurant_overrides": data.get("restaurant_overrides", {}),
-    }
-
-
-def find_override(mapping: dict[str, Any], key: str) -> Any:
-    normalized_key = normalize_name(key)
-    for current_key, value in mapping.items():
-        if normalize_name(current_key) == normalized_key:
-            return value
-    return None
-
-
-def apply_restaurant_override(restaurant: dict[str, Any], override: dict[str, Any] | None) -> dict[str, Any]:
-    if not override:
-        return restaurant
-    updated = copy.deepcopy(restaurant)
-    for field in ["name", "location", "cuisine", "lat", "lng"]:
-        if field in override:
-            updated[field] = override[field]
-    return updated
-
-
-def merge_restaurant(existing: dict[str, Any], incoming: dict[str, Any], thread_id: str) -> dict[str, Any]:
-    merged = copy.deepcopy(existing)
-    merged["aggregate_score"] += incoming["aggregate_score"]
-    merged["mention_count"] += incoming["mention_count"]
-    merged["source_threads"] = sorted(set(merged["source_threads"] + [thread_id] + incoming.get("source_threads", [])))
-
-    if not merged.get("location") and incoming.get("location"):
-        merged["location"] = incoming["location"]
-    if not merged.get("cuisine") and incoming.get("cuisine"):
-        merged["cuisine"] = incoming["cuisine"]
-    if merged.get("lat") is None and incoming.get("lat") is not None:
-        merged["lat"] = incoming["lat"]
-    if merged.get("lng") is None and incoming.get("lng") is not None:
-        merged["lng"] = incoming["lng"]
-
-    if incoming["primary_comment"]["score"] > merged["primary_comment"]["score"]:
-        merged["primary_comment"] = incoming["primary_comment"]
-
-    seen = {
-        (endorsement["type"], endorsement["author"], endorsement["body"])
-        for endorsement in merged["endorsements"]
-    }
-    for endorsement in incoming["endorsements"]:
-        key = (endorsement["type"], endorsement["author"], endorsement["body"])
-        if key not in seen:
-            seen.add(key)
-            merged["endorsements"].append(endorsement)
-    merged["endorsements"].sort(key=lambda endorsement: endorsement["score"], reverse=True)
-    return merged
-
-
-def iter_publishable_threads(threads_root: Path) -> list[tuple[dict[str, Any], Path]]:
-    items: list[tuple[dict[str, Any], Path]] = []
-    for thread_dir in sorted(path for path in threads_root.iterdir() if path.is_dir()):
-        manifest = load_json(thread_dir / "manifest.json", default=None)
-        if not manifest or not manifest.get("include_in_publish", True):
-            continue
-        geocoded_path = thread_dir / "processed" / "restaurants.geocoded.json"
-        if not geocoded_path.exists():
-            continue
-        items.append((manifest, geocoded_path))
-    return items
-
-
-def publish_threads(
-    threads_root: Path = THREADS_ROOT,
-    output_path: Path = GENERATED_DATA_PATH,
-    overrides_path: Path = OVERRIDES_PATH,
-) -> dict[str, Any]:
-    overrides = load_overrides(overrides_path)
-    aliases = overrides["aliases"]
-    thread_overrides = overrides["thread_overrides"]
-    restaurant_overrides = overrides["restaurant_overrides"]
-
-    source_threads: list[dict[str, Any]] = []
-    models_used: list[str] = []
-    endorsement_types: set[str] = set()
-    total_comments_processed = 0
-    merged_groups: dict[str, dict[str, Any]] = {}
-
-    for manifest, geocoded_path in iter_publishable_threads(threads_root):
-        geocoded_data = load_json(geocoded_path, default={"restaurants": [], "meta": {}})
-        meta = geocoded_data.get("meta", {})
-        total_comments_processed += meta.get("total_comments_processed", manifest.get("comment_count", 0))
-
-        model_name = meta.get("model_used")
-        if model_name and model_name not in models_used:
-            models_used.append(model_name)
-
-        for endorsement_type in meta.get("kept_endorsement_types", []):
-            endorsement_types.add(endorsement_type)
-
-        source_threads.append(
-            {
-                "id": manifest["id"],
-                "title": manifest["title"],
-                "url": manifest["url"],
-                "subreddit": manifest["subreddit"],
-                "post_id": manifest["post_id"],
-                "comment_count": manifest.get("comment_count", meta.get("total_comments_processed", 0)),
-                "restaurant_count": len(geocoded_data.get("restaurants", [])),
-            }
-        )
-
-        per_thread_overrides = thread_overrides.get(manifest["id"], {})
-        for restaurant in geocoded_data.get("restaurants", []):
-            current = copy.deepcopy(restaurant)
-            current["source_threads"] = [manifest["id"]]
-
-            current = apply_restaurant_override(current, find_override(per_thread_overrides, current["name"]))
-
-            alias_name = find_override(aliases, current["name"])
-            if alias_name:
-                current["name"] = alias_name
-
-            key = normalize_name(current["name"])
-            if key in merged_groups:
-                merged_groups[key] = merge_restaurant(merged_groups[key], current, manifest["id"])
-            else:
-                merged_groups[key] = current
-
-    restaurants: list[dict[str, Any]] = []
-    for restaurant in merged_groups.values():
-        final = apply_restaurant_override(restaurant, find_override(restaurant_overrides, restaurant["name"]))
-        restaurants.append(final)
-
-    restaurants.sort(key=lambda restaurant: restaurant["aggregate_score"], reverse=True)
-    source_threads.sort(key=lambda thread: thread["id"])
-
-    geocoded_count = sum(1 for restaurant in restaurants if restaurant.get("lat") is not None and restaurant.get("lng") is not None)
-    published = {
-        "restaurants": restaurants,
-        "meta": {
-            "source_threads": source_threads,
-            "total_restaurants": len(restaurants),
-            "total_comments_processed": total_comments_processed,
-            "model_used": ", ".join(models_used),
-            "generated_at": current_timestamp(),
-            "kept_endorsement_types": sorted(endorsement_types),
-            "geocoded_count": geocoded_count,
-            "unmapped_count": len(restaurants) - geocoded_count,
-        },
-    }
-    write_json(output_path, published)
-    return published
-
-
-def _load_assign_slugs() -> Callable[[list[dict[str, Any]]], list[tuple[dict[str, Any], str]]]:
-    """Lazily import `assign_slugs` from migrate_json_to_db (same scripts/ dir).
-
-    Lazy + path-injecting so existing subcommands that never call write_to_db
-    don't pay the import cost or break if migrate_json_to_db itself can't load.
-    """
-    scripts_dir = str(Path(__file__).resolve().parent)
-    if scripts_dir not in sys.path:
-        sys.path.insert(0, scripts_dir)
-    from migrate_json_to_db import assign_slugs  # type: ignore[import-not-found]
-    return assign_slugs
-
-
 def write_to_db(
     parsed_thread: dict[str, Any],
     restaurants_with_geocodes: list[dict[str, Any]],
@@ -1438,7 +1279,6 @@ def write_to_db(
     if not database_url:
         raise RuntimeError("DATABASE_URL is not set; cannot write to Postgres")
 
-    assign_slugs = _load_assign_slugs()
     thread_id = manifest["id"]
 
     restaurants_inserted = 0
@@ -1472,7 +1312,7 @@ def write_to_db(
                 ),
             )
 
-            # 2. Restaurants — assign collision-safe slugs (imported from migrate_json_to_db)
+            # 2. Restaurants — assign collision-safe slugs
             for restaurant, slug in assign_slugs(restaurants_with_geocodes):
                 cur.execute(
                     """
@@ -1747,9 +1587,6 @@ def main(argv: list[str] | None = None) -> int:
     build_parser = subparsers.add_parser("build-thread", help="Parse, extract, and geocode one saved Reddit thread")
     build_parser.add_argument("--thread", required=True)
 
-    publish_parser = subparsers.add_parser("publish", help="Merge publishable threads into the app dataset")
-    publish_parser.add_argument("--output", type=Path, default=GENERATED_DATA_PATH)
-
     ingest_parser = subparsers.add_parser(
         "ingest",
         help="Parse a saved Reddit thread HTML export and write directly to Postgres",
@@ -1794,11 +1631,6 @@ def main(argv: list[str] | None = None) -> int:
         thread_dir = THREADS_ROOT / args.thread
         result = build_thread(thread_dir)
         print(json.dumps(result["meta"], indent=2))
-        return 0
-
-    if args.command == "publish":
-        published = publish_threads(output_path=args.output)
-        print(json.dumps(published["meta"], indent=2))
         return 0
 
     if args.command == "ingest":
