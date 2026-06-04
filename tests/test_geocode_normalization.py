@@ -15,6 +15,8 @@ class NormalizeLocationTests(unittest.TestCase):
         self.assertEqual(rp.normalize_location("Newport"), "Newport Beach")
         self.assertEqual(rp.normalize_location("Aliso"), "Aliso Viejo")
         self.assertEqual(rp.normalize_location("SNA"), "Santa Ana")
+        self.assertEqual(rp.normalize_location("BP"), "Buena Park")
+        self.assertEqual(rp.normalize_location("San Juan"), "San Juan Capistrano")
 
     def test_multi_city_takes_first(self):
         self.assertEqual(rp.normalize_location("Santa Ana/Garden Grove"), "Santa Ana")
@@ -24,11 +26,53 @@ class NormalizeLocationTests(unittest.TestCase):
         self.assertEqual(rp.normalize_location("Old Town Tustin"), "Tustin")
         self.assertEqual(rp.normalize_location("Anaheim Blvd"), "Anaheim")
 
+    def test_landmarks_map_to_city(self):
+        self.assertEqual(rp.normalize_location("Disneyland"), "Anaheim")
+        self.assertEqual(rp.normalize_location("downtown Disney"), "Anaheim")
+        self.assertEqual(rp.normalize_location("Little Arabia"), "Anaheim")
+        self.assertEqual(rp.normalize_location("Fashion Island"), "Newport Beach")
+        self.assertEqual(rp.normalize_location("Crystal Cove"), "Newport Beach")
+
     def test_canonical_passthrough_and_empty(self):
         self.assertEqual(rp.normalize_location("Costa Mesa"), "Costa Mesa")
         self.assertEqual(rp.normalize_location(" santa ana "), "Santa Ana")
         self.assertIsNone(rp.normalize_location(""))
         self.assertIsNone(rp.normalize_location(None))
+
+    def test_invented_cities_return_none(self):
+        # street intersections, restaurant names, abbreviations without mappings
+        # — all must return None rather than a made-up city name
+        self.assertIsNone(rp.normalize_location("Katella & Tustin"))
+        self.assertIsNone(rp.normalize_location("Mitasie"))
+        self.assertIsNone(rp.normalize_location("Laguna"))  # ambiguous between 4 cities
+
+
+class CityFromAddressStringTests(unittest.TestCase):
+    """_city_from_address_string extracts the canonical city from a geocoder address."""
+
+    def test_nominatim_display_name(self):
+        self.assertEqual(
+            rp._city_from_address_string("Taco Place, 410 N Bristol St, Santa Ana, California, 92703, United States"),
+            "Santa Ana",
+        )
+
+    def test_mapbox_full_address(self):
+        self.assertEqual(
+            rp._city_from_address_string("mapbox: Claro's Italian Market, 2795 Cabot Dr, Newport Beach, CA"),
+            "Newport Beach",
+        )
+
+    def test_longest_match_wins(self):
+        # "Rancho Santa Margarita" must win over "Santa Ana" (substring risk)
+        self.assertEqual(
+            rp._city_from_address_string("456 Oso Pkwy, Rancho Santa Margarita, CA 92688"),
+            "Rancho Santa Margarita",
+        )
+
+    def test_unrecognized_or_empty_returns_none(self):
+        self.assertIsNone(rp._city_from_address_string("no results"))
+        self.assertIsNone(rp._city_from_address_string(""))
+        self.assertIsNone(rp._city_from_address_string(None))
 
 
 class NegativeCacheTests(unittest.TestCase):
@@ -61,8 +105,8 @@ class NegativeCacheTests(unittest.TestCase):
                 with mock.patch.object(rp.urllib.request, "urlopen", fake_urlopen):
                     r1 = rp.default_geocode("Nonexistent Spot", "Santa Ana")
                     r2 = rp.default_geocode("Nonexistent Spot", "Santa Ana")
-                self.assertEqual(r1, (None, None, "no results"))
-                self.assertEqual(r2, (None, None, "no results"))
+                self.assertEqual(r1, (None, None, "no results", None))
+                self.assertEqual(r2, (None, None, "no results", None))
                 self.assertEqual(calls["n"], 2)  # not cached -> queried both times
             finally:
                 rp.GEOCODE_CACHE_PATH = orig
