@@ -1,5 +1,5 @@
 import { db } from '$lib/server/db';
-import type { Mention, Restaurant, RestaurantData, ThreadSummary } from '$lib/restaurants/types';
+import type { Mention, Restaurant, RestaurantData, SubredditStat, ThreadSummary } from '$lib/restaurants/types';
 import { sql } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
 
@@ -119,28 +119,6 @@ export const load: PageServerLoad = async (): Promise<{ dataset: RestaurantData 
 	`);
 
 	const restaurantRows = restaurantsResult.rows as unknown as RestaurantRow[];
-	const restaurants: Restaurant[] = restaurantRows.map((row) => ({
-		name: row.name,
-		slug: row.slug,
-		location: row.location,
-		cuisine: row.cuisine,
-		lat: row.lat,
-		lng: row.lng,
-		aggregate_score: row.aggregate_score,
-		mention_count: row.mention_count,
-		source_threads: row.source_threads ?? [],
-		mentions: (row.mentions ?? []).map((m) => ({
-			comment_id: m.comment_id,
-			thread_id: m.thread_id,
-			permalink: m.permalink,
-			author: m.author,
-			body: m.body,
-			score: m.score,
-			role: m.role,
-			classification: m.classification
-		}))
-	}));
-
 	// Thread summaries — restaurant_count is the distinct count of restaurants
 	// represented by published mentions in that thread.
 	const threadsResult = await db.execute(sql`
@@ -169,6 +147,72 @@ export const load: PageServerLoad = async (): Promise<{ dataset: RestaurantData 
 		comment_count: row.comment_count,
 		restaurant_count: row.restaurant_count
 	}));
+
+	// thread_id -> subreddit, for per-subreddit aggregate precomputation.
+	const threadSub: Record<string, string> = {};
+	for (const t of sourceThreads) threadSub[t.id] = t.subreddit;
+
+	// Weighted aggregate (mirrors weightedAggregates in stores.svelte.ts): an author's best
+	// mention counts fully; repeats decay 0.5^rank. Anonymous authors each count as one voice.
+	const ANON = new Set(['[deleted]', '[removed]', '']);
+	function weightedAgg(ms: Mention[]): { aggregate_score: number; mention_count: number } {
+		const byAuthor = new Map<string, Mention[]>();
+		let score = 0;
+		let count = 0;
+		for (const m of ms) {
+			const a = (m.author ?? '').trim();
+			if (ANON.has(a)) {
+				score += m.score;
+				count += 1;
+				continue;
+			}
+			const list = byAuthor.get(a) ?? [];
+			list.push(m);
+			byAuthor.set(a, list);
+		}
+		for (const list of byAuthor.values()) {
+			list.sort((a, b) => b.score - a.score);
+			list.forEach((m, i) => {
+				score += m.score * Math.pow(0.5, i);
+			});
+			count += 1;
+		}
+		return { aggregate_score: Math.round(score), mention_count: count };
+	}
+
+	const restaurants: Restaurant[] = restaurantRows.map((row) => {
+		const mentions = row.mentions ?? [];
+		const bySub = new Map<string, Mention[]>();
+		for (const m of mentions) {
+			const sub = threadSub[m.thread_id];
+			if (!sub) continue;
+			const list = bySub.get(sub) ?? [];
+			list.push(m);
+			bySub.set(sub, list);
+		}
+		const subreddit_stats: Record<string, SubredditStat> = {};
+		for (const [sub, ms] of bySub) {
+			const agg = weightedAgg(ms);
+			subreddit_stats[sub] = {
+				aggregate_score: agg.aggregate_score,
+				mention_count: agg.mention_count,
+				endorsement_count: ms.filter((m) => m.role === 'endorsement').length
+			};
+		}
+		return {
+			name: row.name,
+			slug: row.slug,
+			location: row.location,
+			cuisine: row.cuisine,
+			lat: row.lat,
+			lng: row.lng,
+			aggregate_score: row.aggregate_score,
+			mention_count: row.mention_count,
+			endorsement_count: mentions.filter((m) => m.role === 'endorsement').length,
+			source_threads: row.source_threads ?? [],
+			subreddit_stats
+		};
+	});
 
 	// Aggregate stats over the published slice — total comments processed sums
 	// the per-thread comment_count, the distinct classifications observed, and

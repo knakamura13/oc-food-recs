@@ -1,12 +1,8 @@
 <script lang="ts">
 	import { onMount, tick } from 'svelte';
+	import { replaceState } from '$app/navigation';
 	import type { Restaurant } from '$lib/restaurants/types';
-	import {
-		appState,
-		normalizeCuisine,
-		normalizeCity,
-		weightedAggregates
-	} from '$lib/restaurants/stores.svelte';
+	import { appState, normalizeCuisine, normalizeCity } from '$lib/restaurants/stores.svelte';
 	import Hero from '$lib/restaurants/components/Hero.svelte';
 	import SearchBar from '$lib/restaurants/components/SearchBar.svelte';
 	import FilterBar from '$lib/restaurants/components/FilterBar.svelte';
@@ -133,21 +129,17 @@
 		// Subreddit filter: keep only mentions from the selected subreddit(s) and recompute
 		// each restaurant's aggregates from that slice so datasources never blend.
 		if (appState.activeSubreddits.length > 0) {
-			const active = new Set(appState.activeSubreddits);
+			const active = appState.activeSubreddits;
 			result = result.flatMap((r) => {
-				const kept = r.mentions.filter((m) => {
-					const sub = threadSubreddit[m.thread_id];
-					return sub ? active.has(sub) : false;
-				});
-				if (kept.length === 0) return [];
-				const { aggregate_score, mention_count } = weightedAggregates(kept);
+				const stats = active.map((s) => r.subreddit_stats[s]).filter(Boolean);
+				if (stats.length === 0) return [];
 				return [
 					{
 						...r,
-						mentions: kept,
-						mention_count,
-						aggregate_score,
-						source_threads: [...new Set(kept.map((m) => m.thread_id))]
+						aggregate_score: stats.reduce((sum, s) => sum + s.aggregate_score, 0),
+						mention_count: stats.reduce((sum, s) => sum + s.mention_count, 0),
+						endorsement_count: stats.reduce((sum, s) => sum + s.endorsement_count, 0),
+						source_threads: r.source_threads.filter((tid) => active.includes(threadSubreddit[tid]))
 					}
 				];
 			});
@@ -189,10 +181,10 @@
 				appState.activeSubreddits.length > 0
 			) {
 				// Trigger map zoom to filtered restaurants
-				appState.fitBoundsTarget = filteredRestaurants;
+				appState.fitBoundsTarget = filteredRestaurants.filter((r) => r.lat != null && r.lng != null).map((r) => ({ lat: r.lat as number, lng: r.lng as number }));
 			} else {
 				// Reset to full OC view
-				appState.fitBoundsTarget = allRestaurants;
+				appState.fitBoundsTarget = allRestaurants.filter((r) => r.lat != null && r.lng != null).map((r) => ({ lat: r.lat as number, lng: r.lng as number }));
 			}
 		}
 	});
@@ -246,9 +238,9 @@
 			appState.selectedRestaurantSlug = restaurant;
 			const match = allRestaurants.find((r) => r.slug === restaurant);
 			if (match) {
-				appState.listScrollTarget = match;
+				appState.listScrollTarget = match.slug;
 				if (match.lat && match.lng) {
-					appState.mapTarget = match;
+					appState.mapTarget = { slug: match.slug, lat: match.lat, lng: match.lng };
 				}
 			}
 		}
@@ -273,7 +265,7 @@
 		const newUrl = qs ? `?${qs}` : window.location.pathname;
 
 		if (window.location.search !== (qs ? `?${qs}` : '')) {
-			history.replaceState(null, '', newUrl);
+			replaceState(newUrl, {});
 		}
 	});
 </script>
@@ -367,6 +359,12 @@
 
 	:global(*) {
 		box-sizing: border-box;
+	}
+
+	:global(button),
+	:global(a),
+	:global([role='button']) {
+		touch-action: manipulation;
 	}
 
 	:global(*:focus-visible) {
@@ -612,10 +610,10 @@
 
 		.map-close-btn {
 			position: absolute;
-			top: 12px;
-			right: 12px;
-			width: 36px;
-			height: 36px;
+			top: max(12px, env(safe-area-inset-top, 0px));
+			right: max(12px, env(safe-area-inset-right, 0px));
+			width: 44px;
+			height: 44px;
 			border-radius: 50%;
 			border: none;
 			background: rgba(255, 255, 255, 0.92);

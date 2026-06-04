@@ -5,15 +5,27 @@
 	let visible = $state(false);
 
 	onMount(() => {
-		const onScroll = () => {
-			visible = window.scrollY > 300;
+		// On mobile the window barely scrolls (just the hero); the real scrolling happens
+		// inside `.list-scroll`. On desktop only `.list-scroll` scrolls. Track both so the
+		// button appears in either context.
+		const scroller = document.querySelector('.list-scroll');
+		const update = () => {
+			const listY = scroller instanceof HTMLElement ? scroller.scrollTop : 0;
+			visible = window.scrollY > 300 || listY > 300;
 		};
-		window.addEventListener('scroll', onScroll, { passive: true });
-		return () => window.removeEventListener('scroll', onScroll);
+		update();
+		window.addEventListener('scroll', update, { passive: true });
+		scroller?.addEventListener('scroll', update, { passive: true });
+		return () => {
+			window.removeEventListener('scroll', update);
+			scroller?.removeEventListener('scroll', update);
+		};
 	});
 
 	function scrollToTop() {
 		window.scrollTo({ top: 0, behavior: 'smooth' });
+		const scroller = document.querySelector('.list-scroll');
+		if (scroller instanceof HTMLElement) scroller.scrollTo({ top: 0, behavior: 'smooth' });
 	}
 </script>
 
@@ -86,10 +98,18 @@
 		height: 24px;
 	}
 
+	/* Below the map breakpoint (< 1024px) the bottom-right corner belongs to the map FAB
+	   (position: fixed, z-index 1300); move Back-to-Top clear of it. */
+	@media (max-width: 1023px) {
+		.back-to-top {
+			left: max(1rem, env(safe-area-inset-left, 0px));
+			right: auto;
+			bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+		}
+	}
+
 	@media (max-width: 768px) {
 		.back-to-top {
-			bottom: 1rem;
-			right: 1rem;
 			width: 40px;
 			height: 40px;
 		}

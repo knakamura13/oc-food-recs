@@ -10,6 +10,25 @@
 
 	let { restaurants }: Props = $props();
 
+	// Full mentions are lazy-loaded per restaurant on first expand (kept out of the
+	// prerendered page payload). Cached by slug; `undefined` = not yet loaded.
+	let details = $state<Record<string, Mention[] | undefined>>({});
+	async function loadDetail(slug: string) {
+		if (details[slug] !== undefined) return;
+		try {
+			const res = await fetch(`/api/r/${slug}.json`);
+			details[slug] = res.ok ? await res.json() : [];
+		} catch {
+			details[slug] = [];
+		}
+	}
+
+	// Load detail whenever a restaurant becomes selected (row tap, search, map, or URL).
+	$effect(() => {
+		const slug = appState.selectedRestaurantSlug;
+		if (slug) loadDetail(slug);
+	});
+
 	const sortOptions: { key: 'score' | 'name'; label: string }[] = [
 		{ key: 'score', label: 'Score' },
 		{ key: 'name', label: 'Name' }
@@ -73,9 +92,8 @@
 	}
 
 	$effect(() => {
-		const target = appState.listScrollTarget;
-		if (target) {
-			const slug = target.slug;
+		const slug = appState.listScrollTarget;
+		if (slug) {
 			appState.selectedRestaurantSlug = slug;
 			appState.listScrollTarget = null;
 			tick().then(() => {
@@ -91,8 +109,8 @@
 			appState.selectedRestaurantSlug = null;
 		} else {
 			appState.selectedRestaurantSlug = slug;
-			if (restaurant.lat && restaurant.lng) {
-				appState.mapTarget = restaurant;
+			if (restaurant.lat != null && restaurant.lng != null) {
+				appState.mapTarget = { slug, lat: restaurant.lat, lng: restaurant.lng };
 			}
 		}
 	}
@@ -110,7 +128,8 @@
 	}
 
 	function showOnMap(restaurant: Restaurant) {
-		appState.mapTarget = restaurant;
+		if (restaurant.lat == null || restaurant.lng == null) return;
+		appState.mapTarget = { slug: restaurant.slug, lat: restaurant.lat, lng: restaurant.lng };
 		const mapEl = document.querySelector('.map-container');
 		if (mapEl) {
 			mapEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -122,21 +141,21 @@
 		return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(query);
 	}
 
-	function getPrimaryMention(restaurant: Restaurant): Mention | null {
-		const primaries = restaurant.mentions.filter((m) => m.role === 'primary');
+	function getPrimaryMention(mentions: Mention[]): Mention | null {
+		const primaries = mentions.filter((m) => m.role === 'primary');
 		if (primaries.length === 0) return null;
 		// Defensive: there should be exactly one per restaurant per thread, but
 		// pick the highest-scored primary if multiple slipped through.
 		return primaries.reduce((best, m) => (m.score > best.score ? m : best), primaries[0]);
 	}
 
-	function groupEndorsements(restaurant: Restaurant) {
+	function groupEndorsements(mentions: Mention[]) {
 		const groups = {
 			dish_rec: [] as Mention[],
 			personal_story: [] as Mention[],
 			endorsement: [] as Mention[]
 		};
-		for (const m of restaurant.mentions) {
+		for (const m of mentions) {
 			if (m.role !== 'endorsement') continue;
 			if (m.classification === 'dish_rec') groups.dish_rec.push(m);
 			else if (m.classification === 'personal_story') groups.personal_story.push(m);
@@ -146,7 +165,7 @@
 	}
 
 	function endorsementCount(restaurant: Restaurant): number {
-		return restaurant.mentions.filter((m) => m.role === 'endorsement').length;
+		return restaurant.endorsement_count;
 	}
 </script>
 
@@ -180,8 +199,6 @@
 		{#each sorted as restaurant (restaurant.slug)}
 			{@const slug = restaurant.slug}
 			{@const isOpen = appState.selectedRestaurantSlug === slug}
-			{@const groups = groupEndorsements(restaurant)}
-			{@const primary = getPrimaryMention(restaurant)}
 
 			<div class="row" class:expanded={isOpen} class:hovered={appState.hoveredRestaurantSlug === slug} id="restaurant-{slug}">
 				<button
@@ -215,6 +232,12 @@
 
 				{#if isOpen}
 					<div class="drawer" id="drawer-{slug}" role="region" aria-label="{restaurant.name} details" transition:slide={{ duration: 200 }}>
+						{#if details[slug] === undefined}
+							<p class="drawer-loading">Loading comments…</p>
+						{:else}
+							{@const mentions = details[slug] ?? []}
+							{@const primary = getPrimaryMention(mentions)}
+							{@const groups = groupEndorsements(mentions)}
 						{#if primary}
 							<div class="primary-comment">
 								<div class="comment-header">
@@ -314,6 +337,7 @@
 									</div>
 								{/each}
 							</div>
+						{/if}
 						{/if}
 
 						<div class="drawer-actions">
@@ -466,6 +490,7 @@
 	}
 
 	.row-name {
+		overflow-wrap: anywhere;
 		font-family: 'DM Serif Display', Georgia, serif;
 		font-weight: 400;
 		font-size: 1rem;
@@ -519,9 +544,9 @@
 		position: relative;
 		display: inline-flex;
 		align-items: center;
-		margin-left: 2px;
 		vertical-align: middle;
-		padding: 0;
+		padding: 6px;
+		margin: -6px -6px -6px -4px;
 		border: 0;
 		background: transparent;
 	}
@@ -592,6 +617,12 @@
 		border-top: 1px solid #e8e0d6;
 	}
 
+	.drawer-loading {
+		padding: 0.5rem 0;
+		font-size: 0.85rem;
+		color: #7a6e63;
+	}
+
 	.primary-comment {
 		background: #fffcf8;
 		border: none;
@@ -631,6 +662,7 @@
 		color: #3e2c23;
 		margin: 0;
 		white-space: pre-wrap;
+		overflow-wrap: anywhere;
 	}
 
 	.permalink {
@@ -693,6 +725,7 @@
 	}
 
 	.endorsement-card p {
+		overflow-wrap: anywhere;
 		font-size: 0.85rem;
 		line-height: 1.5;
 		color: #3e2c23;

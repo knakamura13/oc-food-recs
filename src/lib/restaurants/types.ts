@@ -9,6 +9,12 @@ export interface Mention {
 	classification: 'dish_rec' | 'personal_story' | 'endorsement' | 'filler' | 'question' | null;
 }
 
+export interface SubredditStat {
+	aggregate_score: number;
+	mention_count: number;
+	endorsement_count: number;
+}
+
 export interface Restaurant {
 	name: string;
 	slug: string;
@@ -16,10 +22,11 @@ export interface Restaurant {
 	cuisine: string | null;
 	aggregate_score: number;
 	mention_count: number;
+	endorsement_count: number;
 	lat: number | null;
 	lng: number | null;
-	mentions: Mention[];
 	source_threads: string[];
+	subreddit_stats: Record<string, SubredditStat>;
 }
 
 export interface ThreadSummary {
