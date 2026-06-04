@@ -5,6 +5,9 @@ export const appState = $state({
 	activeCuisines: [] as string[],
 	activeCities: [] as string[],
 	activeSubreddits: [] as string[],
+	// Comment-recency filter: epoch-ms cutoff; only mentions on/after it are kept.
+	// null = "All time" (filter inactive). Mentions with a null comment_date are always kept.
+	freshnessCutoff: null as number | null,
 	sortKey: 'score' as SortKey,
 	sortDirection: 'desc' as 'asc' | 'desc',
 	selectedRestaurantSlug: null as string | null,
@@ -276,4 +279,75 @@ export function findFilterMatch(
 	}
 
 	return null;
+}
+
+// ── Comment-recency helpers ─────────────────────────────────────────────────
+// Pure, dependency-free utilities backing the Recency filter + density histogram.
+
+const DAY_MS = 86_400_000;
+
+/**
+ * Min/max `comment_date` (epoch ms) across every mention of the given restaurants.
+ * Mentions without a parseable date are ignored. Returns { min: 0, max: 0 } when no
+ * dated mention exists — callers treat a non-positive span as "disable the slider".
+ */
+export function dateExtentOf(restaurants: Restaurant[]): { min: number; max: number } {
+	let min = Infinity;
+	let max = -Infinity;
+	for (const r of restaurants) {
+		for (const m of r.mentions) {
+			if (!m.comment_date) continue;
+			const t = Date.parse(m.comment_date);
+			if (Number.isNaN(t)) continue;
+			if (t < min) min = t;
+			if (t > max) max = t;
+		}
+	}
+	if (min === Infinity) return { min: 0, max: 0 };
+	return { min, max };
+}
+
+/**
+ * Bucket mentions into `binCount` equal-width time bins across `extent`, returning a
+ * count per bin. Null/invalid dates are skipped. A non-positive span yields all-zero bins.
+ */
+export function buildDateHistogram(
+	mentions: Mention[],
+	extent: { min: number; max: number },
+	binCount: number
+): number[] {
+	const bins = new Array<number>(binCount).fill(0);
+	const span = extent.max - extent.min;
+	if (span <= 0 || binCount <= 0) return bins;
+	for (const m of mentions) {
+		if (!m.comment_date) continue;
+		const t = Date.parse(m.comment_date);
+		if (Number.isNaN(t)) continue;
+		let idx = Math.floor(((t - extent.min) / span) * binCount);
+		if (idx < 0) idx = 0;
+		if (idx >= binCount) idx = binCount - 1;
+		bins[idx] += 1;
+	}
+	return bins;
+}
+
+const MONTH_YEAR_FMT = new Intl.DateTimeFormat('en-US', { month: 'short', year: 'numeric' });
+
+/** Format an epoch-ms timestamp as e.g. "Feb 2025". */
+export function formatMonthYear(ms: number): string {
+	return MONTH_YEAR_FMT.format(new Date(ms));
+}
+
+/**
+ * Human-friendly age of `ms` relative to `nowMs`, e.g. "~14 months" or "~2.5 years".
+ * Used for the slider readout ("Past ~14 months · since Feb 2025").
+ */
+export function relativeAge(ms: number, nowMs: number): string {
+	const days = Math.max(0, (nowMs - ms) / DAY_MS);
+	const months = Math.round(days / 30.44);
+	if (months < 1) return 'under a month';
+	if (months < 24) return `~${months} month${months === 1 ? '' : 's'}`;
+	const years = months / 12;
+	const label = years % 1 === 0 ? years.toFixed(0) : years.toFixed(1);
+	return `~${label} year${label === '1' ? '' : 's'}`;
 }
