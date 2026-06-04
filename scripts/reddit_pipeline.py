@@ -1197,7 +1197,7 @@ def default_geocode(
             results = json.loads(response.read())
     except Exception as exc:
         # Don't cache transient network failures — they should be retried next run.
-        return None, None, str(exc)
+        return None, None, str(exc), None
 
     if not results:
         result = (None, None, "no results")

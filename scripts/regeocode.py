@@ -4,7 +4,11 @@
 default_geocode now normalizes the location (expand abbreviations, first-of-multi-city,
 neighborhood/street -> city) and no longer caches negative results. This script:
   1. purges negative entries from the on-disk geocode cache (so they're retried),
-  2. runs default_geocode over every restaurant missing lat/lng,
+  2. for each unmapped restaurant, runs default_geocode with the LLM-extracted
+     location; if that fails because normalize_location can't recognize the input
+     (e.g. "Katella & Tustin", "Mitasie", NULL), retries with the most-frequent
+     subreddit's implied city as the hint — mirroring what build_thread does on
+     fresh ingests,
   3. updates lat, lng, AND location for each newly-resolved hit.
 
 Usage:
@@ -40,7 +44,25 @@ def main() -> int:
 
     conn = b._connect()
     cur = conn.cursor()
-    cur.execute("SELECT id, name, location FROM restaurants WHERE lat IS NULL OR lng IS NULL")
+    # Also fetch each restaurant's most-frequent subreddit (via mentions → threads).
+    # When the LLM-extracted location is unrecognized — and normalize_location returns
+    # None — we retry default_geocode with the subreddit's implied city, mirroring
+    # what build_thread does for fresh ingests.
+    cur.execute(
+        """
+        SELECT r.id, r.name, r.location,
+               (SELECT t.subreddit
+                FROM mentions m
+                JOIN threads t ON t.id = m.thread_id
+                WHERE m.restaurant_id = r.id
+                GROUP BY t.subreddit
+                ORDER BY COUNT(*) DESC, t.subreddit
+                LIMIT 1) AS subreddit
+        FROM restaurants r
+        WHERE r.lat IS NULL OR r.lng IS NULL
+        ORDER BY r.id
+        """
+    )
     rows = cur.fetchall()
     print(f"unmapped restaurants: {len(rows)}")
 
@@ -61,8 +83,22 @@ def main() -> int:
         print(f"  ... committed {total_committed} updates so far")
         batch.clear()
 
-    for rid, name, location in rows:
+    retried = 0
+    for rid, name, location, subreddit in rows:
         lat, lng, detail, geocoded_city = rp.default_geocode(name, location)
+
+        # Fallback: when normalize_location returned None (so default_geocode never
+        # hit the network), retry using the subreddit's city as the hint. Only
+        # triggers for "missing location" — other failure modes (no in-OC hit,
+        # outside-bounds, etc.) have already been tried with a valid city hint.
+        if lat is None and detail == "missing location":
+            sub_city = rp._subreddit_city(subreddit)
+            if sub_city:
+                lat, lng, detail, geocoded_city = rp.default_geocode(name, sub_city)
+                if lat is not None:
+                    retried += 1
+                    detail = f"(via r/{subreddit}) {detail}"
+
         if lat is not None:
             canonical = geocoded_city or rp.normalize_location(location)
             pending += 1
@@ -77,7 +113,10 @@ def main() -> int:
     else:
         print("(dry run -- pass --apply to write)")
 
-    print(f"newly resolved: {total_committed if apply else pending}")
+    print(
+        f"newly resolved: {total_committed if apply else pending} "
+        f"({retried} via subreddit fallback)"
+    )
 
     if apply:
         cur.execute("SELECT count(*) FROM restaurants WHERE lat IS NOT NULL AND lng IS NOT NULL")
