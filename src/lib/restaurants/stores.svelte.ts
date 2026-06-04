@@ -1,4 +1,4 @@
-import type { Mention, Restaurant, SortKey } from './types';
+import type { Mention, SortKey } from './types';
 
 export const appState = $state({
 	searchQuery: '',
@@ -9,9 +9,9 @@ export const appState = $state({
 	sortDirection: 'desc' as 'asc' | 'desc',
 	selectedRestaurantSlug: null as string | null,
 	hoveredRestaurantSlug: null as string | null,
-	mapTarget: null as Restaurant | null,
-	listScrollTarget: null as Restaurant | null,
-	fitBoundsTarget: null as Restaurant[] | null
+	mapTarget: null as { slug: string; lat: number; lng: number } | null,
+	listScrollTarget: null as string | null,
+	fitBoundsTarget: null as Array<{ lat: number; lng: number }> | null
 });
 
 export function slugify(name: string): string {
@@ -227,10 +227,6 @@ export function weightedAggregates(mentions: Mention[]): {
 	return { aggregate_score: Math.round(score), mention_count: count };
 }
 
-export function getEngagement(r: Restaurant): number {
-	const endorsementCount = r.mentions.filter((m) => m.role === 'endorsement').length;
-	return r.aggregate_score + endorsementCount + r.mention_count;
-}
 
 // Find the best filter match for a search term
 export function findFilterMatch(

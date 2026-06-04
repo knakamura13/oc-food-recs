@@ -3,6 +3,9 @@
 	import type { Restaurant } from '$lib/restaurants/types';
 	import { appState } from '$lib/restaurants/stores.svelte';
 
+	const reduceMotion = () =>
+		typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
 	interface Props {
 		restaurants: Restaurant[];
 		mapExpanded: boolean;
@@ -43,7 +46,7 @@
 		const token = ++focusToken;
 		const marker = markers.get(slug);
 		if (!marker || !clusterGroupRef) {
-			leafletMap.setView([lat, lng], leafletMap.getMaxZoom(), { animate: true });
+			leafletMap.setView([lat, lng], leafletMap.getMaxZoom(), { animate: !reduceMotion() });
 			return;
 		}
 
@@ -66,7 +69,7 @@
 		// Register before setView: a large zoom jump fires 'moveend' synchronously inside
 		// setView, so a listener attached afterward would miss it.
 		leafletMap.once('moveend', () => setTimeout(reveal, 0));
-		leafletMap.setView([lat, lng], leafletMap.getMaxZoom(), { animate: true });
+		leafletMap.setView([lat, lng], leafletMap.getMaxZoom(), { animate: !reduceMotion() });
 	}
 
 	// Highlight the hovered (preferred) or selected restaurant's pin. This is the
@@ -223,7 +226,7 @@
 
 			marker.on('click', () => {
 				appState.selectedRestaurantSlug = r.slug;
-				appState.listScrollTarget = r;
+				appState.listScrollTarget = r.slug;
 			});
 
 			// Debounced hover so a fast mouse sweep across pins doesn't flicker.
@@ -284,8 +287,8 @@
 		if (targets && leafletMap && L) {
 			const mapped = targets.filter((r) => r.lat !== null && r.lng !== null);
 			if (mapped.length > 0) {
-				const bounds = L.latLngBounds(mapped.map((r: Restaurant) => [r.lat, r.lng]));
-				leafletMap.fitBounds(bounds, { padding: [30, 30], maxZoom: 14, animate: true });
+				const bounds = L.latLngBounds(mapped.map((r) => [r.lat, r.lng]));
+				leafletMap.fitBounds(bounds, { padding: [30, 30], maxZoom: 14, animate: !reduceMotion() });
 			}
 			appState.fitBoundsTarget = null;
 		}
@@ -296,7 +299,7 @@
 		if (!mapContainer || !leafletMap) return;
 
 		const ro = new ResizeObserver(() => {
-			leafletMap.invalidateSize({ animate: true });
+			leafletMap.invalidateSize({ animate: !reduceMotion() });
 		});
 
 		ro.observe(mapContainer);
@@ -315,7 +318,7 @@
 
 	function scrollToRestaurant(r: Restaurant) {
 		appState.selectedRestaurantSlug = r.slug;
-		appState.listScrollTarget = r;
+		appState.listScrollTarget = r.slug;
 	}
 
 	function escapeHtml(value: string): string {
