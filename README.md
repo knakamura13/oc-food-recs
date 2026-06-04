@@ -1,5 +1,10 @@
 # OC Food Recs
 
+![Build Status](https://img.shields.io/github/actions/workflow/status/knakamura13/oc-food-recs/ci.yml?branch=main)
+![Last Commit](https://img.shields.io/github/last-commit/knakamura13/oc-food-recs)
+![License](https://img.shields.io/github/license/knakamura13/oc-food-recs)
+![Node.js](https://img.shields.io/badge/Node.js-18+-success)
+
 A community-driven restaurant explorer for Orange County, CA — built from real Reddit recommendations.
 
 **Live site:** [oc-food-recs-production.up.railway.app](https://oc-food-recs-production.up.railway.app/)
@@ -8,7 +13,7 @@ A community-driven restaurant explorer for Orange County, CA — built from real
 
 ## About
 
-OC Food Recs aggregates 289 mom-and-pop restaurant recommendations from a popular [r/orangecounty Reddit thread](https://www.reddit.com/r/orangecounty/comments/1sb0qo7/) asking *"What's your favorite 'mom and pop' family owned restaurant?"* — which received 735 responses. Comments were parsed and structured using a local LLM, then geocoded for map display.
+OC Food Recs aggregates 289 mom-and-pop restaurant recommendations from a popular [r/orangecounty Reddit thread](https://www.reddit.com/r/orangecounty/comments/1sb0qo7/) asking *"What's your favorite mom-and-pop restaurant in OC?"*
 
 The result is an interactive map + list explorer where you can:
 
@@ -83,7 +88,7 @@ npm start
 
 ## Deployment
 
-This app is deployed on [Railway](https://railway.com?referralCode=QCz9lp) using the Node.js adapter (`@sveltejs/adapter-node`). The `railway.toml` config at the project root handles build and start commands automatically.
+This app is deployed on [Railway](https://railway.com?referralCode=QCz9lp) using the Node.js adapter (`@sveltejs/adapter-node`). The `railway.toml` config at the project root handles build and startup steps.
 
 To deploy your own instance:
 
