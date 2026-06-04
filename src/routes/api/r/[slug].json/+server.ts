@@ -30,7 +30,8 @@ export const GET: RequestHandler = async ({ params }) => {
 			m.body,
 			m.score,
 			m.role,
-			m.classification
+			m.classification,
+			m.comment_date
 		FROM mentions m
 		JOIN restaurants r ON r.id = m.restaurant_id
 		JOIN threads t ON t.id = m.thread_id

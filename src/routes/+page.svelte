@@ -2,7 +2,13 @@
 	import { onMount, tick } from 'svelte';
 	import { replaceState } from '$app/navigation';
 	import type { Restaurant } from '$lib/restaurants/types';
-	import { appState, normalizeCuisine, normalizeCity } from '$lib/restaurants/stores.svelte';
+	import {
+		appState,
+		normalizeCuisine,
+		normalizeCity,
+		weightedAggregates,
+		dateExtentOf
+	} from '$lib/restaurants/stores.svelte';
 	import Hero from '$lib/restaurants/components/Hero.svelte';
 	import SearchBar from '$lib/restaurants/components/SearchBar.svelte';
 	import FilterBar from '$lib/restaurants/components/FilterBar.svelte';
@@ -23,6 +29,9 @@
 		for (const t of data.dataset.meta.source_threads) lookup[t.id] = t.subreddit;
 		return lookup;
 	});
+
+	// Full-dataset comment-date range (epoch ms) — the fixed extent for the recency slider/axis.
+	const dateExtent = $derived(dateExtentOf(allRestaurants));
 
 	// Compute unique cuisine and city names for search matching
 	const cuisineNames = $derived.by(() => {
@@ -123,23 +132,27 @@
 		};
 	});
 
-	let filteredRestaurants = $derived.by(() => {
+	let restaurantsBeforeFreshness = $derived.by(() => {
 		let result = allRestaurants;
 
 		// Subreddit filter: keep only mentions from the selected subreddit(s) and recompute
 		// each restaurant's aggregates from that slice so datasources never blend.
 		if (appState.activeSubreddits.length > 0) {
-			const active = appState.activeSubreddits;
+			const active = new Set(appState.activeSubreddits);
 			result = result.flatMap((r) => {
-				const stats = active.map((s) => r.subreddit_stats[s]).filter(Boolean);
-				if (stats.length === 0) return [];
+				const kept = r.mentions.filter((m) => {
+					const sub = threadSubreddit[m.thread_id];
+					return sub ? active.has(sub) : false;
+				});
+				if (kept.length === 0) return [];
+				const { aggregate_score, mention_count } = weightedAggregates(kept);
 				return [
 					{
 						...r,
-						aggregate_score: stats.reduce((sum, s) => sum + s.aggregate_score, 0),
-						mention_count: stats.reduce((sum, s) => sum + s.mention_count, 0),
-						endorsement_count: stats.reduce((sum, s) => sum + s.endorsement_count, 0),
-						source_threads: r.source_threads.filter((tid) => active.includes(threadSubreddit[tid]))
+						mentions: kept,
+						mention_count,
+						aggregate_score,
+						source_threads: [...new Set(kept.map((m) => m.thread_id))]
 					}
 				];
 			});
@@ -160,6 +173,33 @@
 		}
 
 		return result;
+	});
+
+	// Recency filter (mention-level): keep mentions on/after the cutoff (undated mentions are always
+	// kept), re-score from the kept slice, and drop restaurants left with no qualifying mentions.
+	// Reads restaurantsBeforeFreshness so the histogram (fed the same intermediate) reacts to the
+	// other filters while staying stable as the slider handle moves.
+	let filteredRestaurants = $derived.by(() => {
+		const cutoff = appState.freshnessCutoff;
+		if (cutoff === null || cutoff <= dateExtent.min) return restaurantsBeforeFreshness;
+		return restaurantsBeforeFreshness.flatMap((r) => {
+			const kept = r.mentions.filter((m) => {
+				if (!m.comment_date) return true;
+				const t = Date.parse(m.comment_date);
+				return Number.isNaN(t) || t >= cutoff;
+			});
+			if (kept.length === 0) return [];
+			const { aggregate_score, mention_count } = weightedAggregates(kept);
+			return [
+				{
+					...r,
+					mentions: kept,
+					mention_count,
+					aggregate_score,
+					source_threads: [...new Set(kept.map((m) => m.thread_id))]
+				}
+			];
+		});
 	});
 
 	// Trigger fitBounds when filters change
@@ -187,6 +227,29 @@
 				appState.fitBoundsTarget = allRestaurants.filter((r) => r.lat != null && r.lng != null).map((r) => ({ lat: r.lat as number, lng: r.lng as number }));
 			}
 		}
+	});
+
+	// Recency commits ~10×/sec while dragging; debounce the map re-zoom to drag-end so it doesn't
+	// continuously animate. (The list + counts still update live off filteredRestaurants.)
+	let freshnessMapInitialized = false;
+	let mapFreshnessTimer: ReturnType<typeof setTimeout> | undefined;
+	$effect(() => {
+		const cutoff = appState.freshnessCutoff; // the only tracked dependency
+		void cutoff;
+		if (!freshnessMapInitialized) {
+			freshnessMapInitialized = true;
+			return;
+		}
+		clearTimeout(mapFreshnessTimer);
+		mapFreshnessTimer = setTimeout(() => {
+			const anyFilter =
+				appState.activeCuisines.length > 0 ||
+				appState.activeCities.length > 0 ||
+				appState.activeSubreddits.length > 0 ||
+				appState.freshnessCutoff !== null;
+			appState.fitBoundsTarget = (anyFilter ? filteredRestaurants : allRestaurants).filter((r) => r.lat != null && r.lng != null).map((r) => ({ lat: r.lat as number, lng: r.lng as number }));
+		}, 250);
+		return () => clearTimeout(mapFreshnessTimer);
 	});
 
 	onMount(() => {
@@ -224,6 +287,12 @@
 		const subreddit = params.get('subreddit');
 		if (subreddit) appState.activeSubreddits = subreddit.split(',').filter(Boolean);
 
+		const since = params.get('since');
+		if (since) {
+			const t = Date.parse(since);
+			if (!Number.isNaN(t)) appState.freshnessCutoff = t;
+		}
+
 		const sort = params.get('sort');
 		if (sort === 'name' || sort === 'score') {
 			appState.sortKey = sort;
@@ -260,6 +329,8 @@
 		if (appState.sortKey) params.set('sort', appState.sortKey);
 		if (appState.sortDirection !== 'desc') params.set('sortdir', appState.sortDirection);
 		if (appState.selectedRestaurantSlug) params.set('restaurant', appState.selectedRestaurantSlug);
+		if (appState.freshnessCutoff !== null)
+			params.set('since', new Date(appState.freshnessCutoff).toISOString().slice(0, 10));
 
 		const qs = params.toString();
 		const newUrl = qs ? `?${qs}` : window.location.pathname;
@@ -289,7 +360,12 @@
 <div class="app-trap" bind:this={appTrapEl}>
 	<div class="controls-bar" bind:this={controlsBarEl}>
 		<SearchBar restaurants={allRestaurants} {cuisineNames} {cityNames} />
-		<FilterBar restaurants={allRestaurants} {threadSubreddit} />
+		<FilterBar
+			restaurants={allRestaurants}
+			{threadSubreddit}
+			restaurantsForHistogram={restaurantsBeforeFreshness}
+			{dateExtent}
+		/>
 	</div>
 	<div class="content-area">
 		<div

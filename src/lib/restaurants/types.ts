@@ -7,13 +7,12 @@ export interface Mention {
 	score: number;
 	role: 'primary' | 'endorsement';
 	classification: 'dish_rec' | 'personal_story' | 'endorsement' | 'filler' | 'question' | null;
+	/** ISO 8601 timestamp the Reddit comment was authored, or null for legacy rows without a source date. */
+	comment_date: string | null;
 }
 
-export interface SubredditStat {
-	aggregate_score: number;
-	mention_count: number;
-	endorsement_count: number;
-}
+/** The subset of Mention fields shipped in the page payload; the rest load on demand. */
+export type ListMention = Pick<Mention, 'comment_date' | 'thread_id' | 'score' | 'author' | 'role'>;
 
 export interface Restaurant {
 	name: string;
@@ -22,11 +21,10 @@ export interface Restaurant {
 	cuisine: string | null;
 	aggregate_score: number;
 	mention_count: number;
-	endorsement_count: number;
 	lat: number | null;
 	lng: number | null;
+	mentions: ListMention[];
 	source_threads: string[];
-	subreddit_stats: Record<string, SubredditStat>;
 }
 
 export interface ThreadSummary {

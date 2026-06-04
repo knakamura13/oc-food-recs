@@ -165,7 +165,7 @@
 	}
 
 	function endorsementCount(restaurant: Restaurant): number {
-		return restaurant.endorsement_count;
+		return restaurant.mentions.filter((m) => m.role === 'endorsement').length;
 	}
 </script>
 
