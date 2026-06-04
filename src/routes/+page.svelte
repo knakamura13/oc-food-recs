@@ -172,6 +172,10 @@
 			});
 		}
 
+		if (!appState.showUnmapped) {
+			result = result.filter((r) => r.lat != null && r.lng != null);
+		}
+
 		return result;
 	});
 
