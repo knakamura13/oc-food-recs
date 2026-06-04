@@ -44,32 +44,47 @@ def main() -> int:
     rows = cur.fetchall()
     print(f"unmapped restaurants: {len(rows)}")
 
-    hits = []
+    BATCH_SIZE = 25
+    batch: list[tuple] = []
+    total_committed = pending = 0
+
+    def _flush() -> None:
+        nonlocal total_committed
+        if not batch:
+            return
+        cur.executemany(
+            "UPDATE restaurants SET lat=%s, lng=%s, location=COALESCE(%s, location), updated_at=now() WHERE id=%s",
+            batch,
+        )
+        conn.commit()
+        total_committed += len(batch)
+        print(f"  ... committed {total_committed} updates so far")
+        batch.clear()
+
     for rid, name, location in rows:
         lat, lng, detail, geocoded_city = rp.default_geocode(name, location)
         if lat is not None:
             canonical = geocoded_city or rp.normalize_location(location)
-            hits.append((lat, lng, canonical, rid, name, detail))
-    print(f"newly resolved (exact): {len(hits)}")
-    for lat, lng, canonical, _rid, name, detail in hits[:30]:
-        print(f"  + {name!r} -> {lat:.4f},{lng:.4f}  city={canonical!r}  {detail[:40]}")
+            pending += 1
+            print(f"  + {name!r} -> {lat:.4f},{lng:.4f}  city={canonical!r}  {detail[:40]}")
+            if apply:
+                batch.append((lat, lng, canonical, rid))
+                if len(batch) >= BATCH_SIZE:
+                    _flush()
 
-    if not apply:
+    if apply:
+        _flush()
+    else:
         print("(dry run -- pass --apply to write)")
-        conn.close()
-        return 0
 
-    if hits:
-        cur.executemany(
-            "UPDATE restaurants SET lat=%s, lng=%s, location=COALESCE(%s, location), updated_at=now() WHERE id=%s",
-            [(lat, lng, canonical, rid) for lat, lng, canonical, rid, _n, _d in hits],
-        )
-        conn.commit()
-    cur.execute("SELECT count(*) FROM restaurants WHERE lat IS NOT NULL AND lng IS NOT NULL")
-    geo = cur.fetchone()[0]
-    cur.execute("SELECT count(*) FROM restaurants")
-    tot = cur.fetchone()[0]
-    print(f"APPLIED. mapped now: {geo}/{tot} ({100 * geo // tot}%)")
+    print(f"newly resolved: {total_committed if apply else pending}")
+
+    if apply:
+        cur.execute("SELECT count(*) FROM restaurants WHERE lat IS NOT NULL AND lng IS NOT NULL")
+        geo = cur.fetchone()[0]
+        cur.execute("SELECT count(*) FROM restaurants")
+        tot = cur.fetchone()[0]
+        print(f"APPLIED. mapped now: {geo}/{tot} ({100 * geo // tot}%)")
     conn.close()
     return 0
 
