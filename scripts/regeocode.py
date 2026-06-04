@@ -4,11 +4,15 @@
 default_geocode now normalizes the location (expand abbreviations, first-of-multi-city,
 neighborhood/street -> city) and no longer caches negative results. This script:
   1. purges negative entries from the on-disk geocode cache (so they're retried),
-  2. for each unmapped restaurant, runs default_geocode with the LLM-extracted
-     location; if that fails because normalize_location can't recognize the input
-     (e.g. "Katella & Tustin", "Mitasie", NULL), retries with the most-frequent
-     subreddit's implied city as the hint — mirroring what build_thread does on
-     fresh ingests,
+  2. for each unmapped restaurant, runs default_geocode in tiers:
+       T1: LLM-extracted location (when normalize_location recognizes it),
+       T2: most-frequent subreddit's implied city (when T1 returns "missing location"
+           and the subreddit maps to a known OC city — mirrors build_thread),
+       T3: name-only OC-bounded query (when T1 returns "missing location" and no
+           subreddit hint is available — e.g. r/orangecounty + empty LLM location);
+           _mapbox_accept's score>=0.85 floor keeps fuzzy false positives bounded
+           but generic names ("Taco Shop") can still drift, so inspect dry-run
+           output before --apply,
   3. updates lat, lng, AND location for each newly-resolved hit.
 
 Usage:
@@ -83,21 +87,33 @@ def main() -> int:
         print(f"  ... committed {total_committed} updates so far")
         batch.clear()
 
-    retried = 0
+    retried_subreddit = retried_name_only = 0
     for rid, name, location, subreddit in rows:
+        # Tier 1: use the LLM-extracted city (if any).
         lat, lng, detail, geocoded_city = rp.default_geocode(name, location)
 
-        # Fallback: when normalize_location returned None (so default_geocode never
-        # hit the network), retry using the subreddit's city as the hint. Only
-        # triggers for "missing location" — other failure modes (no in-OC hit,
-        # outside-bounds, etc.) have already been tried with a valid city hint.
+        # Tier 2 / Tier 3: only fire when normalize_location returned None — other
+        # failure modes (no in-OC hit, outside-bounds, etc.) have already been tried
+        # with a valid city hint, so retrying with a different city won't help.
         if lat is None and detail == "missing location":
             sub_city = rp._subreddit_city(subreddit)
             if sub_city:
+                # Tier 2: subreddit-implied city (e.g. r/Anaheim → Anaheim).
                 lat, lng, detail, geocoded_city = rp.default_geocode(name, sub_city)
                 if lat is not None:
-                    retried += 1
+                    retried_subreddit += 1
                     detail = f"(via r/{subreddit}) {detail}"
+            else:
+                # Tier 3: no city signal anywhere (e.g. r/orangecounty + empty location).
+                # Name-only OC-bounded retry; _mapbox_accept's score>=0.85 floor keeps
+                # fuzzy false-positives bounded. Inspect the output before --apply if
+                # the restaurant name is generic.
+                lat, lng, detail, geocoded_city = rp.default_geocode(
+                    name, None, allow_name_only=True
+                )
+                if lat is not None:
+                    retried_name_only += 1
+                    detail = f"(name-only OC bbox) {detail}"
 
         if lat is not None:
             canonical = geocoded_city or rp.normalize_location(location)
@@ -115,7 +131,7 @@ def main() -> int:
 
     print(
         f"newly resolved: {total_committed if apply else pending} "
-        f"({retried} via subreddit fallback)"
+        f"({retried_subreddit} via subreddit, {retried_name_only} via name-only)"
     )
 
     if apply:

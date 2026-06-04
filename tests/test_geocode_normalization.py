@@ -1,3 +1,4 @@
+import json
 import sys
 import tempfile
 import unittest
@@ -102,6 +103,69 @@ class TransientNetworkErrorTests(unittest.TestCase):
                 rp.GEOCODE_CACHE_PATH = orig
                 rp._geocode_cache = None
                 rp._last_geocode_ts = 0.0
+                rp._mapbox_token_value = None
+
+
+class NameOnlyGeocodeTests(unittest.TestCase):
+    """allow_name_only=True bypasses the missing-location early-return and issues
+    a name-only OC-bounded query as a last-resort retry tier."""
+
+    def test_default_behavior_unchanged_when_no_city(self):
+        # Without the flag, an empty/unrecognizable location still short-circuits.
+        result = rp.default_geocode("Porto's", "")
+        self.assertEqual(result, (None, None, "missing location", None))
+        result = rp.default_geocode("Porto's", "Katella & Tustin")  # not recognized
+        self.assertEqual(result, (None, None, "missing location", None))
+
+    def test_allow_name_only_falls_through_to_mapbox(self):
+        # Nominatim returns empty so we exercise the Mapbox path with no city hint.
+        class _Resp:
+            def __init__(self, body): self._body = body
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+            def read(self): return self._body
+
+        mapbox_payload = json.dumps({
+            "features": [{
+                "geometry": {"coordinates": [-117.998, 33.829]},  # in-OC
+                "properties": {
+                    "name": "Porto's Bakery & Cafe",
+                    "full_address": "7640 Beach Blvd, Buena Park, CA 90620",
+                },
+            }],
+        }).encode()
+        calls: list[str] = []
+
+        def fake_urlopen(request, timeout=10):
+            url = request.full_url if hasattr(request, "full_url") else str(request)
+            calls.append(url)
+            if "nominatim" in url:
+                return _Resp(b"[]")  # Nominatim: no results, force Mapbox fallback
+            return _Resp(mapbox_payload)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            orig = rp.GEOCODE_CACHE_PATH
+            try:
+                rp.GEOCODE_CACHE_PATH = Path(tmp) / "cache.json"
+                rp._geocode_cache = None
+                rp._last_geocode_ts = 0.0
+                rp._last_mapbox_ts = 0.0
+                rp._mapbox_token_value = "fake-token"  # enable Mapbox
+                with mock.patch.object(rp.urllib.request, "urlopen", fake_urlopen):
+                    result = rp.default_geocode("Porto's Bakery", None, allow_name_only=True)
+                lat, lng, detail, geocoded_city = result
+                self.assertAlmostEqual(lat, 33.829, places=2)
+                self.assertAlmostEqual(lng, -117.998, places=2)
+                self.assertIn("Porto's Bakery", detail)
+                self.assertEqual(geocoded_city, "Buena Park")
+                # Cache key uses "" for the city so it doesn't collide with city-hint runs.
+                cached = json.loads(rp.GEOCODE_CACHE_PATH.read_text())
+                self.assertIn("porto's bakery|", cached)
+            finally:
+                rp.GEOCODE_CACHE_PATH = orig
+                rp._geocode_cache = None
+                rp._last_geocode_ts = 0.0
+                rp._last_mapbox_ts = 0.0
                 rp._mapbox_token_value = None
 
 
