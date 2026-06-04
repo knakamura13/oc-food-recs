@@ -113,7 +113,7 @@ class RedditPipelineTest(unittest.TestCase):
                 ]
 
             def geocode(name, location):
-                return 33.6411, -117.9187, "stub"
+                return 33.6411, -117.9187, "stub", None
 
             self.pipeline.build_thread(
                 thread_dir,
@@ -596,7 +596,7 @@ class WriteToDbTest(unittest.TestCase):
 
                 # Network hit exactly once; the repeat (case/space-insensitive) is served from cache.
                 self.assertEqual(calls["n"], 1)
-                self.assertEqual(first, (33.75, -117.85, "Taco Place, Santa Ana, CA"))
+                self.assertEqual(first, (33.75, -117.85, "Taco Place, Santa Ana, CA", "Santa Ana"))
                 self.assertEqual(second, first)
                 self.assertTrue(pipeline.GEOCODE_CACHE_PATH.exists())
                 cached = json.loads(pipeline.GEOCODE_CACHE_PATH.read_text())
