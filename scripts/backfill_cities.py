@@ -72,36 +72,48 @@ def main() -> int:
     rows = cur.fetchall()
     print(f"geocoded restaurants to check: {len(rows)}")
 
-    updates: list[tuple[str, int]] = []
-    no_match = 0
+    BATCH_SIZE = 25  # commit every N updates so the DB reflects progress in real time
+    batch: list[tuple[str, int]] = []
+    total_committed = no_match = already_correct = pending = 0
+
+    def _flush() -> None:
+        nonlocal total_committed
+        if not batch:
+            return
+        cur.executemany(
+            "UPDATE restaurants SET location=%s, updated_at=now() WHERE id=%s", batch
+        )
+        conn.commit()
+        total_committed += len(batch)
+        print(f"  ... committed {total_committed} updates so far")
+        batch.clear()
+
     for rid, name, current_city, lat, lng in rows:
         new_city = _reverse_geocode_city(lat, lng)
         if new_city is None:
             no_match += 1
             continue
         if new_city != current_city:
-            updates.append((new_city, rid))
+            pending += 1
             print(f"  {name!r}: {current_city!r} -> {new_city!r}")
+            if apply:
+                batch.append((new_city, rid))
+                if len(batch) >= BATCH_SIZE:
+                    _flush()
+        else:
+            already_correct += 1
 
-    already_correct = len(rows) - no_match - len(updates)
+    if apply:
+        _flush()  # commit any remaining rows in the final partial batch
+        print(f"\nAPPLIED {total_committed} location updates.")
+    else:
+        print("(dry run -- pass --apply to write)")
+
     print(
-        f"\nsummary: {len(updates)} to update, "
+        f"summary: {total_committed if apply else pending} to update, "
         f"{already_correct} already correct, "
         f"{no_match} no OC city found in address"
     )
-
-    if not apply:
-        print("(dry run -- pass --apply to write)")
-        conn.close()
-        return 0
-
-    if updates:
-        cur.executemany(
-            "UPDATE restaurants SET location=%s, updated_at=now() WHERE id=%s",
-            updates,
-        )
-        conn.commit()
-    print(f"APPLIED {len(updates)} location updates.")
     conn.close()
     return 0
 
