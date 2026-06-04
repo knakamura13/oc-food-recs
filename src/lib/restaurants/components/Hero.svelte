@@ -19,7 +19,7 @@
 			This interactive explorer is built from one Reddit thread and {totalCommentsLabel} community
 			comments.
 		{:else}
-			This interactive explorer pulls together {threadCount} Reddit threads{#if subredditCount > 1} across
+			This interactive explorer pulls together {threadCount} Reddit threads{#if subredditCount > 1}{' '}across
 				{subredditCount} subreddits{/if} and {totalCommentsLabel} community comments.
 		{/if}
 	</p>
