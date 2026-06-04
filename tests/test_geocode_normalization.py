@@ -75,6 +75,36 @@ class CityFromAddressStringTests(unittest.TestCase):
         self.assertIsNone(rp._city_from_address_string(None))
 
 
+class TransientNetworkErrorTests(unittest.TestCase):
+    """A transient network error must still return a 4-tuple (lat, lng, detail, geocoded_city)
+    so callers that destructure the result don't crash."""
+
+    def test_urlopen_exception_returns_four_tuple(self):
+        def boom(request, timeout=10):
+            raise ConnectionError("network unreachable")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            orig = rp.GEOCODE_CACHE_PATH
+            try:
+                rp.GEOCODE_CACHE_PATH = Path(tmp) / "cache.json"
+                rp._geocode_cache = None
+                rp._last_geocode_ts = 0.0
+                rp._mapbox_token_value = ""  # disable Mapbox so we exercise only the failing path
+                with mock.patch.object(rp.urllib.request, "urlopen", boom):
+                    result = rp.default_geocode("Some Spot", "Santa Ana")
+                self.assertEqual(len(result), 4)
+                lat, lng, detail, geocoded_city = result
+                self.assertIsNone(lat)
+                self.assertIsNone(lng)
+                self.assertIn("network unreachable", detail)
+                self.assertIsNone(geocoded_city)
+            finally:
+                rp.GEOCODE_CACHE_PATH = orig
+                rp._geocode_cache = None
+                rp._last_geocode_ts = 0.0
+                rp._mapbox_token_value = None
+
+
 class NegativeCacheTests(unittest.TestCase):
     """A 'no results' outcome must NOT be cached, so it is retried next run."""
 
