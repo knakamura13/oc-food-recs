@@ -101,13 +101,15 @@
 		appState.activeCities = [];
 		appState.activeSubreddits = [];
 		appState.freshnessCutoff = null;
+		appState.showUnmapped = false;
 	}
 
 	let hasActiveFilters = $derived(
 		appState.activeCuisines.length > 0 ||
 			appState.activeCities.length > 0 ||
 			appState.activeSubreddits.length > 0 ||
-			appState.freshnessCutoff !== null
+			appState.freshnessCutoff !== null ||
+			appState.showUnmapped
 	);
 </script>
 
@@ -262,6 +264,19 @@
 				{/if}
 			</div>
 		{/if}
+
+		<!-- Show-unmapped toggle -->
+		<button
+			class="dropdown-trigger mapped-only-toggle"
+			class:has-active={appState.showUnmapped}
+			aria-pressed={appState.showUnmapped}
+			onclick={() => (appState.showUnmapped = !appState.showUnmapped)}
+		>
+			{#if appState.showUnmapped}
+				<span aria-hidden="true">✓</span>
+			{/if}
+			Show unmapped
+		</button>
 
 		{#if hasActiveFilters}
 			<button class="clear-filters" onclick={clearAllFilters}>Clear all</button>
