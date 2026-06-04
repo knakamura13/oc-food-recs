@@ -17,13 +17,6 @@ export const appState = $state({
 	fitBoundsTarget: null as Array<{ lat: number; lng: number }> | null
 });
 
-export function slugify(name: string): string {
-	return name
-		.toLowerCase()
-		.replace(/[^a-z0-9]+/g, '-')
-		.replace(/(^-|-$)/g, '');
-}
-
 // Cuisine consolidation: map raw values to canonical categories
 const CUISINE_MAP: Record<string, string> = {
 	// Case variants
@@ -228,11 +221,6 @@ export function weightedAggregates(mentions: ListMention[]): {
 		count += 1; // one distinct contributor
 	}
 	return { aggregate_score: Math.round(score), mention_count: count };
-}
-
-export function getEngagement(r: Restaurant): number {
-	const endorsementCount = r.mentions.filter((m) => m.role === 'endorsement').length;
-	return r.aggregate_score + endorsementCount + r.mention_count;
 }
 
 // Find the best filter match for a search term
