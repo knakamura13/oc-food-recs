@@ -1183,28 +1183,42 @@ def _mapbox_geocode(name: str, location: str) -> tuple[float | None, float | Non
 
 
 def default_geocode(
-    name: str, location: str | None
+    name: str,
+    location: str | None,
+    *,
+    allow_name_only: bool = False,
 ) -> tuple[float | None, float | None, str, str | None]:
     """Geocode a restaurant by name + location hint.
 
     Returns (lat, lng, detail, geocoded_city) where geocoded_city is the canonical
     OC city/community extracted from the geocoder's address string, or None when
     geocoding fails or the result address doesn't contain a recognized OC place.
+
+    By default a missing/unrecognized location returns immediately with "missing
+    location". Pass allow_name_only=True to instead issue a name-only OC-bounded
+    query — useful only as a last-resort retry tier: _mapbox_accept's
+    score>=0.85 floor (no city to confirm against) limits fuzzy false positives
+    to very-strong name matches, but truly generic names ("Taco Shop") can still
+    drift. The cache key differs between modes (empty city vs real city), so the
+    two paths don't pollute each other.
     """
     location = normalize_location(location)
-    if not location:
+    if not location and not allow_name_only:
         return None, None, "missing location", None
 
     # Cache hit: skip both the network round-trip and the rate-limit sleep. Many
     # restaurants recur across threads, so this is the dominant throughput win.
     cache = _load_geocode_cache()
-    key = _geocode_key(name, location)
+    key = _geocode_key(name, location or "")
     if key in cache:
         lat, lng, detail = cache[key]
         geocoded_city = _city_from_address_string(detail) if lat is not None else None
         return lat, lng, detail, geocoded_city
 
-    query = f"{name}, {location}, Orange County, CA"
+    query = (
+        f"{name}, {location}, Orange County, CA" if location
+        else f"{name}, Orange County, CA"
+    )
     params = urllib.parse.urlencode(
         {
             "q": query,
@@ -1245,8 +1259,10 @@ def default_geocode(
 
     # Fallback: when Nominatim has no in-OC hit, try Mapbox's POI-rich Search Box
     # (accepting only a strongly name+city-matched result -- see _mapbox_accept).
+    # An empty city forces _mapbox_accept's score>=0.85 floor, which is exactly
+    # the gate we want for the name-only retry path.
     if result[0] is None:
-        mb = _mapbox_geocode(name, location)
+        mb = _mapbox_geocode(name, location or "")
         if mb[0] is not None:
             result = mb
 
