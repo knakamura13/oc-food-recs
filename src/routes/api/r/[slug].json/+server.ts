@@ -7,7 +7,7 @@ import type { EntryGenerator, RequestHandler } from './$types';
 // Prerendered at build time: one static JSON per restaurant slug. Holds the full
 // per-restaurant mentions (comment bodies, permalinks, classifications) that are only
 // shown when a card is expanded, so they stay out of the initial prerendered page payload.
-export const prerender = true;
+export const prerender = process.env.SITES_BUILD === '1';
 
 export const entries: EntryGenerator = async () => {
 	const res = await db.execute(sql`
