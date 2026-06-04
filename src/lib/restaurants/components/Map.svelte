@@ -92,6 +92,11 @@
 	let clusterHoverTimer: ReturnType<typeof setTimeout> | null = null;
 	let appliedSlug: string | null = null;
 
+	let locating = $state(false);
+	let locationError = $state<string | null>(null);
+	let locationMarker: any = null;
+	let locationErrorTimer: ReturnType<typeof setTimeout> | null = null;
+
 	async function initMap() {
 		if (mapInitialized || !mapContainer) return;
 		mapInitialized = true;
@@ -312,9 +317,52 @@
 		return () => {
 			if (hoverTimer) clearTimeout(hoverTimer);
 			if (clusterHoverTimer) clearTimeout(clusterHoverTimer);
+			if (locationErrorTimer) clearTimeout(locationErrorTimer);
+			if (locationMarker && leafletMap) leafletMap.removeLayer(locationMarker);
 			leafletMap?.remove();
 		};
 	});
+
+	function jumpToCurrentLocation() {
+		if (!leafletMap || !L || locating) return;
+		if (!navigator.geolocation) {
+			locationError = 'Geolocation is not supported by your browser';
+			return;
+		}
+		locating = true;
+		locationError = null;
+		navigator.geolocation.getCurrentPosition(
+			(position) => {
+				locating = false;
+				const { latitude, longitude } = position.coords;
+				if (locationMarker) {
+					leafletMap.removeLayer(locationMarker);
+					locationMarker = null;
+				}
+				locationMarker = L.circleMarker([latitude, longitude], {
+					radius: 8,
+					fillColor: '#4285f4',
+					fillOpacity: 1,
+					color: '#fff',
+					weight: 2.5
+				}).addTo(leafletMap);
+				leafletMap.setView([latitude, longitude], 14, { animate: true });
+			},
+			(error) => {
+				locating = false;
+				locationError =
+					error.code === error.PERMISSION_DENIED
+						? 'Location access denied'
+						: 'Unable to get your location';
+				if (locationErrorTimer) clearTimeout(locationErrorTimer);
+				locationErrorTimer = setTimeout(() => {
+					locationError = null;
+					locationErrorTimer = null;
+				}, 3500);
+			},
+			{ timeout: 10000, maximumAge: 60000 }
+		);
+	}
 
 	function scrollToRestaurant(r: Restaurant) {
 		appState.selectedRestaurantSlug = r.slug;
@@ -396,6 +444,31 @@
 	<div class="map-container" bind:this={mapContainer} role="application" aria-label="Map of restaurants in Orange County"></div>
 	{#if !mapExpanded}
 		<div class="map-click-blocker" aria-hidden="true"></div>
+	{/if}
+
+	{#if mapInitialized}
+		<button
+			class="locate-me-btn"
+			class:is-locating={locating}
+			onclick={jumpToCurrentLocation}
+			title={locating ? 'Getting your location…' : 'Jump to my location'}
+			aria-label="Jump to my current location"
+			disabled={locating}
+		>
+			{#if locating}
+				<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true" class="spinner">
+					<path d="M12 2a10 10 0 1 0 10 10"/>
+				</svg>
+			{:else}
+				<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+					<circle cx="12" cy="12" r="3"/>
+					<path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>
+				</svg>
+			{/if}
+		</button>
+		{#if locationError}
+			<div class="location-error" role="alert">{locationError}</div>
+		{/if}
 	{/if}
 
 	{#if unmappedRestaurants.length > 0}
@@ -683,6 +756,66 @@
 		:global(.rec-dot),
 		:global(.rec-pin) {
 			transition: none !important;
+		}
+	}
+
+	.locate-me-btn {
+		position: absolute;
+		top: 10px;
+		right: 10px;
+		z-index: 600;
+		width: 34px;
+		height: 34px;
+		padding: 0;
+		border: 2px solid rgba(0, 0, 0, 0.2);
+		border-radius: 6px;
+		background: #fffcf8;
+		color: #3e2c23;
+		cursor: pointer;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		box-shadow: 0 1px 5px rgba(0, 0, 0, 0.15);
+		transition: background 0.15s, color 0.15s, border-color 0.15s;
+	}
+
+	.locate-me-btn:hover:not(:disabled) {
+		background: #fff0eb;
+		color: #ff4500;
+		border-color: rgba(0, 0, 0, 0.3);
+	}
+
+	.locate-me-btn:disabled {
+		cursor: default;
+		opacity: 0.75;
+	}
+
+	.spinner {
+		animation: spin 0.8s linear infinite;
+	}
+
+	@keyframes spin {
+		to { transform: rotate(360deg); }
+	}
+
+	.location-error {
+		position: absolute;
+		top: 52px;
+		right: 10px;
+		z-index: 600;
+		background: #3e2c23;
+		color: #fffcf8;
+		font-size: 0.75rem;
+		padding: 5px 10px;
+		border-radius: 6px;
+		white-space: nowrap;
+		box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+		pointer-events: none;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.spinner {
+			animation: none;
 		}
 	}
 </style>
