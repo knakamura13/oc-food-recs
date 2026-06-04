@@ -1,18 +1,31 @@
 <script lang="ts">
 	import type { Restaurant } from '$lib/restaurants/types';
-	import { appState, normalizeCuisine, normalizeCity } from '$lib/restaurants/stores.svelte';
+	import { appState, normalizeCuisine, normalizeCity, formatMonthYear } from '$lib/restaurants/stores.svelte';
+	import RecencyHistogram from './RecencyHistogram.svelte';
 
 	interface Props {
 		restaurants: Restaurant[];
 		/** thread_id -> subreddit, used to attribute each restaurant to its origin subreddit. */
 		threadSubreddit: Record<string, string>;
+		/** Restaurants after every filter EXCEPT recency — the histogram's reactive population. */
+		restaurantsForHistogram: Restaurant[];
+		/** Full-dataset comment-date range (epoch ms) — the fixed slider/axis extent. */
+		dateExtent: { min: number; max: number };
 	}
 
-	let { restaurants, threadSubreddit }: Props = $props();
+	let { restaurants, threadSubreddit, restaurantsForHistogram, dateExtent }: Props = $props();
 
 	let showCuisineDropdown = $state(false);
 	let showCityDropdown = $state(false);
 	let showSubredditDropdown = $state(false);
+	let showRecencyDropdown = $state(false);
+
+	// Flattened dated mentions for the density histogram; reacts to the other active filters.
+	let histogramMentions = $derived(restaurantsForHistogram.flatMap((r) => r.mentions));
+	// Non-empty only when the recency filter is engaged; doubles as the pill label.
+	let recencyLabel = $derived(
+		appState.freshnessCutoff === null ? '' : `Since ${formatMonthYear(appState.freshnessCutoff)}`
+	);
 
 	let subredditCounts = $derived.by(() => {
 		const counts = new Map<string, number>();
@@ -95,12 +108,14 @@
 		appState.activeCuisines = [];
 		appState.activeCities = [];
 		appState.activeSubreddits = [];
+		appState.freshnessCutoff = null;
 	}
 
 	let hasActiveFilters = $derived(
 		appState.activeCuisines.length > 0 ||
 			appState.activeCities.length > 0 ||
-			appState.activeSubreddits.length > 0
+			appState.activeSubreddits.length > 0 ||
+			appState.freshnessCutoff !== null
 	);
 </script>
 
@@ -117,6 +132,8 @@
 				onclick={() => {
 					showCuisineDropdown = !showCuisineDropdown;
 					showCityDropdown = false;
+					showSubredditDropdown = false;
+					showRecencyDropdown = false;
 				}}
 			>
 				Cuisine
@@ -156,6 +173,8 @@
 				onclick={() => {
 					showCityDropdown = !showCityDropdown;
 					showCuisineDropdown = false;
+					showSubredditDropdown = false;
+					showRecencyDropdown = false;
 				}}
 			>
 				City
@@ -184,6 +203,31 @@
 			{/if}
 		</div>
 
+		<!-- Recency dropdown — comment-density histogram + freshness cutoff -->
+		<div class="dropdown-wrapper">
+			<button
+				class="dropdown-trigger"
+				class:has-active={appState.freshnessCutoff !== null}
+				aria-expanded={showRecencyDropdown}
+				aria-haspopup="dialog"
+				onclick={() => {
+					showRecencyDropdown = !showRecencyDropdown;
+					showCuisineDropdown = false;
+					showCityDropdown = false;
+					showSubredditDropdown = false;
+				}}
+			>
+				Recency
+				<span class="arrow" aria-hidden="true" class:open={showRecencyDropdown}>&#9662;</span>
+			</button>
+
+			{#if showRecencyDropdown}
+				<div class="dropdown-panel recency-panel">
+					<RecencyHistogram mentions={histogramMentions} extent={dateExtent} />
+				</div>
+			{/if}
+		</div>
+
 		<!-- Subreddit dropdown (only when data spans more than one subreddit) -->
 		{#if showSubredditFilter}
 			<div class="dropdown-wrapper">
@@ -197,6 +241,7 @@
 						showSubredditDropdown = !showSubredditDropdown;
 						showCuisineDropdown = false;
 						showCityDropdown = false;
+						showRecencyDropdown = false;
 					}}
 				>
 					Subreddit
@@ -249,6 +294,15 @@
 					r/{subreddit} &times;
 				</button>
 			{/each}
+			{#if recencyLabel}
+				<button
+					class="pill recency-pill"
+					onclick={() => (appState.freshnessCutoff = null)}
+					aria-label="Remove recency filter"
+				>
+					{recencyLabel} &times;
+				</button>
+			{/if}
 		</div>
 	{/if}
 </nav>
@@ -261,6 +315,7 @@
 			showCuisineDropdown = false;
 			showCityDropdown = false;
 			showSubredditDropdown = false;
+			showRecencyDropdown = false;
 		}
 	}}
 	onkeydown={(e) => {
@@ -268,6 +323,7 @@
 			showCuisineDropdown = false;
 			showCityDropdown = false;
 			showSubredditDropdown = false;
+			showRecencyDropdown = false;
 		}
 	}}
 />
@@ -284,8 +340,6 @@
 		flex-wrap: wrap;
 		align-items: center;
 		gap: 0.5rem;
-		max-width: 1200px;
-		margin: 0 auto;
 	}
 
 	.dropdown-wrapper {
@@ -440,6 +494,15 @@
 	.subreddit-pill {
 		background: #e6eef5;
 		color: #3a5a7a;
+	}
+
+	.recency-pill {
+		background: #fff0eb;
+		color: #ff4500;
+	}
+
+	.recency-panel {
+		min-width: 300px;
 	}
 
 	.pill:hover {
