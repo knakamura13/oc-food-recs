@@ -169,6 +169,7 @@ class WriteToDbTest(unittest.TestCase):
         executions = []
         ids_iter = iter(returned_restaurant_ids)
         existing_restaurants = existing_restaurants or []
+        next_mention_id = 1000
 
         cursor_mock = mock.MagicMock()
 
@@ -198,10 +199,18 @@ class WriteToDbTest(unittest.TestCase):
             return []
 
         def fetchone():
-            try:
-                return (next(ids_iter),)
-            except StopIteration:
-                return None
+            last_sql = executions[-1][0].strip().upper() if executions else ""
+            if "INSERT INTO MENTIONS" in last_sql:
+                nonlocal next_mention_id
+                val = next_mention_id
+                next_mention_id += 1
+                return (val,)
+            elif "INSERT INTO RESTAURANTS" in last_sql:
+                try:
+                    return (next(ids_iter),)
+                except StopIteration:
+                    return None
+            return None
 
         cursor_mock.execute.side_effect = execute
         cursor_mock.fetchone.side_effect = fetchone
@@ -224,7 +233,7 @@ class WriteToDbTest(unittest.TestCase):
 
     def _first_word(self, sql):
         # Match "INSERT INTO <table>", "UPDATE <table>", "DELETE FROM <table>"
-        match = re.search(r"\b(INSERT|UPDATE|DELETE)\b\s+(?:INTO\s+)?(\w+)", sql, re.IGNORECASE)
+        match = re.search(r"\b(INSERT|UPDATE|DELETE)\b\s+(?:INTO\s+|FROM\s+)?(\w+)", sql, re.IGNORECASE)
         if match:
             return match.group(2).lower()
         # Special case for SELECT from restaurants
@@ -325,10 +334,10 @@ class WriteToDbTest(unittest.TestCase):
         self.assertEqual(result["mentions"], 4)  # 2 primary + 2 endorsements
         self.assertEqual(result["thread_id"], "orangecounty-abc123")
 
-        # 1 threads upsert + 1 select existing + 2 restaurants upserts + 4 mentions upserts = 8 execute() calls.
-        self.assertEqual(len(executions), 8)
+        # 1 threads upsert + 1 select existing + 2 restaurants upserts + 4 mentions upserts + 1 delete mentions = 9 execute() calls.
+        self.assertEqual(len(executions), 9)
 
-        # Ordering: thread first, then per-restaurant (restaurant, primary mention, endorsements...).
+        # Ordering: thread first, then per-restaurant (restaurant, primary mention, endorsements...), then delete orphaned mentions.
         targets = [self._first_word(sql) for sql, _ in executions]
         self.assertEqual(
             targets,
@@ -341,6 +350,7 @@ class WriteToDbTest(unittest.TestCase):
                 "mentions",      # 5: endorsement 1b
                 "restaurants",   # 6: restaurant 2 upsert
                 "mentions",      # 7: primary mention restaurant 2
+                "mentions",      # 8: delete orphaned mentions
             ],
         )
 
@@ -869,6 +879,53 @@ class WriteToDbDedupTest(WriteToDbTest):
         ]
         self.assertEqual(len(restaurant_upserts), 1)
         self.assertEqual(result["mentions"], 2)
+
+    def test_write_to_db_cleans_up_orphaned_mentions(self):
+        parsed_thread = {
+            "post": {"id": "x", "subreddit": "oc", "title": "t", "url": "u"},
+            "comment_count": 0,
+            "max_depth": 0,
+            "comments": [],
+        }
+        manifest = {
+            "id": "oc-x",
+            "subreddit": "oc",
+            "post_id": "x",
+            "title": "t",
+            "url": "u",
+            "comment_count": 0,
+            "max_depth": 0,
+        }
+        restaurants = [
+            {
+                "name": "Mo Ran Gak",
+                "location": "Garden Grove",
+                "cuisine": None,
+                "lat": 33.770,
+                "lng": -117.940,
+                "primary_comment": {
+                    "id": "c1", "author": "a", "body": "b1", "score": 10, "permalink": "p1",
+                },
+                "endorsements": [],
+            }
+        ]
+
+        # Fake cursor to return 101 for the restaurant insert (mentions start at 1000)
+        factory, _conn, _cursor, executions = self._build_fake_connection([101])
+        with mock.patch.dict(os.environ, {"DATABASE_URL": "postgres://stub"}):
+            self.pipeline.write_to_db(
+                parsed_thread, restaurants, manifest, connection_factory=factory,
+            )
+
+        # Check that DELETE FROM mentions is called
+        delete_mentions = [
+            (sql, params) for sql, params in executions
+            if "DELETE FROM mentions WHERE thread_id =" in sql
+        ]
+        self.assertEqual(len(delete_mentions), 1)
+        sql, params = delete_mentions[0]
+        self.assertIn("id != ALL(%s)", sql)
+        self.assertEqual(params, ("oc-x", [1000]))
 
 
 if __name__ == "__main__":
