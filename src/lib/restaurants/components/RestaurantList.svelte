@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { ChevronRight, MapPin } from 'lucide-svelte';
 	import { tick } from 'svelte';
 	import { slide } from 'svelte/transition';
 	import NumberFlow, { NumberFlowGroup } from '@number-flow/svelte';
@@ -238,7 +239,7 @@
 							</span>
 						</div>
 					</NumberFlowGroup>
-					<span class="chevron" aria-hidden="true" class:open={isOpen}>&rsaquo;</span>
+					<span class="chevron" class:open={isOpen} aria-hidden="true"><ChevronRight size={20} /></span>
 				</button>
 
 				{#if isOpen}
@@ -364,10 +365,7 @@
 								rel="noopener noreferrer"
 								aria-label="Open {restaurant.name} in Google Maps"
 							>
-								<svg class="maps-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-									<path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
-									<circle cx="12" cy="9" r="2.5"/>
-								</svg>
+								<span class="maps-icon" aria-hidden="true"><MapPin size={14} /></span>
 								Google Maps
 							</a>
 						</div>
@@ -611,8 +609,9 @@
 	}
 
 	.chevron {
-		font-size: 1.3rem;
 		color: #d4c8bb;
+		display: inline-flex;
+		align-items: center;
 		transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 		flex-shrink: 0;
 	}
