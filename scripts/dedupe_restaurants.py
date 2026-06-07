@@ -7,7 +7,7 @@ Usage:
 """
 import sys
 import os
-from collections import defaultdict, deque
+from collections import defaultdict
 from typing import Any
 
 # Ensure we can import from the scripts directory
@@ -15,23 +15,21 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import db_backup as b
 import reddit_pipeline as rp
 
+
 def get_connected_components(nodes: list[int], adjacency: dict[int, list[int]]) -> list[list[int]]:
-    visited = set()
-    components = []
-    for node in nodes:
-        if node not in visited:
-            component = []
-            queue = deque([node])
-            visited.add(node)
-            while queue:
-                current = queue.popleft()
-                component.append(current)
-                for neighbor in adjacency.get(current, []):
-                    if neighbor not in visited:
-                        visited.add(neighbor)
-                        queue.append(neighbor)
-            components.append(component)
-    return components
+    return rp.get_connected_components(nodes, adjacency)
+
+
+def _merge_winner_fields(winner: dict[str, Any], loser: dict[str, Any]) -> dict[str, Any]:
+    """Apply upsert-equivalent field merge rules from loser onto winner."""
+    merged = dict(winner)
+    if len(loser["name"]) > len(merged["name"]):
+        merged["name"] = loser["name"]
+    for field in ("location", "cuisine", "lat", "lng"):
+        if merged.get(field) is None and loser.get(field) is not None:
+            merged[field] = loser[field]
+    return merged
+
 
 def main() -> int:
     apply = "--apply" in sys.argv[1:]
@@ -43,7 +41,7 @@ def main() -> int:
     cur = conn.cursor()
 
     # Fetch all restaurants
-    cur.execute("SELECT id, name, slug, location, lat, lng FROM restaurants ORDER BY id")
+    cur.execute("SELECT id, name, slug, location, cuisine, lat, lng FROM restaurants ORDER BY id")
     cols = [d[0] for d in cur.description]
     restaurants = [dict(zip(cols, r)) for r in cur.fetchall()]
     id_to_restaurant = {r['id']: r for r in restaurants}
@@ -97,7 +95,11 @@ def main() -> int:
 
     # Perform the merge
     print("\nApplying merges...")
+    winner_fields = {r["id"]: dict(r) for r in restaurants}
     for loser_id, winner_id in merges:
+        loser = id_to_restaurant[loser_id]
+        winner_fields[winner_id] = _merge_winner_fields(winner_fields[winner_id], loser)
+
         # 1. Handle unique constraint violations in mentions:
         # (thread_id, comment_id, restaurant_id) must be unique.
         # Find mentions of the loser that already exist for the winner.
@@ -121,6 +123,30 @@ def main() -> int:
         # 3. Delete the duplicate restaurant
         cur.execute("DELETE FROM restaurants WHERE id = %s", (loser_id,))
         print(f"  Merged ID {loser_id} into {winner_id}")
+
+    for winner_id in {winner for _, winner in merges}:
+        fields = winner_fields[winner_id]
+        cur.execute(
+            """
+            UPDATE restaurants
+            SET name = CASE WHEN length(%s) > length(name) THEN %s ELSE name END,
+                location = COALESCE(location, %s),
+                cuisine = COALESCE(cuisine, %s),
+                lat = COALESCE(lat, %s),
+                lng = COALESCE(lng, %s),
+                updated_at = now()
+            WHERE id = %s
+            """,
+            (
+                fields["name"],
+                fields["name"],
+                fields.get("location"),
+                fields.get("cuisine"),
+                fields.get("lat"),
+                fields.get("lng"),
+                winner_id,
+            ),
+        )
 
     conn.commit()
     conn.close()
