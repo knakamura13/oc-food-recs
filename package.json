@@ -24,6 +24,18 @@
 		"test": "vitest run",
 		"test:watch": "vitest"
 	},
+    	"dependencies": {
+		"@vincjo/datatables": "^2.8.1",
+		"@number-flow/svelte": "^0.4.0",
+		"dotenv": "^17.4.2",
+		"drizzle-orm": "^0.45.2",
+		"fuse.js": "^7.3.0",
+		"leaflet": "^1.9.4",
+		"leaflet.markercluster": "^1.5.3",
+		"svelte-sonner": "^1.1.1",
+		"lucide-svelte": "^1.0.1",
+		"pg": "^8.21.0"
+	},
 	"devDependencies": {
 		"@playwright/test": "^1.59.1",
 		"@sveltejs/adapter-node": "^5.5.4",
@@ -46,15 +58,5 @@
 		"typescript": "^6.0.2",
 		"vite": "^8.0.7",
 		"vitest": "^4.1.8"
-	},
-	"dependencies": {
-		"@number-flow/svelte": "^0.4.0",
-		"dotenv": "^17.4.2",
-		"drizzle-orm": "^0.45.2",
-		"fuse.js": "^7.3.0",
-		"leaflet": "^1.9.4",
-		"leaflet.markercluster": "^1.5.3",
-		"lucide-svelte": "^1.0.1",
-		"pg": "^8.21.0"
 	}
 }
