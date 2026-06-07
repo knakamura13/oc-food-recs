@@ -408,24 +408,11 @@ def assign_slugs(
 
     for r in restaurants:
         matched_slug = None
-        r_norm = normalize_name(r["name"])
 
         for e in existing:
-            if r_norm == normalize_name(e["name"]):
-                # Same normalized name. Check for location/proximity to deduplicate.
-                loc_match = bool(r.get("location")) and r.get("location") == e.get("location")
-                dist_match = False
-                if r.get("lat") is not None and r.get("lng") is not None and \
-                   e.get("lat") is not None and e.get("lng") is not None:
-                    dlat = float(r["lat"]) - float(e["lat"])
-                    dlng = float(r["lng"]) - float(e["lng"])
-                    # ~200m threshold (0.002 degrees is very rough but okay for OC)
-                    if (dlat**2 + dlng**2)**0.5 < 0.002:
-                        dist_match = True
-
-                if loc_match or dist_match:
-                    matched_slug = e["slug"]
-                    break
+            if is_match(r, e):
+                matched_slug = e["slug"]
+                break
 
         if matched_slug:
             slug = matched_slug
@@ -803,6 +790,35 @@ def normalize_name(name: str) -> str:
     # to catch 'Mo Ran Gak' vs 'Morangak'.
     normalized = re.sub(r"[^a-z0-9&]", "", normalized)
     return normalized
+
+
+def is_match(r1: dict[str, Any], r2: dict[str, Any]) -> bool:
+    norm1 = normalize_name(r1["name"])
+    norm2 = normalize_name(r2["name"])
+
+    # Substring matching (e.g., "Mo Ran Gak" matches "Mo Ran Gak Restaurant")
+    name_match = norm1 == norm2 or norm1 in norm2 or norm2 in norm1
+    if not name_match:
+        return False
+
+    # Proximity check: same city or within ~200m (0.002 degrees)
+    loc1 = r1.get("location")
+    loc2 = r2.get("location")
+    loc_match = bool(loc1) and loc1 == loc2
+
+    dist_match = False
+    if (
+        r1.get("lat") is not None
+        and r1.get("lng") is not None
+        and r2.get("lat") is not None
+        and r2.get("lng") is not None
+    ):
+        dlat = float(r1["lat"]) - float(r2["lat"])
+        dlng = float(r1["lng"]) - float(r2["lng"])
+        if (dlat**2 + dlng**2) ** 0.5 < 0.002:
+            dist_match = True
+
+    return loc_match or dist_match
 
 
 def collect_endorsements(parent_id: str, children_map: dict[str, list[dict[str, Any]]], reply_classes: dict[str, str]) -> list[dict[str, Any]]:
@@ -1451,11 +1467,11 @@ def write_to_db(
                     INSERT INTO restaurants (name, slug, location, cuisine, lat, lng)
                     VALUES (%s, %s, %s, %s, %s, %s)
                     ON CONFLICT (slug) DO UPDATE SET
-                        name = EXCLUDED.name,
-                        location = EXCLUDED.location,
-                        cuisine = EXCLUDED.cuisine,
-                        lat = EXCLUDED.lat,
-                        lng = EXCLUDED.lng,
+                        name = CASE WHEN length(EXCLUDED.name) > length(restaurants.name) THEN EXCLUDED.name ELSE restaurants.name END,
+                        location = COALESCE(restaurants.location, EXCLUDED.location),
+                        cuisine = COALESCE(restaurants.cuisine, EXCLUDED.cuisine),
+                        lat = COALESCE(restaurants.lat, EXCLUDED.lat),
+                        lng = COALESCE(restaurants.lng, EXCLUDED.lng),
                         updated_at = now()
                     RETURNING id
                     """,
