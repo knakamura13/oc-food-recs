@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { ChevronRight } from 'lucide-svelte';
 	import { onMount, untrack } from 'svelte';
 	import type { Restaurant } from '$lib/restaurants/types';
 	import { appState } from '$lib/restaurants/stores.svelte';
@@ -487,7 +488,7 @@
 	{#if unmappedRestaurants.length > 0}
 		<button class="unmapped-toggle" onclick={() => (showUnmapped = !showUnmapped)} aria-expanded={showUnmapped}>
 			{showUnmapped ? 'Hide' : 'Show'} {unmappedRestaurants.length} unmapped restaurants
-			<span class="arrow" aria-hidden="true" class:open={showUnmapped}>&rsaquo;</span>
+			<span class="arrow" class:open={showUnmapped} aria-hidden="true"><ChevronRight size={18} /></span>
 		</button>
 
 		{#if showUnmapped}
@@ -558,7 +559,8 @@
 
 	.arrow {
 		transition: transform 0.2s;
-		font-size: 1.1rem;
+		display: inline-flex;
+		align-items: center;
 	}
 
 	.arrow.open {

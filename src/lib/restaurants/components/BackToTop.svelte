@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { ArrowUp } from 'lucide-svelte';
 	import { onMount } from 'svelte';
 	import { fade } from 'svelte/transition';
 
@@ -31,32 +32,7 @@
 
 {#if visible}
 	<button class="back-to-top" onclick={scrollToTop} aria-label="Back to top" transition:fade={{ duration: 200 }}>
-		<svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-			<!-- Hand-drawn squiggly upward arrow -->
-			<path
-				d="M20 34 C19.5 28, 21 24, 20.2 18 C19.8 14, 20.5 11, 20 7"
-				stroke="currentColor"
-				stroke-width="2.5"
-				stroke-linecap="round"
-				fill="none"
-			/>
-			<!-- Sketchy arrowhead - left side -->
-			<path
-				d="M20 7 C18 9, 14.5 12, 11 14.5"
-				stroke="currentColor"
-				stroke-width="2.5"
-				stroke-linecap="round"
-				fill="none"
-			/>
-			<!-- Sketchy arrowhead - right side -->
-			<path
-				d="M20 7 C22.5 9.5, 25 12.5, 28.5 15"
-				stroke="currentColor"
-				stroke-width="2.5"
-				stroke-linecap="round"
-				fill="none"
-			/>
-		</svg>
+		<span class="back-to-top-icon" aria-hidden="true"><ArrowUp size={24} /></span>
 	</button>
 {/if}
 
@@ -93,7 +69,7 @@
 		box-shadow: 0 1px 4px rgba(255, 69, 0, 0.2);
 	}
 
-	.back-to-top svg {
+	.back-to-top-icon {
 		width: 24px;
 		height: 24px;
 	}
@@ -114,7 +90,7 @@
 			height: 40px;
 		}
 
-		.back-to-top svg {
+		.back-to-top-icon {
 			width: 20px;
 			height: 20px;
 		}
