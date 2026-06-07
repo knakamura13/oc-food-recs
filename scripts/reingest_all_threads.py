@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+import tqdm
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -116,11 +117,13 @@ def reingest_all(
     os.environ["DATABASE_URL"] = b._url()
 
     successes: list[str] = []
-    for index, html_path in enumerate(html_files, start=1):
-        print(f"\n[{index}/{len(html_files)}] Ingesting {html_path.name}...")
+    pbar = tqdm.tqdm(html_files, desc="Re-ingesting", unit="thread")
+    for index, html_path in enumerate(pbar, start=1):
+        pbar.set_postfix_str(html_path.name)
         try:
             rp.ingest(html_path, limit=limit)
         except Exception as exc:  # noqa: BLE001
+            pbar.close()
             print(
                 f"\nERROR ingesting {html_path.name}: {exc}",
                 file=sys.stderr,

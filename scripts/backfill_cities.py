@@ -20,7 +20,7 @@ Rate-limited to Nominatim's ~1 req/s policy.
 Reads DATABASE_URL from environment or .env (via db_backup).
 """
 from __future__ import annotations
-import sys, os, json, time, urllib.request, urllib.parse
+import sys, os, json, time, tqdm, urllib.request, urllib.parse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import db_backup as b
@@ -88,20 +88,21 @@ def main() -> int:
         print(f"  ... committed {total_committed} updates so far")
         batch.clear()
 
-    for rid, name, current_city, lat, lng in rows:
+    pbar = tqdm.tqdm(rows, desc="Backfilling cities", unit="restaurant")
+    for rid, name, current_city, lat, lng in pbar:
         new_city = _reverse_geocode_city(lat, lng)
         if new_city is None:
             no_match += 1
             continue
         if new_city != current_city:
             pending += 1
-            print(f"  {name!r}: {current_city!r} -> {new_city!r}")
             if apply:
                 batch.append((new_city, rid))
                 if len(batch) >= BATCH_SIZE:
                     _flush()
         else:
             already_correct += 1
+    pbar.close()
 
     if apply:
         _flush()  # commit any remaining rows in the final partial batch

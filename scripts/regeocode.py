@@ -22,7 +22,7 @@ Usage:
 Network calls are rate-limited to Nominatim's ~1 req/s; ~N-with-location seconds.
 """
 from __future__ import annotations
-import sys, os, json
+import sys, os, json, tqdm
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import db_backup as b
@@ -88,7 +88,8 @@ def main() -> int:
         batch.clear()
 
     retried_subreddit = retried_name_only = 0
-    for rid, name, location, subreddit in rows:
+    pbar = tqdm.tqdm(rows, desc="Geocoding", unit="restaurant")
+    for rid, name, location, subreddit in pbar:
         # Tier 1: use the LLM-extracted city (if any).
         lat, lng, detail, geocoded_city = rp.default_geocode(name, location)
 
@@ -118,11 +119,11 @@ def main() -> int:
         if lat is not None:
             canonical = geocoded_city or rp.normalize_location(location)
             pending += 1
-            print(f"  + {name!r} -> {lat:.4f},{lng:.4f}  city={canonical!r}  {detail[:40]}")
             if apply:
                 batch.append((lat, lng, canonical, rid))
                 if len(batch) >= BATCH_SIZE:
                     _flush()
+    pbar.close()
 
     if apply:
         _flush()

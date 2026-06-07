@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import tqdm
 from datetime import datetime
 from pathlib import Path
 
@@ -77,10 +78,9 @@ def build_date_map() -> dict[str, datetime]:
     """Parse all available HTML files and merge into one comment_id → datetime map."""
     html_files = collect_html_files()
     date_map: dict[str, datetime] = {}
-    for path in html_files:
+    for path in tqdm.tqdm(html_files, desc="Parsing HTML", unit="file"):
         dates = extract_dates_from_html(path)
         date_map.update(dates)
-        print(f'  {path.name}: {len(dates)} timestamps extracted')
     return date_map
 
 
@@ -116,7 +116,7 @@ def main() -> int:
 
             updated = 0
             skipped = 0
-            for mention_id, comment_id in rows:
+            for mention_id, comment_id in tqdm.tqdm(rows, desc="Updating DB", unit="row"):
                 dt = date_map.get(comment_id)
                 if dt is None:
                     skipped += 1

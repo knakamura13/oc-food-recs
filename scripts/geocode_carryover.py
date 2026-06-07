@@ -16,7 +16,7 @@ Reads DATABASE_URL via db_backup (env or .env). Safe to re-run: only rows that
 are currently ungeocoded are considered.
 """
 from __future__ import annotations
-import sys, os, json, re, unicodedata
+import sys, os, json, re, unicodedata, tqdm
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import db_backup as b
@@ -56,7 +56,7 @@ def main() -> int:
     rows = cur.fetchall()
     updates = []
     t1 = t2 = 0
-    for rid, name, loc in rows:
+    for rid, name, loc in tqdm.tqdm(rows, desc="Matching", unit="restaurant"):
         nm = nk(name)
         key = nm + "|" + nk(loc)
         if key in namecity:

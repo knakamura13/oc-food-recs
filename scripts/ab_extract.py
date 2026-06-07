@@ -18,6 +18,7 @@ import argparse
 import json
 import re
 import sys
+import tqdm
 import urllib.request
 from pathlib import Path
 
@@ -123,8 +124,9 @@ def cmd_gemma(args) -> None:
     model = args.model or rp.OLLAMA_MODEL
     think = {"omit": None, "true": True, "false": False}[args.think]
     done = ok = empty_content = 0
+    pbar = tqdm.tqdm(rows, desc="Extracting", unit="comment")
     with out.open("w", encoding="utf-8") as fh:
-        for r in rows:
+        for r in pbar:
             try:
                 entities, raw, tlen = _extract_with(r["body"], model, think)
                 rec = {"comment_id": r["comment_id"], "entities": entities, "raw": raw}
@@ -136,8 +138,7 @@ def cmd_gemma(args) -> None:
             fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
             fh.flush()
             done += 1
-            n_ent = len(rec.get("entities") or [])
-            print(f"[{done}/{len(rows)}] {r['comment_id']}: {n_ent} entities", flush=True)
+    pbar.close()
     print(f"model = {model}  think = {args.think}  url = {rp.OLLAMA_URL}")
     print(f"wrote {done} rows ({ok} ok, {empty_content} empty-content) -> {out}")
 

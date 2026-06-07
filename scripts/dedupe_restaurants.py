@@ -7,6 +7,7 @@ Usage:
 """
 import sys
 import os
+import tqdm
 from collections import defaultdict
 from typing import Any
 
@@ -53,7 +54,7 @@ def main() -> int:
     print(f"Checking {len(restaurants)} restaurants for duplicates...")
 
     adjacency = defaultdict(list)
-    for i, r1 in enumerate(restaurants):
+    for i, r1 in tqdm.tqdm(enumerate(restaurants), total=len(restaurants), desc="Comparing", unit="restaurant"):
         for j in range(i + 1, len(restaurants)):
             r2 = restaurants[j]
             if rp.is_match(r1, r2):
@@ -82,10 +83,7 @@ def main() -> int:
         losers = sorted_group[1:]
 
         winner = id_to_restaurant[winner_id]
-        print(f"\nGroup (Winner: '{winner['name']}' ID {winner_id}, {mention_counts.get(winner_id, 0)} mentions):")
         for rid in losers:
-            loser = id_to_restaurant[rid]
-            print(f"  - '{loser['name']}' (ID {rid}, {mention_counts.get(rid, 0)} mentions)")
             merges.append((rid, winner_id))
 
     if not apply:
@@ -96,7 +94,7 @@ def main() -> int:
     # Perform the merge
     print("\nApplying merges...")
     winner_fields = {r["id"]: dict(r) for r in restaurants}
-    for loser_id, winner_id in merges:
+    for loser_id, winner_id in tqdm.tqdm(merges, desc="Merging", unit="restaurant"):
         loser = id_to_restaurant[loser_id]
         winner_fields[winner_id] = _merge_winner_fields(winner_fields[winner_id], loser)
 
@@ -122,7 +120,7 @@ def main() -> int:
 
         # 3. Delete the duplicate restaurant
         cur.execute("DELETE FROM restaurants WHERE id = %s", (loser_id,))
-        print(f"  Merged ID {loser_id} into {winner_id}")
+
 
     for winner_id in {winner for _, winner in merges}:
         fields = winner_fields[winner_id]
