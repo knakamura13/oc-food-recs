@@ -3,6 +3,7 @@
 	import { slide } from 'svelte/transition';
 	import type { Mention, Restaurant } from '$lib/restaurants/types';
 	import { appState, normalizeCuisine } from '$lib/restaurants/stores.svelte';
+	import { toast } from '$lib/toast';
 
 	interface Props {
 		restaurants: Restaurant[];
@@ -139,6 +140,22 @@
 	function googleMapsUrl(restaurant: Restaurant): string {
 		const query = restaurant.name + ' ' + (restaurant.location || 'Orange County') + ' CA';
 		return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(query);
+	}
+
+
+	function shareUrl(slug: string): string {
+		const url = new URL(window.location.href);
+		url.searchParams.set('restaurant', slug);
+		return url.toString();
+	}
+
+	async function copyShareLink(restaurant: Restaurant) {
+		try {
+			await navigator.clipboard.writeText(shareUrl(restaurant.slug));
+			toast.success('Link copied!');
+		} catch {
+			toast.error('Could not copy link');
+		}
 	}
 
 	function getPrimaryMention(mentions: Mention[]): Mention | null {
@@ -346,6 +363,11 @@
 									Show on map
 								</button>
 							{/if}
+
+							<button type="button" class="share-link" onclick={() => copyShareLink(restaurant)} aria-label="Copy link to {restaurant.name}">
+								<svg class="share-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+								Copy link
+							</button>
 							<a
 								class="maps-link"
 								href={googleMapsUrl(restaurant)}
@@ -774,6 +796,12 @@
 	.map-link:active {
 		transform: scale(0.97);
 	}
+
+
+	.share-link { display: inline-flex; align-items: center; gap: 4px; font-size: 0.8rem; padding: 5px 14px; border-radius: 6px; cursor: pointer; border: 1px solid #d4c8bb; background: #fffcf8; color: #5d4e37; transition: all 0.15s ease; font-weight: 500; }
+	.share-link:hover { border-color: #ff4500; color: #ff4500; box-shadow: 0 2px 6px rgba(255, 69, 0, 0.1); }
+	.share-link:active { transform: scale(0.97); }
+	.share-icon { width: 14px; height: 14px; flex-shrink: 0; }
 
 	.maps-link {
 		display: inline-flex;
