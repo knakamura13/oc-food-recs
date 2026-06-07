@@ -135,6 +135,10 @@
 			maxZoom: 19
 		}).addTo(leafletMap);
 
+		leafletMap.on('click', () => {
+			appState.selectedRestaurantSlug = null;
+		});
+
 		updateMarkers();
 
 		setTimeout(() => leafletMap?.invalidateSize(), 100);
@@ -217,6 +221,10 @@
 			e.layer.unbindTooltip();
 		});
 
+		clusterGroupRef.on('clusterclick', () => {
+			appState.selectedRestaurantSlug = null;
+		});
+
 		// When clusters expand/collapse, re-apply the highlight so a pin that
 		// un-clusters into view picks up an active hover/selection.
 		clusterGroupRef.on('animationend', () => applyHighlight());
@@ -229,9 +237,14 @@
 				riseOnHover: true
 			});
 
-			marker.on('click', () => {
-				appState.selectedRestaurantSlug = r.slug;
-				appState.listScrollTarget = r.slug;
+			marker.on('click', (e: any) => {
+				L.DomEvent.stopPropagation(e);
+				if (appState.selectedRestaurantSlug === r.slug) {
+					appState.selectedRestaurantSlug = null;
+				} else {
+					appState.selectedRestaurantSlug = r.slug;
+					appState.listScrollTarget = r.slug;
+				}
 			});
 
 			// Debounced hover so a fast mouse sweep across pins doesn't flicker.
