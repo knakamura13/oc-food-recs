@@ -11,6 +11,7 @@ import re
 import shutil
 import sys
 import time
+import tqdm
 import unicodedata
 import urllib.parse
 import urllib.request
@@ -1896,7 +1897,16 @@ def ingest(
     total_roots = len(roots) or 1
 
     entity_records: list[dict[str, Any]] = []
-    for index, root in enumerate(roots, start=1):
+    # Wrap in tqdm for CLI feedback, but disable when stderr is not a TTY (e.g. web UI stream).
+    for index, root in enumerate(
+        tqdm.tqdm(
+            roots,
+            desc="Extracting",
+            unit="comment",
+            disable=not sys.stderr.isatty(),
+        ),
+        start=1,
+    ):
         entities, raw = normalize_extractor_result(
             extract_entities_fn(root["body"], comment=root, manifest=manifest)
         )
@@ -1921,7 +1931,15 @@ def ingest(
     restaurants = copy.deepcopy(thread_dataset["restaurants"])
     total_restaurants = len(restaurants) or 1
 
-    for index, restaurant in enumerate(restaurants, start=1):
+    for index, restaurant in enumerate(
+        tqdm.tqdm(
+            restaurants,
+            desc="Geocoding",
+            unit="restaurant",
+            disable=not sys.stderr.isatty(),
+        ),
+        start=1,
+    ):
         raw_location = restaurant.get("location") or _subreddit_city(manifest["subreddit"])
         lat, lng, detail, geocoded_city = geocode_fn(restaurant["name"], raw_location)
         _apply_geocode_result(restaurant, lat, lng, geocoded_city, raw_location)
@@ -2001,12 +2019,13 @@ def ingest_batch(
         print(f"No .html files found in {UNINGESTED_ROOT}")
         return 0
     failures = 0
-    for html_path in files:
+    pbar = tqdm.tqdm(files, desc="Batch Ingesting", unit="file", disable=not sys.stderr.isatty())
+    for html_path in pbar:
+        pbar.set_postfix_str(html_path.name)
         try:
             ingest(html_path, limit=limit, dry_run=dry_run)
             if not dry_run and archive:
                 dest = _archive_ingested_html(html_path)
-                print(f"archived -> {dest}")
         except Exception as exc:  # skip + continue to the next file
             failures += 1
             print(f"ERROR ingesting {html_path.name}: {exc}", file=sys.stderr)
