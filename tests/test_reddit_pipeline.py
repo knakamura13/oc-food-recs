@@ -160,7 +160,7 @@ class WriteToDbTest(unittest.TestCase):
     def setUpClass(cls):
         cls.pipeline = load_pipeline_module()
 
-    def _build_fake_connection(self, returned_restaurant_ids):
+    def _build_fake_connection(self, returned_restaurant_ids, existing_restaurants=None):
         """Return (factory, cursor) where factory(url) -> context-manager conn.
 
         `returned_restaurant_ids` is a list of ids served sequentially by the
@@ -168,6 +168,7 @@ class WriteToDbTest(unittest.TestCase):
         """
         executions = []
         ids_iter = iter(returned_restaurant_ids)
+        existing_restaurants = existing_restaurants or []
 
         cursor_mock = mock.MagicMock()
 
@@ -181,7 +182,18 @@ class WriteToDbTest(unittest.TestCase):
                 cursor_mock.description = None
 
         def fetchall():
-            if executions and executions[-1][0].strip().upper().startswith("SELECT NAME"):
+            if executions and executions[-1][0].strip().upper().startswith("SELECT"):
+                if existing_restaurants and "FROM RESTAURANTS" in executions[-1][0].upper():
+                    return [
+                        (
+                            row["name"],
+                            row["slug"],
+                            row.get("location"),
+                            row.get("lat"),
+                            row.get("lng"),
+                        )
+                        for row in existing_restaurants
+                    ]
                 return []
             return []
 
@@ -644,6 +656,219 @@ class WriteToDbTest(unittest.TestCase):
         self.assertIsNone(p._subreddit_city("orangecounty"))       # county-wide -> no fallback
         self.assertIsNone(p._subreddit_city(None))
         self.assertIsNone(p._subreddit_city("nonexistentsub"))
+
+
+class BuildThreadDatasetTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.pipeline = load_pipeline_module()
+
+    def _minimal_thread(self):
+        return {
+            "post": {"id": "abc", "subreddit": "orangecounty", "title": "t", "url": "u"},
+            "comments": [
+                {
+                    "id": "root1",
+                    "depth": 0,
+                    "author": "a1",
+                    "body": "body1",
+                    "score": 10,
+                    "permalink": "p1",
+                    "created_utc": "",
+                    "replies": [],
+                },
+                {
+                    "id": "root2",
+                    "depth": 0,
+                    "author": "a2",
+                    "body": "body2",
+                    "score": 8,
+                    "permalink": "p2",
+                    "created_utc": "",
+                    "replies": [],
+                },
+            ],
+            "comment_count": 2,
+            "max_depth": 0,
+        }
+
+    def test_same_name_different_cities_stay_separate(self):
+        parsed = self._minimal_thread()
+        entity_records = [
+            {"comment_id": "root1", "entities": [{"name": "In-N-Out", "location": "Irvine"}]},
+            {"comment_id": "root2", "entities": [{"name": "In-N-Out", "location": "Costa Mesa"}]},
+        ]
+        dataset = self.pipeline.build_thread_dataset(parsed, entity_records)
+        self.assertEqual(len(dataset["restaurants"]), 2)
+        locations = sorted(r["location"] for r in dataset["restaurants"])
+        self.assertEqual(locations, ["Costa Mesa", "Irvine"])
+
+    def test_same_name_same_city_merges(self):
+        parsed = self._minimal_thread()
+        entity_records = [
+            {"comment_id": "root1", "entities": [{"name": "Mo Ran Gak", "location": "Garden Grove"}]},
+            {"comment_id": "root2", "entities": [{"name": "Morangak", "location": "Garden Grove"}]},
+        ]
+        dataset = self.pipeline.build_thread_dataset(parsed, entity_records)
+        self.assertEqual(len(dataset["restaurants"]), 1)
+        self.assertEqual(dataset["restaurants"][0]["mention_count"], 2)
+
+    def test_endorsement_dedup(self):
+        parsed = self._minimal_thread()
+        parsed["comments"][0]["replies"] = [{
+            "id": "reply1",
+            "depth": 1,
+            "parent_id": "root1",
+            "author": "fan",
+            "body": "seconded",
+            "score": 3,
+            "permalink": "pr1",
+            "created_utc": "",
+            "replies": [],
+        }]
+        entity_records = [
+            {"comment_id": "root1", "entities": [{"name": "Stub Cafe", "location": "Irvine"}]},
+            {"comment_id": "root2", "entities": [{"name": "Stub Cafe", "location": "Irvine"}]},
+        ]
+        dataset = self.pipeline.build_thread_dataset(parsed, entity_records)
+        self.assertEqual(len(dataset["restaurants"]), 1)
+        self.assertEqual(len(dataset["restaurants"][0]["endorsements"]), 1)
+
+
+class GeocodeHelperTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.pipeline = load_pipeline_module()
+
+    def test_apply_geocode_result_sets_location(self):
+        restaurant = {"name": "Stub Cafe", "location": "HB"}
+        self.pipeline._apply_geocode_result(
+            restaurant,
+            lat=33.66,
+            lng=-117.99,
+            geocoded_city="Huntington Beach",
+            raw_location="HB",
+        )
+        self.assertEqual(restaurant["lat"], 33.66)
+        self.assertEqual(restaurant["lng"], -117.99)
+        self.assertEqual(restaurant["location"], "Huntington Beach")
+
+    def test_apply_geocode_result_falls_back_to_normalized_location(self):
+        restaurant = {"name": "Stub Cafe"}
+        self.pipeline._apply_geocode_result(
+            restaurant,
+            lat=None,
+            lng=None,
+            geocoded_city=None,
+            raw_location="HB",
+        )
+        self.assertEqual(restaurant["location"], "Huntington Beach")
+
+
+class WriteToDbDedupTest(WriteToDbTest):
+    def test_write_to_db_reuses_slug_for_is_match_existing(self):
+        parsed_thread = {
+            "post": {"id": "x", "subreddit": "oc", "title": "t", "url": "u"},
+            "comment_count": 0,
+            "max_depth": 0,
+            "comments": [],
+        }
+        manifest = {
+            "id": "oc-x",
+            "subreddit": "oc",
+            "post_id": "x",
+            "title": "t",
+            "url": "u",
+            "comment_count": 0,
+            "max_depth": 0,
+        }
+        restaurants = [{
+            "name": "Morangak",
+            "location": "Garden Grove",
+            "cuisine": None,
+            "lat": 33.77,
+            "lng": -117.94,
+            "primary_comment": {
+                "id": "c1", "author": "a", "body": "b", "score": 1, "permalink": "p1",
+            },
+            "endorsements": [],
+        }]
+        existing = [{
+            "name": "Mo Ran Gak",
+            "slug": "mo-ran-gak",
+            "location": "Garden Grove",
+            "lat": 33.77,
+            "lng": -117.94,
+        }]
+
+        factory, _conn, _cursor, executions = self._build_fake_connection(
+            [101], existing_restaurants=existing,
+        )
+        with mock.patch.dict(os.environ, {"DATABASE_URL": "postgres://stub"}):
+            self.pipeline.write_to_db(
+                parsed_thread, restaurants, manifest, connection_factory=factory,
+            )
+
+        restaurant_upserts = [
+            params for sql, params in executions
+            if "INSERT INTO restaurants" in sql
+        ]
+        self.assertEqual(len(restaurant_upserts), 1)
+        self.assertEqual(restaurant_upserts[0][1], "mo-ran-gak")
+
+    def test_write_to_db_collapses_batch_duplicates(self):
+        parsed_thread = {
+            "post": {"id": "x", "subreddit": "oc", "title": "t", "url": "u"},
+            "comment_count": 0,
+            "max_depth": 0,
+            "comments": [],
+        }
+        manifest = {
+            "id": "oc-x",
+            "subreddit": "oc",
+            "post_id": "x",
+            "title": "t",
+            "url": "u",
+            "comment_count": 0,
+            "max_depth": 0,
+        }
+        restaurants = [
+            {
+                "name": "Mo Ran Gak",
+                "location": "Garden Grove",
+                "cuisine": None,
+                "lat": 33.770,
+                "lng": -117.940,
+                "primary_comment": {
+                    "id": "c1", "author": "a", "body": "b1", "score": 10, "permalink": "p1",
+                },
+                "endorsements": [],
+            },
+            {
+                "name": "Morangak Restaurant",
+                "location": "Garden Grove",
+                "cuisine": None,
+                "lat": 33.771,
+                "lng": -117.941,
+                "primary_comment": {
+                    "id": "c2", "author": "b", "body": "b2", "score": 5, "permalink": "p2",
+                },
+                "endorsements": [],
+            },
+        ]
+
+        factory, _conn, _cursor, executions = self._build_fake_connection([101])
+        with mock.patch.dict(os.environ, {"DATABASE_URL": "postgres://stub"}):
+            result = self.pipeline.write_to_db(
+                parsed_thread, restaurants, manifest, connection_factory=factory,
+            )
+
+        restaurant_upserts = [
+            params for sql, params in executions
+            if "INSERT INTO restaurants" in sql
+        ]
+        self.assertEqual(len(restaurant_upserts), 1)
+        self.assertEqual(result["mentions"], 2)
 
 
 if __name__ == "__main__":

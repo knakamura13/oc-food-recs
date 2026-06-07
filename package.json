@@ -12,7 +12,7 @@
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"test:e2e": "playwright test",
-		"test:pipeline": "python3 -m unittest tests/test_reddit_pipeline.py",
+		"test:pipeline": "python3 -m unittest tests/test_reddit_pipeline.py tests/test_dedupe_logic.py tests/test_geocode_normalization.py",
 		"db:generate": "drizzle-kit generate",
 		"db:migrate": "drizzle-kit migrate",
 		"db:push": "drizzle-kit push",
