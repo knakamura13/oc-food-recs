@@ -26,6 +26,31 @@ class TestDedupeLogic(unittest.TestCase):
         r2 = {"name": "Mo Ran Gak Restaurant", "location": "Garden Grove"}
         self.assertTrue(rp.is_match(r1, r2))
 
+    def test_is_match_substring_word_boundary_edge_cases(self):
+        # Short valid word prefix should match
+        self.assertTrue(rp.is_match(
+            {"name": "Joe", "location": "A"}, 
+            {"name": "Joe's Pizza", "location": "A"}
+        ))
+        
+        # Valid word boundary match
+        self.assertTrue(rp.is_match(
+            {"name": "McDonald", "location": "A"}, 
+            {"name": "McDonald's", "location": "A"}
+        ))
+
+        # Should NOT match if it doesn't align with word boundaries
+        self.assertFalse(rp.is_match(
+            {"name": "The Stand", "location": "Irvine"}, 
+            {"name": "The Standard", "location": "Irvine"}
+        ))
+        
+        # Another boundary failure case
+        self.assertFalse(rp.is_match(
+            {"name": "Mac", "location": "A"}, 
+            {"name": "MacDonalds", "location": "A"}
+        ))
+
     def test_is_match_proximity(self):
         # Within ~200m (0.002 degrees)
         r1 = {"name": "Mo Ran Gak", "lat": 33.770, "lng": -117.940}

@@ -902,12 +902,63 @@ def _locations_match(loc1: str | None, loc2: str | None) -> bool:
     return False
 
 
+def _is_word_boundary_match(short_name: str, long_name: str) -> bool:
+    """
+    Check if normalize_name(short_name) is a substring of normalize_name(long_name)
+    AND the match aligns with word boundaries in long_name.
+    """
+    short_norm = normalize_name(short_name)
+    long_norm = normalize_name(long_name)
+    
+    if not short_norm or short_norm not in long_norm:
+        return False
+        
+    starts = [m.start() for m in re.finditer(re.escape(short_norm), long_norm)]
+    if not starts:
+        return False
+        
+    # Process long_name lowercased, removing trailing 's
+    long_processed = long_name.lower().strip()
+    long_processed = re.sub(r"['’]s$", "", long_processed)
+    
+    mapping = []
+    for i, c in enumerate(long_processed):
+        if re.match(r"[a-z0-9&]", c):
+            mapping.append(i)
+            
+    for start in starts:
+        end = start + len(short_norm) - 1
+        
+        is_start_boundary = True
+        if start > 0:
+            if mapping[start] == mapping[start - 1] + 1:
+                is_start_boundary = False
+                
+        is_end_boundary = True
+        if end < len(mapping) - 1:
+            if mapping[end + 1] == mapping[end] + 1:
+                is_end_boundary = False
+                
+        if is_start_boundary and is_end_boundary:
+            return True
+            
+    return False
+
+
 def is_match(r1: dict[str, Any], r2: dict[str, Any]) -> bool:
     norm1 = normalize_name(r1["name"])
     norm2 = normalize_name(r2["name"])
 
     # Substring matching (e.g., "Mo Ran Gak" matches "Mo Ran Gak Restaurant")
-    name_match = norm1 == norm2 or norm1 in norm2 or norm2 in norm1
+    if norm1 == norm2:
+        name_match = True
+    elif len(norm1) <= len(norm2) and _is_word_boundary_match(r1["name"], r2["name"]):
+        name_match = True
+    elif len(norm2) < len(norm1) and _is_word_boundary_match(r2["name"], r1["name"]):
+        name_match = True
+    else:
+        name_match = False
+
     if not name_match:
         return False
 
@@ -1548,6 +1599,7 @@ def write_to_db(
 
     restaurants_inserted = 0
     mentions_inserted = 0
+    inserted_mention_ids = []
 
     with connection_factory(database_url) as conn:
         with conn.cursor() as cur:
@@ -1645,6 +1697,7 @@ def write_to_db(
                             body = EXCLUDED.body,
                             score = EXCLUDED.score,
                             comment_date = EXCLUDED.comment_date
+                        RETURNING id
                         """,
                         (
                             restaurant_id,
@@ -1657,6 +1710,9 @@ def write_to_db(
                             parse_comment_date(primary.get("created_utc")),
                         ),
                     )
+                    row = cur.fetchone()
+                    if row:
+                        inserted_mention_ids.append(row[0] if isinstance(row, (tuple, list)) else row["id"])
                     mentions_inserted += 1
 
                 # 4. Endorsements — role='endorsement', classification=<type>
@@ -1675,6 +1731,7 @@ def write_to_db(
                             score = EXCLUDED.score,
                             classification = EXCLUDED.classification,
                             comment_date = EXCLUDED.comment_date
+                        RETURNING id
                         """,
                         (
                             restaurant_id,
@@ -1688,7 +1745,16 @@ def write_to_db(
                             parse_comment_date(endorsement.get("created_utc")),
                         ),
                     )
+                    row = cur.fetchone()
+                    if row:
+                        inserted_mention_ids.append(row[0] if isinstance(row, (tuple, list)) else row["id"])
                     mentions_inserted += 1
+
+            if inserted_mention_ids:
+                cur.execute(
+                    "DELETE FROM mentions WHERE thread_id = %s AND id != ALL(%s)",
+                    (thread_id, inserted_mention_ids)
+                )
 
         conn.commit()
 
