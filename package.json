@@ -54,6 +54,7 @@
 		"fuse.js": "^7.3.0",
 		"leaflet": "^1.9.4",
 		"leaflet.markercluster": "^1.5.3",
+		"lucide-svelte": "^1.0.1",
 		"pg": "^8.21.0"
 	}
 }
