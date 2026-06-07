@@ -1,9 +1,12 @@
 <script lang="ts">
+	import { ChevronRight, MapPin } from 'lucide-svelte';
 	import { tick } from 'svelte';
 	import { slide } from 'svelte/transition';
 	import { TableHandler } from '@vincjo/datatables';
+	import NumberFlow, { NumberFlowGroup } from '@number-flow/svelte';
 	import type { Mention, Restaurant } from '$lib/restaurants/types';
 	import { appState, normalizeCuisine } from '$lib/restaurants/stores.svelte';
+	import { toast } from '$lib/toast';
 
 	interface Props {
 		restaurants: Restaurant[];
@@ -145,6 +148,22 @@
 		return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(query);
 	}
 
+
+	function shareUrl(slug: string): string {
+		const url = new URL(window.location.href);
+		url.searchParams.set('restaurant', slug);
+		return url.toString();
+	}
+
+	async function copyShareLink(restaurant: Restaurant) {
+		try {
+			await navigator.clipboard.writeText(shareUrl(restaurant.slug));
+			toast.success('Link copied!');
+		} catch {
+			toast.error('Could not copy link');
+		}
+	}
+
 	function getPrimaryMention(mentions: Mention[]): Mention | null {
 		const primaries = mentions.filter((m) => m.role === 'primary');
 		if (primaries.length === 0) return null;
@@ -189,7 +208,9 @@
 				{/if}
 			</button>
 		{/each}
-		<span class="result-count" aria-live="polite">{restaurants.length} restaurants</span>
+		<span class="result-count" aria-live="polite">
+			<NumberFlow value={restaurants.length} /> restaurants
+		</span>
 	</div>
 
 	<div class="list-scroll" role="region" aria-label="Restaurant results">
@@ -226,12 +247,20 @@
 							{/if}
 						</div>
 					</div>
-					<div class="row-stats">
-						<span class="stat score">{restaurant.aggregate_score} <small>pts</small></span>
-						<span class="stat">{endorsementCount(restaurant)} <small>endorse</small></span>
-						<span class="stat">{restaurant.mention_count} <small>mentions</small></span>
-					</div>
-					<span class="chevron" aria-hidden="true" class:open={isOpen}>&rsaquo;</span>
+					<NumberFlowGroup>
+						<div class="row-stats">
+							<span class="stat score">
+								<NumberFlow value={restaurant.aggregate_score} /> <small>pts</small>
+							</span>
+							<span class="stat">
+								<NumberFlow value={endorsementCount(restaurant)} /> <small>endorse</small>
+							</span>
+							<span class="stat">
+								<NumberFlow value={restaurant.mention_count} /> <small>mentions</small>
+							</span>
+						</div>
+					</NumberFlowGroup>
+					<span class="chevron" class:open={isOpen} aria-hidden="true"><ChevronRight size={20} /></span>
 				</button>
 
 				{#if isOpen}
@@ -350,6 +379,11 @@
 									Show on map
 								</button>
 							{/if}
+
+							<button type="button" class="share-link" onclick={() => copyShareLink(restaurant)} aria-label="Copy link to {restaurant.name}">
+								<svg class="share-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+								Copy link
+							</button>
 							<a
 								class="maps-link"
 								href={googleMapsUrl(restaurant)}
@@ -357,10 +391,7 @@
 								rel="noopener noreferrer"
 								aria-label="Open {restaurant.name} in Google Maps"
 							>
-								<svg class="maps-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-									<path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
-									<circle cx="12" cy="9" r="2.5"/>
-								</svg>
+								<span class="maps-icon" aria-hidden="true"><MapPin size={14} /></span>
 								Google Maps
 							</a>
 						</div>
@@ -430,6 +461,7 @@
 		margin-left: auto;
 		font-size: 0.78rem;
 		color: #7a6e63;
+		font-variant-numeric: tabular-nums;
 	}
 
 	.list-scroll {
@@ -530,6 +562,7 @@
 		display: flex;
 		gap: 0.75rem;
 		flex-shrink: 0;
+		font-variant-numeric: tabular-nums;
 	}
 
 	.stat {
@@ -602,8 +635,9 @@
 	}
 
 	.chevron {
-		font-size: 1.3rem;
 		color: #d4c8bb;
+		display: inline-flex;
+		align-items: center;
 		transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 		flex-shrink: 0;
 	}
@@ -778,6 +812,12 @@
 	.map-link:active {
 		transform: scale(0.97);
 	}
+
+
+	.share-link { display: inline-flex; align-items: center; gap: 4px; font-size: 0.8rem; padding: 5px 14px; border-radius: 6px; cursor: pointer; border: 1px solid #d4c8bb; background: #fffcf8; color: #5d4e37; transition: all 0.15s ease; font-weight: 500; }
+	.share-link:hover { border-color: #ff4500; color: #ff4500; box-shadow: 0 2px 6px rgba(255, 69, 0, 0.1); }
+	.share-link:active { transform: scale(0.97); }
+	.share-icon { width: 14px; height: 14px; flex-shrink: 0; }
 
 	.maps-link {
 		display: inline-flex;
