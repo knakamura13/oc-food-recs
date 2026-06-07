@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { tick } from 'svelte';
 	import { slide } from 'svelte/transition';
+	import NumberFlow, { NumberFlowGroup } from '@number-flow/svelte';
 	import type { Mention, Restaurant } from '$lib/restaurants/types';
 	import { appState, normalizeCuisine } from '$lib/restaurants/stores.svelte';
 
@@ -185,7 +186,9 @@
 				{/if}
 			</button>
 		{/each}
-		<span class="result-count" aria-live="polite">{restaurants.length} restaurants</span>
+		<span class="result-count" aria-live="polite">
+			<NumberFlow value={restaurants.length} /> restaurants
+		</span>
 	</div>
 
 	<div class="list-scroll" role="region" aria-label="Restaurant results">
@@ -222,11 +225,19 @@
 							{/if}
 						</div>
 					</div>
-					<div class="row-stats">
-						<span class="stat score">{restaurant.aggregate_score} <small>pts</small></span>
-						<span class="stat">{endorsementCount(restaurant)} <small>endorse</small></span>
-						<span class="stat">{restaurant.mention_count} <small>mentions</small></span>
-					</div>
+					<NumberFlowGroup>
+						<div class="row-stats">
+							<span class="stat score">
+								<NumberFlow value={restaurant.aggregate_score} /> <small>pts</small>
+							</span>
+							<span class="stat">
+								<NumberFlow value={endorsementCount(restaurant)} /> <small>endorse</small>
+							</span>
+							<span class="stat">
+								<NumberFlow value={restaurant.mention_count} /> <small>mentions</small>
+							</span>
+						</div>
+					</NumberFlowGroup>
 					<span class="chevron" aria-hidden="true" class:open={isOpen}>&rsaquo;</span>
 				</button>
 
@@ -426,6 +437,7 @@
 		margin-left: auto;
 		font-size: 0.78rem;
 		color: #7a6e63;
+		font-variant-numeric: tabular-nums;
 	}
 
 	.list-scroll {
@@ -526,6 +538,7 @@
 		display: flex;
 		gap: 0.75rem;
 		flex-shrink: 0;
+		font-variant-numeric: tabular-nums;
 	}
 
 	.stat {
