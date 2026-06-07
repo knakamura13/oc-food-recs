@@ -11,6 +11,9 @@ importers:
       '@number-flow/svelte':
         specifier: ^0.4.0
         version: 0.4.0(svelte@5.56.2)
+      '@vincjo/datatables':
+        specifier: ^2.8.1
+        version: 2.8.1(svelte@5.56.2)
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2
@@ -32,6 +35,9 @@ importers:
       pg:
         specifier: ^8.21.0
         version: 8.21.0
+      svelte-sonner:
+        specifier: ^1.1.1
+        version: 1.1.1(svelte@5.56.2)
     devDependencies:
       '@playwright/test':
         specifier: ^1.59.1
@@ -1062,6 +1068,11 @@ packages:
   '@types/trusted-types@2.0.7':
     resolution: {integrity: sha512-ScaPdn1dQczgbl0QFTeTOmVHFULt394XJgOQNoyVhZ6r2vLnMLJfBPd53SB52T/3G36VI1/g2MZaX0cwDuXsfw==}
 
+  '@vincjo/datatables@2.8.1':
+    resolution: {integrity: sha512-rWl17XkriNyX3fFB5GSThLlhlPDKchFMMSCuaeSYbZCokkwSACjTLtk9v3gg4PltUaXMsJ2XjQcpnPeKJ0xa5A==}
+    peerDependencies:
+      svelte: ^5.56.1
+
   '@vitest/expect@4.1.8':
     resolution: {integrity: sha512-h3nDO677RDLEGlBxyQ5CW8RlMThSKSRLUePLOx09gNIWRL40edgA1GCZSZgf1W55MFAG6/Sw14KeaAnqv0NKdQ==}
 
@@ -1684,6 +1695,11 @@ packages:
     engines: {node: '>=18.0.0', npm: '>=8.0.0'}
     hasBin: true
 
+  runed@0.28.0:
+    resolution: {integrity: sha512-k2xx7RuO9hWcdd9f+8JoBeqWtYrm5CALfgpkg2YDB80ds/QE4w0qqu34A7fqiAwiBBSBQOid7TLxwxVC27ymWQ==}
+    peerDependencies:
+      svelte: ^5.7.0
+
   sade@1.8.1:
     resolution: {integrity: sha512-xal3CZX1Xlo/k4ApwCFrHVACi9fBqJ7V+mwhBsuf/1IOKbBy098Fex+Wa/5QMubw09pSZ/u8EY8PWgevJsXp1A==}
     engines: {node: '>=6'}
@@ -1738,6 +1754,11 @@ packages:
     peerDependencies:
       svelte: ^4.0.0 || ^5.0.0-next.0
       typescript: '>=5.0.0'
+
+  svelte-sonner@1.1.1:
+    resolution: {integrity: sha512-5cd3p7wa4cq0NsqslMwdlPb7x1JglEZ/GKrLePWNr5bCxR1nagAVrY01FRFrXfUGs41miLt3C327+8XJo5BzZw==}
+    peerDependencies:
+      svelte: ^5.0.0
 
   svelte@5.56.2:
     resolution: {integrity: sha512-1lDf8TLqpxyAt3xgybfytWPJQbaUD6TiDgpiCLH0BKrKEwzecB9pjuNVnEJMpzH018xUzo6oxheK2HT0oa2RoQ==}
@@ -2579,6 +2600,10 @@ snapshots:
 
   '@types/trusted-types@2.0.7': {}
 
+  '@vincjo/datatables@2.8.1(svelte@5.56.2)':
+    dependencies:
+      svelte: 5.56.2
+
   '@vitest/expect@4.1.8':
     dependencies:
       '@standard-schema/spec': 1.1.0
@@ -3144,6 +3169,11 @@ snapshots:
       '@rollup/rollup-win32-x64-msvc': 4.61.1
       fsevents: 2.3.3
 
+  runed@0.28.0(svelte@5.56.2):
+    dependencies:
+      esm-env: 1.2.2
+      svelte: 5.56.2
+
   sade@1.8.1:
     dependencies:
       mri: 1.2.0
@@ -3195,6 +3225,11 @@ snapshots:
       typescript: 6.0.3
     transitivePeerDependencies:
       - picomatch
+
+  svelte-sonner@1.1.1(svelte@5.56.2):
+    dependencies:
+      runed: 0.28.0(svelte@5.56.2)
+      svelte: 5.56.2
 
   svelte@5.56.2:
     dependencies:
