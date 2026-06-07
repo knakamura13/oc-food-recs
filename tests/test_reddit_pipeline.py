@@ -723,6 +723,18 @@ class BuildThreadDatasetTest(unittest.TestCase):
         self.assertEqual(len(dataset["restaurants"]), 1)
         self.assertEqual(dataset["restaurants"][0]["mention_count"], 2)
 
+    def test_substring_name_variants_merge_within_thread(self):
+        # Test Fix 5: "In-N-Out" and "In-N-Out Burger" should merge 
+        # via connected-components name matching.
+        parsed = self._minimal_thread()
+        entity_records = [
+            {"comment_id": "root1", "entities": [{"name": "In-N-Out Burger", "location": "Irvine"}]},
+            {"comment_id": "root2", "entities": [{"name": "In N Out", "location": "Irvine"}]},
+        ]
+        dataset = self.pipeline.build_thread_dataset(parsed, entity_records)
+        self.assertEqual(len(dataset["restaurants"]), 1)
+        self.assertEqual(dataset["restaurants"][0]["mention_count"], 2)
+
     def test_endorsement_dedup(self):
         parsed = self._minimal_thread()
         parsed["comments"][0]["replies"] = [{
@@ -773,6 +785,25 @@ class GeocodeHelperTest(unittest.TestCase):
             raw_location="HB",
         )
         self.assertEqual(restaurant["location"], "Huntington Beach")
+
+    def test_apply_geocode_result_preserves_existing_location(self):
+        # Test Fix 9: Don't clobber a valid location with None when geocoding fails.
+        restaurant = {"name": "Stub Cafe", "location": "Costa Mesa"}
+        self.pipeline._apply_geocode_result(
+            restaurant,
+            lat=None,
+            lng=None,
+            geocoded_city=None,
+            raw_location="Mitasie", # This normalizes to None
+        )
+        # Should remain Costa Mesa, not None
+        self.assertEqual(restaurant["location"], "Costa Mesa")
+
+    def test_cuisine_from_name_uses_word_boundaries(self):
+        # Test Fix 8: "thai" should match "Thai Kitchen" but not "Cheetah Bistro"
+        self.assertEqual(self.pipeline.cuisine_from_name("Thai Kitchen"), "Thai")
+        self.assertEqual(self.pipeline.cuisine_from_name("Northern Thai Cuisine"), "Thai")
+        self.assertIsNone(self.pipeline.cuisine_from_name("Cheetah Bistro"))
 
 
 class WriteToDbDedupTest(WriteToDbTest):
