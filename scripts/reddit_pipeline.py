@@ -11,6 +11,7 @@ import re
 import shutil
 import sys
 import time
+import unicodedata
 import urllib.parse
 import urllib.request
 from collections import defaultdict, deque
@@ -466,14 +467,10 @@ def _merge_restaurant_group(entries: list[dict[str, Any]]) -> dict[str, Any]:
     lng = next((entry.get("lng") for entry in entries if entry.get("lng") is not None), None)
 
     all_endorsements: list[dict[str, Any]] = []
-    seen_endorsements: set[tuple[str, str, str]] = set()
+    seen_endorsements: set[str | tuple[str, str, str]] = set()
     for entry in entries:
         for endorsement in entry.get("endorsements", []):
-            dedupe_key = (
-                endorsement["type"],
-                endorsement["author"],
-                endorsement["body"].strip(),
-            )
+            dedupe_key = _endorsement_dedupe_key(endorsement)
             if dedupe_key in seen_endorsements:
                 continue
             seen_endorsements.add(dedupe_key)
@@ -881,13 +878,29 @@ def classify_reply(body_text: str) -> str:
     return "other"
 
 
+def _fold_accents(value: str) -> str:
+    folded = unicodedata.normalize("NFKD", value)
+    return "".join(c for c in folded if not unicodedata.combining(c))
+
+
 def normalize_name(name: str) -> str:
-    normalized = name.lower().strip()
+    normalized = _fold_accents(name.lower().strip())
     normalized = re.sub(r"['’]s$", "", normalized)
-    # Aggressive normalization: strip all whitespace and non-alphanumeric (except &)
-    # to catch 'Mo Ran Gak' vs 'Morangak'.
-    normalized = re.sub(r"[^a-z0-9&]", "", normalized)
+    normalized = re.sub(r"\s*&\s*", " and ", normalized)
+    # Aggressive normalization: strip all whitespace and non-alphanumeric
+    # to catch 'Mo Ran Gak' vs 'Morangak' and 'A & B' vs 'A and B'.
+    normalized = re.sub(r"[^a-z0-9]", "", normalized)
     return normalized
+
+
+def _raw_location_key(location: str | None) -> str | None:
+    """Stable key for unrecognized location strings (crossroads, neighborhoods)."""
+    if not location or not location.strip():
+        return None
+    raw = _fold_accents(location.strip().lower())
+    raw = re.sub(r"\s*&\s*", " and ", raw)
+    key = re.sub(r"[^a-z0-9]+", "", raw)
+    return key or None
 
 
 def _locations_match(loc1: str | None, loc2: str | None) -> bool:
@@ -898,7 +911,9 @@ def _locations_match(loc1: str | None, loc2: str | None) -> bool:
     if norm1 and norm2:
         return norm1 == norm2
     if norm1 is None and norm2 is None:
-        return loc1.strip().lower() == loc2.strip().lower()
+        key1 = _raw_location_key(loc1)
+        key2 = _raw_location_key(loc2)
+        return key1 is not None and key1 == key2
     return False
 
 
@@ -924,13 +939,14 @@ def _is_word_boundary_match(short_name: str, long_name: str) -> bool:
     if not starts:
         return False
         
-    # Process long_name lowercased, removing trailing 's
-    long_processed = long_name.lower().strip()
+    # Process long_name with the same folding rules as normalize_name.
+    long_processed = _fold_accents(long_name.lower().strip())
     long_processed = re.sub(r"['’]s$", "", long_processed)
-    
+    long_processed = re.sub(r"\s*&\s*", " and ", long_processed)
+
     mapping = []
     for i, c in enumerate(long_processed):
-        if re.match(r"[a-z0-9&]", c):
+        if re.match(r"[a-z0-9]", c):
             mapping.append(i)
             
     for start in starts:
@@ -985,6 +1001,18 @@ def is_match(r1: dict[str, Any], r2: dict[str, Any]) -> bool:
             dist_match = True
 
     return loc_match or dist_match
+
+
+def _endorsement_dedupe_key(endorsement: dict[str, Any]) -> str | tuple[str, str, str]:
+    """Prefer Reddit comment id; fall back to legacy (type, author, body) key."""
+    comment_id = endorsement.get("id")
+    if comment_id:
+        return f"id:{comment_id}"
+    return (
+        endorsement["type"],
+        endorsement["author"],
+        endorsement["body"].strip(),
+    )
 
 
 def collect_endorsements(parent_id: str, children_map: dict[str, list[dict[str, Any]]], reply_classes: dict[str, str]) -> list[dict[str, Any]]:
@@ -1072,9 +1100,28 @@ def build_thread_dataset(
     name_components = get_connected_components(list(range(len(raw_entries))), name_adjacency)
 
     def split_by_location(entries: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
+        """Split name-similar entries by location compatibility.
+
+        Missing-location mentions join a known-location subgroup only when there
+        is exactly one distinct canonical city in the name component. When
+        multiple known cities are present, missing-location entries stay separate.
+        """
+        known_locs = {
+            normalize_location(entry.get("location"))
+            for entry in entries
+            if normalize_location(entry.get("location"))
+        }
+        multi_city = len(known_locs) > 1
+
         subgroups: list[list[dict[str, Any]]] = []
+        null_entries: list[dict[str, Any]] = []
+
         for entry in entries:
             entry_loc = normalize_location(entry.get("location"))
+            if multi_city and entry_loc is None:
+                null_entries.append(entry)
+                continue
+
             placed = False
             for subgroup in subgroups:
                 compatible = True
@@ -1089,6 +1136,10 @@ def build_thread_dataset(
                     break
             if not placed:
                 subgroups.append([entry])
+
+        if null_entries:
+            subgroups.extend([[entry] for entry in null_entries])
+
         return subgroups
 
     restaurants: list[dict[str, Any]] = []
@@ -1099,14 +1150,10 @@ def build_thread_dataset(
             primary = subgroup[0]
 
             all_endorsements: list[dict[str, Any]] = []
-            seen_endorsements: set[tuple[str, str, str]] = set()
+            seen_endorsements: set[str | tuple[str, str, str]] = set()
             for entry in subgroup:
                 for endorsement in entry["endorsements"]:
-                    dedupe_key = (
-                        endorsement["type"],
-                        endorsement["author"],
-                        endorsement["body"].strip(),
-                    )
+                    dedupe_key = _endorsement_dedupe_key(endorsement)
                     if dedupe_key in seen_endorsements:
                         continue
                     seen_endorsements.add(dedupe_key)
@@ -1252,6 +1299,10 @@ _LOCATION_ALIASES: dict[str, str] = {
     "silverado": "Silverado Canyon", "modjeska": "Modjeska Canyon",
     "trabuco": "Trabuco Canyon",
     "rmv": "Rancho Mission Viejo", "ranchomv": "Rancho Mission Viejo",
+    # common OC Reddit neighborhood / landmark shorthands
+    "dtsa": "Santa Ana",
+    "oldtowneorange": "Orange", "oldtowne": "Orange",
+    "southcoastplaza": "Costa Mesa", "scp": "Costa Mesa",
 }
 
 
@@ -1784,6 +1835,11 @@ def write_to_db(
                 cur.execute(
                     "DELETE FROM mentions WHERE thread_id = %s AND id != ALL(%s)",
                     (thread_id, inserted_mention_ids)
+                )
+            else:
+                cur.execute(
+                    "DELETE FROM mentions WHERE thread_id = %s",
+                    (thread_id,),
                 )
 
         conn.commit()
