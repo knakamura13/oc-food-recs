@@ -756,6 +756,77 @@ class BuildThreadDatasetTest(unittest.TestCase):
         self.assertEqual(len(dataset["restaurants"]), 1)
         self.assertEqual(len(dataset["restaurants"][0]["endorsements"]), 1)
 
+    def test_missing_location_stays_separate_when_multi_city(self):
+        parsed = self._minimal_thread()
+        parsed["comments"].append({
+            "id": "root3",
+            "depth": 0,
+            "author": "a3",
+            "body": "body3",
+            "score": 6,
+            "permalink": "p3",
+            "created_utc": "",
+            "replies": [],
+        })
+        entity_records = [
+            {"comment_id": "root1", "entities": [{"name": "In-N-Out", "location": "Irvine"}]},
+            {"comment_id": "root2", "entities": [{"name": "In-N-Out", "location": "Costa Mesa"}]},
+            {"comment_id": "root3", "entities": [{"name": "In-N-Out", "location": None}]},
+        ]
+        dataset = self.pipeline.build_thread_dataset(parsed, entity_records)
+        self.assertEqual(len(dataset["restaurants"]), 3)
+        locations = [r["location"] for r in dataset["restaurants"]]
+        self.assertIn("Irvine", locations)
+        self.assertIn("Costa Mesa", locations)
+        self.assertIn(None, locations)
+
+    def test_missing_location_merges_when_single_known_city(self):
+        parsed = self._minimal_thread()
+        entity_records = [
+            {"comment_id": "root1", "entities": [{"name": "Brodard", "location": "Westminster"}]},
+            {"comment_id": "root2", "entities": [{"name": "Brodard", "location": None}]},
+        ]
+        dataset = self.pipeline.build_thread_dataset(parsed, entity_records)
+        self.assertEqual(len(dataset["restaurants"]), 1)
+        self.assertEqual(dataset["restaurants"][0]["mention_count"], 2)
+        self.assertEqual(dataset["restaurants"][0]["location"], "Westminster")
+
+    def test_endorsement_dedup_preserves_distinct_comment_ids(self):
+        parsed = self._minimal_thread()
+        parsed["comments"][0]["replies"] = [
+            {
+                "id": "reply1",
+                "depth": 1,
+                "parent_id": "root1",
+                "author": "fan",
+                "body": "seconded",
+                "score": 3,
+                "permalink": "pr1",
+                "created_utc": "",
+                "replies": [],
+            },
+            {
+                "id": "reply2",
+                "depth": 1,
+                "parent_id": "root1",
+                "author": "fan",
+                "body": "seconded",
+                "score": 2,
+                "permalink": "pr2",
+                "created_utc": "",
+                "replies": [],
+            },
+        ]
+        entity_records = [
+            {"comment_id": "root1", "entities": [{"name": "Stub Cafe", "location": "Irvine"}]},
+        ]
+        dataset = self.pipeline.build_thread_dataset(parsed, entity_records)
+        self.assertEqual(len(dataset["restaurants"][0]["endorsements"]), 2)
+
+    def test_location_alias_dtsa(self):
+        self.assertEqual(self.pipeline.normalize_location("DTSA"), "Santa Ana")
+        self.assertEqual(self.pipeline.normalize_location("South Coast Plaza"), "Costa Mesa")
+
 
 class GeocodeHelperTest(unittest.TestCase):
     @classmethod
@@ -957,6 +1028,40 @@ class WriteToDbDedupTest(WriteToDbTest):
         sql, params = delete_mentions[0]
         self.assertIn("id != ALL(%s)", sql)
         self.assertEqual(params, ("oc-x", [1000]))
+
+    def test_write_to_db_deletes_all_mentions_when_zero_restaurants(self):
+        parsed_thread = {
+            "post": {"id": "x", "subreddit": "oc", "title": "t", "url": "u"},
+            "comment_count": 0,
+            "max_depth": 0,
+            "comments": [],
+        }
+        manifest = {
+            "id": "oc-x",
+            "subreddit": "oc",
+            "post_id": "x",
+            "title": "t",
+            "url": "u",
+            "comment_count": 0,
+            "max_depth": 0,
+        }
+
+        factory, _conn, _cursor, executions = self._build_fake_connection([])
+        with mock.patch.dict(os.environ, {"DATABASE_URL": "postgres://stub"}):
+            result = self.pipeline.write_to_db(
+                parsed_thread, [], manifest, connection_factory=factory,
+            )
+
+        self.assertEqual(result["restaurants"], 0)
+        self.assertEqual(result["mentions"], 0)
+        delete_mentions = [
+            (sql, params) for sql, params in executions
+            if "DELETE FROM mentions WHERE thread_id =" in sql
+        ]
+        self.assertEqual(len(delete_mentions), 1)
+        sql, params = delete_mentions[0]
+        self.assertNotIn("ALL", sql)
+        self.assertEqual(params, ("oc-x",))
 
 
 if __name__ == "__main__":

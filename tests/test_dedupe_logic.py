@@ -84,10 +84,32 @@ class TestDedupeLogic(unittest.TestCase):
         r2 = {"name": "A&B", "location": "Irvine"}
         self.assertTrue(rp.is_match(r1, r2))
 
-    def test_is_match_no_location_or_coords(self):
+    def test_is_match_similar_name_no_location_still_false(self):
         r1 = {"name": "Mo Ran Gak", "location": None}
         r2 = {"name": "Morangak", "location": None}
         self.assertFalse(rp.is_match(r1, r2))
+
+    def test_normalize_name_accent_folding(self):
+        self.assertEqual(rp.normalize_name("Café Hiro"), rp.normalize_name("Cafe Hiro"))
+
+    def test_normalize_name_ampersand_and_equivalence(self):
+        self.assertEqual(rp.normalize_name("A & B"), rp.normalize_name("A and B"))
+        self.assertEqual(rp.normalize_name("A&B"), rp.normalize_name("A and B"))
+
+    def test_is_match_accent_variants(self):
+        r1 = {"name": "Café Hiro", "location": "Costa Mesa"}
+        r2 = {"name": "Cafe Hiro", "location": "Costa Mesa"}
+        self.assertTrue(rp.is_match(r1, r2))
+
+    def test_raw_location_key_equivalence_and_separation(self):
+        self.assertEqual(
+            rp._raw_location_key("Katella & Tustin"),
+            rp._raw_location_key("katella and tustin"),
+        )
+        self.assertNotEqual(
+            rp._raw_location_key("Katella & Tustin"),
+            rp._raw_location_key("Bristol & Warner"),
+        )
 
     def test_is_match_location_alias_hb(self):
         r1 = {"name": "Wahoo's", "location": "HB"}
