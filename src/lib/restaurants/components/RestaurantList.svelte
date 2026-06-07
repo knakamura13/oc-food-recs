@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { tick } from 'svelte';
 	import { slide } from 'svelte/transition';
+	import { TableHandler } from '@vincjo/datatables';
 	import type { Mention, Restaurant } from '$lib/restaurants/types';
 	import { appState, normalizeCuisine } from '$lib/restaurants/stores.svelte';
 
@@ -29,46 +30,49 @@
 		if (slug) loadDetail(slug);
 	});
 
-	const sortOptions: { key: 'score' | 'name'; label: string }[] = [
-		{ key: 'score', label: 'Score' },
-		{ key: 'name', label: 'Name' }
-	];
+	const table = new TableHandler<Restaurant>([], { rowsPerPage: null as unknown as number });
+	const scoreSort = table.createSort('aggregate_score');
+	const nameSort = table.createSort('name');
+
+	const sortOptions = [
+		{ key: 'score' as const, label: 'Score', sort: scoreSort },
+		{ key: 'name' as const, label: 'Name', sort: nameSort }
+	] as const;
+
+	function applySortFromAppState() {
+		if (appState.sortKey === 'score') {
+			appState.sortDirection === 'desc' ? scoreSort.desc() : scoreSort.asc();
+		} else if (appState.sortKey === 'name') {
+			appState.sortDirection === 'desc' ? nameSort.desc() : nameSort.asc();
+		}
+	}
+
+	$effect(() => {
+		table.setRows([...restaurants]);
+		if (appState.sortKey === 'score' && !scoreSort.isActive) {
+			applySortFromAppState();
+		} else if (appState.sortKey === 'name' && !nameSort.isActive) {
+			applySortFromAppState();
+		}
+	});
 
 	function cycleSort(key: 'score' | 'name') {
 		if (appState.sortKey !== key) {
-			// Activate this sort with default direction
 			appState.sortKey = key;
 			appState.sortDirection = key === 'score' ? 'desc' : 'asc';
+			key === 'score' ? scoreSort.desc() : nameSort.asc();
 		} else if (
 			(key === 'score' && appState.sortDirection === 'desc') ||
 			(key === 'name' && appState.sortDirection === 'asc')
 		) {
-			// Flip direction
 			appState.sortDirection = appState.sortDirection === 'desc' ? 'asc' : 'desc';
+			key === 'score' ? scoreSort.asc() : nameSort.desc();
 		} else {
-			// Third click: disable sort
 			appState.sortKey = null;
+			table.clearSort();
+			table.setRows([...restaurants]);
 		}
 	}
-
-	let sorted = $derived.by(() => {
-		const arr = [...restaurants];
-		const key = appState.sortKey;
-		const dir = appState.sortDirection;
-
-		if (!key) return arr;
-
-		arr.sort((a, b) => {
-			let cmp: number;
-			if (key === 'score') {
-				cmp = a.aggregate_score - b.aggregate_score;
-			} else {
-				cmp = a.name.localeCompare(b.name);
-			}
-			return dir === 'desc' ? -cmp : cmp;
-		});
-		return arr;
-	});
 
 	function scrollRestaurantRowIntoView(el: HTMLElement) {
 		const pane = el.closest('.list-pane') as HTMLElement | null;
@@ -175,13 +179,13 @@
 		{#each sortOptions as opt}
 			<button
 				class="sort-btn"
-				class:active={appState.sortKey === opt.key}
+				class:active={opt.sort.isActive}
 				onclick={() => cycleSort(opt.key)}
-				aria-pressed={appState.sortKey === opt.key}
+				aria-pressed={opt.sort.isActive}
 			>
 				{opt.label}
-				{#if appState.sortKey === opt.key}
-					<span class="sort-arrow">{appState.sortDirection === 'desc' ? '\u25BC' : '\u25B2'}</span>
+				{#if opt.sort.isActive && opt.sort.direction}
+					<span class="sort-arrow">{opt.sort.direction === 'desc' ? '\u25BC' : '\u25B2'}</span>
 				{/if}
 			</button>
 		{/each}
@@ -189,14 +193,14 @@
 	</div>
 
 	<div class="list-scroll" role="region" aria-label="Restaurant results">
-		{#if sorted.length === 0}
+		{#if table.rows.length === 0}
 			<div class="empty-state">
 				<span class="empty-icon">&#x1F50D;</span>
 				<p class="empty-title">No restaurants found</p>
 				<p class="empty-hint">Try adjusting your filters or search terms</p>
 			</div>
 		{/if}
-		{#each sorted as restaurant (restaurant.slug)}
+		{#each table.rows as restaurant (restaurant.slug)}
 			{@const slug = restaurant.slug}
 			{@const isOpen = appState.selectedRestaurantSlug === slug}
 
