@@ -13,7 +13,7 @@ import sys
 import time
 import urllib.parse
 import urllib.request
-from collections import defaultdict
+from collections import defaultdict, deque
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
@@ -426,7 +426,105 @@ def assign_slugs(
             used_slugs.add(slug)
 
         out.append((r, slug))
+        existing.append({
+            "name": r["name"],
+            "slug": slug,
+            "location": r.get("location"),
+            "lat": r.get("lat"),
+            "lng": r.get("lng"),
+        })
+
     return out
+
+
+def get_connected_components(nodes: list[int], adjacency: dict[int, list[int]]) -> list[list[int]]:
+    visited: set[int] = set()
+    components: list[list[int]] = []
+    for node in nodes:
+        if node in visited:
+            continue
+        component: list[int] = []
+        queue: deque[int] = deque([node])
+        visited.add(node)
+        while queue:
+            current = queue.popleft()
+            component.append(current)
+            for neighbor in adjacency.get(current, []):
+                if neighbor not in visited:
+                    visited.add(neighbor)
+                    queue.append(neighbor)
+        components.append(component)
+    return components
+
+
+def _merge_restaurant_group(entries: list[dict[str, Any]]) -> dict[str, Any]:
+    """Collapse is_match-equivalent restaurants from the same ingest batch."""
+    best_name = max((entry["name"] for entry in entries), key=len)
+    best_location = next((entry.get("location") for entry in entries if entry.get("location")), None)
+    best_cuisine = next((entry.get("cuisine") for entry in entries if entry.get("cuisine")), None)
+    lat = next((entry.get("lat") for entry in entries if entry.get("lat") is not None), None)
+    lng = next((entry.get("lng") for entry in entries if entry.get("lng") is not None), None)
+
+    all_endorsements: list[dict[str, Any]] = []
+    seen_endorsements: set[tuple[str, str, str]] = set()
+    for entry in entries:
+        for endorsement in entry.get("endorsements", []):
+            dedupe_key = (
+                endorsement["type"],
+                endorsement["author"],
+                endorsement["body"].strip(),
+            )
+            if dedupe_key in seen_endorsements:
+                continue
+            seen_endorsements.add(dedupe_key)
+            all_endorsements.append(endorsement)
+    all_endorsements.sort(key=lambda endorsement: endorsement["score"], reverse=True)
+
+    primary_comments: list[dict[str, Any]] = []
+    seen_primary_ids: set[str] = set()
+    for entry in entries:
+        primary_comment = entry["primary_comment"]
+        if primary_comment["id"] in seen_primary_ids:
+            continue
+        seen_primary_ids.add(primary_comment["id"])
+        primary_comments.append(primary_comment)
+    primary_comments.sort(key=lambda comment: comment["score"], reverse=True)
+
+    merged = copy.deepcopy(entries[0])
+    merged["name"] = best_name
+    merged["location"] = best_location
+    merged["cuisine"] = best_cuisine
+    merged["lat"] = lat
+    merged["lng"] = lng
+    merged["aggregate_score"] = sum(entry.get("aggregate_score", 0) for entry in entries)
+    merged["mention_count"] = sum(entry.get("mention_count", 1) for entry in entries)
+    merged["endorsements"] = all_endorsements
+    merged["primary_comment"] = primary_comments[0]
+    merged["primary_comments"] = primary_comments
+    return merged
+
+
+def collapse_duplicate_restaurants(restaurants: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Merge transitive is_match duplicates within an ingest batch."""
+    if len(restaurants) <= 1:
+        return restaurants
+
+    adjacency: dict[int, list[int]] = defaultdict(list)
+    for i, r1 in enumerate(restaurants):
+        for j in range(i + 1, len(restaurants)):
+            if is_match(r1, restaurants[j]):
+                adjacency[i].append(j)
+                adjacency[j].append(i)
+
+    components = get_connected_components(list(range(len(restaurants))), adjacency)
+    collapsed: list[dict[str, Any]] = []
+    for component in components:
+        if len(component) == 1:
+            collapsed.append(restaurants[component[0]])
+        else:
+            entries = [restaurants[index] for index in component]
+            collapsed.append(_merge_restaurant_group(entries))
+    return collapsed
 
 
 def thread_folder_name(parsed_thread: dict[str, Any]) -> str:
@@ -792,6 +890,18 @@ def normalize_name(name: str) -> str:
     return normalized
 
 
+def _locations_match(loc1: str | None, loc2: str | None) -> bool:
+    if not loc1 or not loc2:
+        return False
+    norm1 = normalize_location(loc1)
+    norm2 = normalize_location(loc2)
+    if norm1 and norm2:
+        return norm1 == norm2
+    if norm1 is None and norm2 is None:
+        return loc1 == loc2
+    return False
+
+
 def is_match(r1: dict[str, Any], r2: dict[str, Any]) -> bool:
     norm1 = normalize_name(r1["name"])
     norm2 = normalize_name(r2["name"])
@@ -802,9 +912,7 @@ def is_match(r1: dict[str, Any], r2: dict[str, Any]) -> bool:
         return False
 
     # Proximity check: same city or within ~200m (0.002 degrees)
-    loc1 = r1.get("location")
-    loc2 = r2.get("location")
-    loc_match = bool(loc1) and loc1 == loc2
+    loc_match = _locations_match(r1.get("location"), r2.get("location"))
 
     dist_match = False
     if (
@@ -885,41 +993,62 @@ def build_thread_dataset(
     for entry in raw_entries:
         groups[normalize_name(entry["name"])].append(entry)
 
+    def split_by_location(entries: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
+        subgroups: list[list[dict[str, Any]]] = []
+        for entry in entries:
+            entry_loc = normalize_location(entry.get("location"))
+            placed = False
+            for subgroup in subgroups:
+                compatible = True
+                for other in subgroup:
+                    other_loc = normalize_location(other.get("location"))
+                    if entry_loc and other_loc and entry_loc != other_loc:
+                        compatible = False
+                        break
+                if compatible:
+                    subgroup.append(entry)
+                    placed = True
+                    break
+            if not placed:
+                subgroups.append([entry])
+        return subgroups
+
     restaurants: list[dict[str, Any]] = []
     for entries in groups.values():
-        entries.sort(key=lambda entry: entry["score"], reverse=True)
-        primary = entries[0]
+        for subgroup in split_by_location(entries):
+            subgroup.sort(key=lambda entry: entry["score"], reverse=True)
+            primary = subgroup[0]
 
-        all_endorsements: list[dict[str, Any]] = []
-        seen_endorsements: set[tuple[str, str, str]] = set()
-        for entry in entries:
-            for endorsement in entry["endorsements"]:
-                dedupe_key = (
-                    endorsement["type"],
-                    endorsement["author"],
-                    endorsement["body"].strip(),
-                )
-                if dedupe_key in seen_endorsements:
-                    continue
-                seen_endorsements.add(dedupe_key)
-                all_endorsements.append(endorsement)
+            all_endorsements: list[dict[str, Any]] = []
+            seen_endorsements: set[tuple[str, str, str]] = set()
+            for entry in subgroup:
+                for endorsement in entry["endorsements"]:
+                    dedupe_key = (
+                        endorsement["type"],
+                        endorsement["author"],
+                        endorsement["body"].strip(),
+                    )
+                    if dedupe_key in seen_endorsements:
+                        continue
+                    seen_endorsements.add(dedupe_key)
+                    all_endorsements.append(endorsement)
 
-        all_endorsements.sort(key=lambda endorsement: endorsement["score"], reverse=True)
-        best_name = max((entry["name"] for entry in entries), key=len)
-        best_location = next((entry["location"] for entry in entries if entry.get("location")), None)
-        best_cuisine = next((entry["cuisine"] for entry in entries if entry.get("cuisine")), None)
+            all_endorsements.sort(key=lambda endorsement: endorsement["score"], reverse=True)
+            best_name = max((entry["name"] for entry in subgroup), key=len)
+            best_location = next((entry["location"] for entry in subgroup if entry.get("location")), None)
+            best_cuisine = next((entry["cuisine"] for entry in subgroup if entry.get("cuisine")), None)
 
-        restaurants.append(
-            {
-                "name": best_name,
-                "location": best_location,
-                "cuisine": best_cuisine,
-                "aggregate_score": sum(entry["score"] for entry in entries),
-                "mention_count": len(entries),
-                "primary_comment": primary["comment"],
-                "endorsements": all_endorsements,
-            }
-        )
+            restaurants.append(
+                {
+                    "name": best_name,
+                    "location": best_location,
+                    "cuisine": best_cuisine,
+                    "aggregate_score": sum(entry["score"] for entry in subgroup),
+                    "mention_count": len(subgroup),
+                    "primary_comment": primary["comment"],
+                    "endorsements": all_endorsements,
+                }
+            )
 
     restaurants.sort(key=lambda restaurant: restaurant["aggregate_score"], reverse=True)
     return {
@@ -1090,6 +1219,18 @@ def normalize_location(location: str | None) -> str | None:
         if re.search(rf"\b{re.escape(city.lower())}\b", low):
             return city
     return None  # unrecognized → unmapped rather than inventing a city name
+
+
+def _apply_geocode_result(
+    restaurant: dict[str, Any],
+    lat: float | None,
+    lng: float | None,
+    geocoded_city: str | None,
+    raw_location: str | None,
+) -> None:
+    restaurant["lat"] = lat
+    restaurant["lng"] = lng
+    restaurant["location"] = geocoded_city or normalize_location(raw_location)
 
 
 # --- Mapbox Search Box fallback ---------------------------------------------
@@ -1347,11 +1488,7 @@ def build_thread(
     for restaurant in restaurants:
         raw_location = restaurant.get("location") or _subreddit_city(manifest["subreddit"])
         lat, lng, detail, geocoded_city = geocode_fn(restaurant["name"], raw_location)
-        restaurant["lat"] = lat
-        restaurant["lng"] = lng
-        # Authoritative city: geocoder-confirmed address wins; fall back to normalizing
-        # the LLM-extracted hint; None if both fail (restaurant will be unmapped).
-        restaurant["location"] = geocoded_city or normalize_location(raw_location)
+        _apply_geocode_result(restaurant, lat, lng, geocoded_city, raw_location)
         if lat is not None and lng is not None:
             geocoded_count += 1
         else:
@@ -1460,8 +1597,9 @@ def write_to_db(
                         "lng": row[col_name["lng"]]
                     })
 
-            # 2. Restaurants — assign collision-safe slugs (with deduplication)
-            for restaurant, slug in assign_slugs(restaurants_with_geocodes, existing=existing):
+            # 2. Restaurants — collapse batch duplicates, assign slugs, upsert
+            deduped_restaurants = collapse_duplicate_restaurants(restaurants_with_geocodes)
+            for restaurant, slug in assign_slugs(deduped_restaurants, existing=existing):
                 cur.execute(
                     """
                     INSERT INTO restaurants (name, slug, location, cuisine, lat, lng)
@@ -1493,32 +1631,33 @@ def write_to_db(
                 restaurant_id = row[0] if isinstance(row, (tuple, list)) else row["id"]
                 restaurants_inserted += 1
 
-                # 3. Primary mention — role='primary', classification NULL
-                primary = restaurant["primary_comment"]
-                cur.execute(
-                    """
-                    INSERT INTO mentions (restaurant_id, thread_id, comment_id, permalink, author, body, score, role, classification, comment_date)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, 'primary', NULL, %s)
-                    ON CONFLICT (thread_id, comment_id, restaurant_id) DO UPDATE SET
-                        restaurant_id = EXCLUDED.restaurant_id,
-                        permalink = EXCLUDED.permalink,
-                        author = EXCLUDED.author,
-                        body = EXCLUDED.body,
-                        score = EXCLUDED.score,
-                        comment_date = EXCLUDED.comment_date
-                    """,
-                    (
-                        restaurant_id,
-                        thread_id,
-                        primary["id"],
-                        primary.get("permalink"),
-                        primary["author"],
-                        primary["body"],
-                        primary["score"],
-                        parse_comment_date(primary.get("created_utc")),
-                    ),
-                )
-                mentions_inserted += 1
+                # 3. Primary mention(s) — role='primary', classification NULL
+                primary_comments = restaurant.get("primary_comments") or [restaurant["primary_comment"]]
+                for primary in primary_comments:
+                    cur.execute(
+                        """
+                        INSERT INTO mentions (restaurant_id, thread_id, comment_id, permalink, author, body, score, role, classification, comment_date)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, 'primary', NULL, %s)
+                        ON CONFLICT (thread_id, comment_id, restaurant_id) DO UPDATE SET
+                            restaurant_id = EXCLUDED.restaurant_id,
+                            permalink = EXCLUDED.permalink,
+                            author = EXCLUDED.author,
+                            body = EXCLUDED.body,
+                            score = EXCLUDED.score,
+                            comment_date = EXCLUDED.comment_date
+                        """,
+                        (
+                            restaurant_id,
+                            thread_id,
+                            primary["id"],
+                            primary.get("permalink"),
+                            primary["author"],
+                            primary["body"],
+                            primary["score"],
+                            parse_comment_date(primary.get("created_utc")),
+                        ),
+                    )
+                    mentions_inserted += 1
 
                 # 4. Endorsements — role='endorsement', classification=<type>
                 # Fresh ingests carry real comment_ids and permalinks (propagated
@@ -1574,7 +1713,7 @@ def ingest(
     limit: int | None = None,
     dry_run: bool = False,
     extract_entities_fn: Callable[..., Any] = default_extract_entities,
-    geocode_fn: Callable[..., tuple[float | None, float | None, str]] = default_geocode,
+    geocode_fn: Callable[..., tuple[float | None, float | None, str, str | None]] = default_geocode,
 ) -> dict[str, Any]:
     """Parse a saved Reddit thread HTML export -> extract -> geocode -> DB write.
 
@@ -1631,12 +1770,9 @@ def ingest(
     total_restaurants = len(restaurants) or 1
 
     for index, restaurant in enumerate(restaurants, start=1):
-        lat, lng, detail = geocode_fn(
-            restaurant["name"],
-            restaurant.get("location") or _subreddit_city(manifest["subreddit"]),
-        )
-        restaurant["lat"] = lat
-        restaurant["lng"] = lng
+        raw_location = restaurant.get("location") or _subreddit_city(manifest["subreddit"])
+        lat, lng, detail, geocoded_city = geocode_fn(restaurant["name"], raw_location)
+        _apply_geocode_result(restaurant, lat, lng, geocoded_city, raw_location)
         _emit_progress(
             {
                 "stage": "geocode",
