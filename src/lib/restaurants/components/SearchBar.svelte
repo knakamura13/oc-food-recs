@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { Search, X } from 'lucide-svelte';
 	import type { Restaurant } from '$lib/restaurants/types';
 	import { appState, findFilterMatch } from '$lib/restaurants/stores.svelte';
 
@@ -113,10 +114,7 @@
 
 <div class="search-container">
 	<div class="search-wrapper">
-		<svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-			<circle cx="11" cy="11" r="8" />
-			<path d="M21 21l-4.35-4.35" />
-		</svg>
+		<span class="search-icon" aria-hidden="true"><Search size={18} /></span>
 		<input
 			bind:this={inputEl}
 			type="search"
@@ -149,7 +147,7 @@
 					inputEl?.focus();
 				}}
 			>
-				&times;
+				<X size={18} aria-hidden="true" />
 			</button>
 		{/if}
 	</div>
@@ -244,9 +242,11 @@
 		right: 4px;
 		top: 50%;
 		transform: translateY(-50%);
+		display: flex;
+		align-items: center;
+		justify-content: center;
 		background: none;
 		border: none;
-		font-size: 1.3rem;
 		color: #7a6e63;
 		cursor: pointer;
 		padding: 6px;

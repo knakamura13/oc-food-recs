@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { X } from 'lucide-svelte';
 	import { onMount, tick } from 'svelte';
 	import { replaceState } from '$app/navigation';
 	import type { Restaurant } from '$lib/restaurants/types';
@@ -410,7 +411,9 @@
 					class="map-close-btn"
 					onclick={(e) => { e.stopPropagation(); mapExpanded = false; }}
 					aria-label="Close map"
-				>&times;</button>
+				>
+					<X size={22} aria-hidden="true" />
+				</button>
 			{/if}
 		</div>
 		<div class="list-pane">
