@@ -44,8 +44,7 @@ def main() -> int:
             if rp.is_name_match(r1['name'], r2['name']):
                 loc_match = bool(r1.get("location")) and r1.get("location") == r2.get("location")
                 dist_match = False
-                if r1.get("lat") is not None and r1.get("lng") is not None and \
-                   r2.get("lat") is not None and r2.get("lng") is not None:
+                if r1.get("lat") is not None and r1.get("lng") is not None and                    r2.get("lat") is not None and r2.get("lng") is not None:
                     dlat = float(r1["lat"]) - float(r2["lat"])
                     dlng = float(r1["lng"]) - float(r2["lng"])
                     if (dlat**2 + dlng**2)**0.5 < 0.002:
@@ -105,7 +104,7 @@ def main() -> int:
     print("\nApplying merges...")
     for dup_id, can_id in canonical_map.items():
         # Update mentions manually to avoid unique violations
-        cur.execute("""
+        cur.execute(\"\"\"
             UPDATE mentions m
             SET restaurant_id = %s
             WHERE restaurant_id = %s
@@ -115,7 +114,7 @@ def main() -> int:
                     AND m2.comment_id = m.comment_id
                     AND m2.restaurant_id = %s
               )
-        """, (can_id, dup_id, can_id))
+        \"\"\", (can_id, dup_id, can_id))
 
         cur.execute("DELETE FROM mentions WHERE restaurant_id = %s", (dup_id,))
         cur.execute("DELETE FROM restaurants WHERE id = %s", (dup_id,))

@@ -461,15 +461,8 @@ class WriteToDbTest(unittest.TestCase):
                 parsed_thread, restaurants, manifest, connection_factory=factory,
             )
 
-        # executions[2] and executions[5] are the restaurant upserts.
-        # (executions[0] is threads, [1] is select existing, [3] is primary mention for r1, [4] is primary mention for r2 - wait, no.)
-        # Let's re-verify the order:
-        # 0: threads
-        # 1: SELECT from restaurants
-        # 2: restaurant 1 INSERT
-        # 3: primary mention 1 INSERT
-        # 4: restaurant 2 INSERT
-        # 5: primary mention 2 INSERT
+        # executions[2] and executions[4] are the restaurant upserts.
+        # (executions[0] is threads, [1] is select existing, [3] is primary mention for r1, [5] is primary mention for r2.)
         self.assertEqual(executions[2][1][1], "folks")
         self.assertEqual(executions[4][1][1], "folks-2")
 
@@ -505,9 +498,7 @@ class WriteToDbTest(unittest.TestCase):
             names = ["orangecounty-aaa111.html", "orangecounty-bbb222.html"]
             uningested, threads = self._make_batch_dirs(tmp_path, names)
 
-            with mock.patch.object(self.pipeline, "UNINGESTED_ROOT", uningested), \
-                mock.patch.object(self.pipeline, "THREADS_ROOT", threads), \
-                mock.patch.object(self.pipeline, "ingest") as fake_ingest:
+            with mock.patch.object(self.pipeline, "UNINGESTED_ROOT", uningested),                 mock.patch.object(self.pipeline, "THREADS_ROOT", threads),                 mock.patch.object(self.pipeline, "ingest") as fake_ingest:
                 code = self.pipeline.ingest_batch()
 
             self.assertEqual(code, 0)
@@ -527,9 +518,7 @@ class WriteToDbTest(unittest.TestCase):
                 if html_path.name == bad:
                     raise RuntimeError("boom")
 
-            with mock.patch.object(self.pipeline, "UNINGESTED_ROOT", uningested), \
-                mock.patch.object(self.pipeline, "THREADS_ROOT", threads), \
-                mock.patch.object(self.pipeline, "ingest", side_effect=side_effect):
+            with mock.patch.object(self.pipeline, "UNINGESTED_ROOT", uningested),                 mock.patch.object(self.pipeline, "THREADS_ROOT", threads),                 mock.patch.object(self.pipeline, "ingest", side_effect=side_effect):
                 code = self.pipeline.ingest_batch()
 
             self.assertEqual(code, 1)
@@ -545,9 +534,7 @@ class WriteToDbTest(unittest.TestCase):
             names = ["orangecounty-aaa111.html", "orangecounty-bbb222.html"]
             uningested, threads = self._make_batch_dirs(tmp_path, names)
 
-            with mock.patch.object(self.pipeline, "UNINGESTED_ROOT", uningested), \
-                mock.patch.object(self.pipeline, "THREADS_ROOT", threads), \
-                mock.patch.object(self.pipeline, "ingest") as fake_ingest:
+            with mock.patch.object(self.pipeline, "UNINGESTED_ROOT", uningested),                 mock.patch.object(self.pipeline, "THREADS_ROOT", threads),                 mock.patch.object(self.pipeline, "ingest") as fake_ingest:
                 code = self.pipeline.ingest_batch(dry_run=True)
 
             self.assertEqual(code, 0)
@@ -563,9 +550,7 @@ class WriteToDbTest(unittest.TestCase):
             names = ["orangecounty-aaa111.html", "orangecounty-bbb222.html"]
             uningested, threads = self._make_batch_dirs(tmp_path, names)
 
-            with mock.patch.object(self.pipeline, "UNINGESTED_ROOT", uningested), \
-                mock.patch.object(self.pipeline, "THREADS_ROOT", threads), \
-                mock.patch.object(self.pipeline, "ingest") as fake_ingest:
+            with mock.patch.object(self.pipeline, "UNINGESTED_ROOT", uningested),                 mock.patch.object(self.pipeline, "THREADS_ROOT", threads),                 mock.patch.object(self.pipeline, "ingest") as fake_ingest:
                 code = self.pipeline.ingest_batch(archive=False)
 
             self.assertEqual(code, 0)
@@ -580,9 +565,7 @@ class WriteToDbTest(unittest.TestCase):
             tmp_path = Path(tmpdir)
             uningested, threads = self._make_batch_dirs(tmp_path, [])
 
-            with mock.patch.object(self.pipeline, "UNINGESTED_ROOT", uningested), \
-                mock.patch.object(self.pipeline, "THREADS_ROOT", threads), \
-                mock.patch.object(self.pipeline, "ingest") as fake_ingest:
+            with mock.patch.object(self.pipeline, "UNINGESTED_ROOT", uningested),                 mock.patch.object(self.pipeline, "THREADS_ROOT", threads),                 mock.patch.object(self.pipeline, "ingest") as fake_ingest:
                 code = self.pipeline.ingest_batch()
 
             self.assertEqual(code, 0)
