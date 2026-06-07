@@ -38,6 +38,13 @@ class ReingestAllThreadsTest(unittest.TestCase):
             (threads / name).write_text(f"<html>{name}</html>", encoding="utf-8")
         return threads
 
+    def _make_uningested_dir(self, tmp_path: Path, filenames: list[str]) -> Path:
+        uningested = tmp_path / "data" / "uningested-threads"
+        uningested.mkdir(parents=True)
+        for name in filenames:
+            (uningested / name).write_text(f"<html>{name}</html>", encoding="utf-8")
+        return uningested
+
     def test_dry_run_lists_files_without_side_effects(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp_path = Path(tmpdir)
@@ -73,22 +80,68 @@ class ReingestAllThreadsTest(unittest.TestCase):
             fake_b._connect.assert_not_called()
             fake_rp.ingest.assert_not_called()
 
-    def test_no_html_files_exits_before_db_changes(self):
+    def test_empty_threads_falls_back_to_uningested(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp_path = Path(tmpdir)
             threads = tmp_path / "data" / "threads"
             threads.mkdir(parents=True)
+            names = ["orangecounty-bbb222.html", "orangecounty-aaa111.html"]
+            uningested = self._make_uningested_dir(tmp_path, names)
+
+            fake_conn = mock.MagicMock()
+            fake_cursor = mock.MagicMock()
+            fake_conn.cursor.return_value.__enter__.return_value = fake_cursor
 
             with mock.patch.object(self.mod, "b") as fake_b, \
-                mock.patch.object(self.mod, "rp") as fake_rp:
+                mock.patch.object(self.mod, "rp") as fake_rp, \
+                mock.patch.dict(os.environ, {"DATABASE_URL": "postgres://stub"}):
+                fake_b.backup.return_value = "data/backups/db-backup-test.json"
+                fake_b._url.return_value = "postgres://from-env"
+                fake_b._connect.return_value = fake_conn
+
                 code = self.mod.reingest_all(
                     threads_root=threads,
+                    uningested_root=uningested,
                     confirmed=True,
                 )
 
-            self.assertEqual(code, 1)
-            fake_b.backup.assert_not_called()
-            fake_b._connect.assert_not_called()
+                self.assertEqual(code, 0)
+                fake_b.backup.assert_called_once()
+                fake_b._connect.assert_called_once()
+                self.assertEqual(fake_rp.ingest.call_count, 2)
+                self.assertEqual(
+                    [call.args[0].name for call in fake_rp.ingest.call_args_list],
+                    sorted(names),
+                )
+
+    def test_empty_both_still_backups_and_purges(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            threads = tmp_path / "data" / "threads"
+            uningested = tmp_path / "data" / "uningested-threads"
+            threads.mkdir(parents=True)
+            uningested.mkdir(parents=True)
+
+            fake_conn = mock.MagicMock()
+            fake_cursor = mock.MagicMock()
+            fake_conn.cursor.return_value.__enter__.return_value = fake_cursor
+
+            with mock.patch.object(self.mod, "b") as fake_b, \
+                mock.patch.object(self.mod, "rp") as fake_rp, \
+                mock.patch.dict(os.environ, {"DATABASE_URL": "postgres://stub"}):
+                fake_b.backup.return_value = "data/backups/db-backup-test.json"
+                fake_b._url.return_value = "postgres://from-env"
+                fake_b._connect.return_value = fake_conn
+
+                code = self.mod.reingest_all(
+                    threads_root=threads,
+                    uningested_root=uningested,
+                    confirmed=True,
+                )
+
+            self.assertEqual(code, 0)
+            fake_b.backup.assert_called_once()
+            fake_b._connect.assert_called_once()
             fake_rp.ingest.assert_not_called()
 
     def test_successful_rebuild_orders_backup_purge_and_ingest(self):
