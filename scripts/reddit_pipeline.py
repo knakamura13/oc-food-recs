@@ -670,7 +670,7 @@ def cuisine_from_name(name: str) -> str | None:
     """Infer a cuisine from an unambiguous food word in the establishment name."""
     low = name.lower()
     for keyword, cuisine in _CUISINE_KEYWORDS:
-        if keyword in low:
+        if re.search(rf"\b{re.escape(keyword)}\b", low):
             return cuisine
     return None
 
@@ -898,7 +898,7 @@ def _locations_match(loc1: str | None, loc2: str | None) -> bool:
     if norm1 and norm2:
         return norm1 == norm2
     if norm1 is None and norm2 is None:
-        return loc1 == loc2
+        return loc1.strip().lower() == loc2.strip().lower()
     return False
 
 
@@ -906,10 +906,17 @@ def _is_word_boundary_match(short_name: str, long_name: str) -> bool:
     """
     Check if normalize_name(short_name) is a substring of normalize_name(long_name)
     AND the match aligns with word boundaries in long_name.
+
+    Very short normalized names (< 3 chars) are rejected to prevent collisions
+    like "Bo" matching "Bob's Burgers".
     """
     short_norm = normalize_name(short_name)
     long_norm = normalize_name(long_name)
-    
+
+    # Guard: extremely short names are too collision-prone for substring matching.
+    if len(short_norm) < 3:
+        return False
+
     if not short_norm or short_norm not in long_norm:
         return False
         
@@ -1040,9 +1047,29 @@ def build_thread_dataset(
                 }
             )
 
-    groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
-    for entry in raw_entries:
-        groups[normalize_name(entry["name"])].append(entry)
+    # Group raw entries by name similarity using connected-components (matching
+    # the approach in collapse_duplicate_restaurants).  The old dict-key grouping
+    # missed substring name variants like "In-N-Out" vs "In-N-Out Burger"
+    # because their normalize_name values differ.
+    def _names_match(e1: dict[str, Any], e2: dict[str, Any]) -> bool:
+        """Name-only match (ignoring location) for within-thread grouping."""
+        n1 = normalize_name(e1["name"])
+        n2 = normalize_name(e2["name"])
+        if n1 == n2:
+            return True
+        if len(n1) <= len(n2) and _is_word_boundary_match(e1["name"], e2["name"]):
+            return True
+        if len(n2) < len(n1) and _is_word_boundary_match(e2["name"], e1["name"]):
+            return True
+        return False
+
+    name_adjacency: dict[int, list[int]] = defaultdict(list)
+    for i, e1 in enumerate(raw_entries):
+        for j in range(i + 1, len(raw_entries)):
+            if _names_match(e1, raw_entries[j]):
+                name_adjacency[i].append(j)
+                name_adjacency[j].append(i)
+    name_components = get_connected_components(list(range(len(raw_entries))), name_adjacency)
 
     def split_by_location(entries: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
         subgroups: list[list[dict[str, Any]]] = []
@@ -1065,7 +1092,8 @@ def build_thread_dataset(
         return subgroups
 
     restaurants: list[dict[str, Any]] = []
-    for entries in groups.values():
+    for component in name_components:
+        entries = [raw_entries[idx] for idx in component]
         for subgroup in split_by_location(entries):
             subgroup.sort(key=lambda entry: entry["score"], reverse=True)
             primary = subgroup[0]
@@ -1281,7 +1309,9 @@ def _apply_geocode_result(
 ) -> None:
     restaurant["lat"] = lat
     restaurant["lng"] = lng
-    restaurant["location"] = geocoded_city or normalize_location(raw_location)
+    resolved_location = geocoded_city or normalize_location(raw_location)
+    if resolved_location is not None:
+        restaurant["location"] = resolved_location
 
 
 # --- Mapbox Search Box fallback ---------------------------------------------

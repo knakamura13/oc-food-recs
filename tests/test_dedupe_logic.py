@@ -1,11 +1,14 @@
 import unittest
 import sys
-import os
 from unittest import mock
 
+from pathlib import Path
+
 # Ensure we can import from the scripts directory
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + "/scripts")
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+# pyrefly: ignore [missing-import]
 import reddit_pipeline as rp
+# pyrefly: ignore [missing-import]
 import dedupe_restaurants as dr
 
 
@@ -27,29 +30,43 @@ class TestDedupeLogic(unittest.TestCase):
         self.assertTrue(rp.is_match(r1, r2))
 
     def test_is_match_substring_word_boundary_edge_cases(self):
-        # Short valid word prefix should match
+        # Good boundaries
         self.assertTrue(rp.is_match(
-            {"name": "Joe", "location": "A"}, 
-            {"name": "Joe's Pizza", "location": "A"}
-        ))
-        
-        # Valid word boundary match
-        self.assertTrue(rp.is_match(
-            {"name": "McDonald", "location": "A"}, 
-            {"name": "McDonald's", "location": "A"}
+            {"name": "Mo Ran Gak", "location": "Garden Grove"},
+            {"name": "Mo Ran Gak Restaurant", "location": "Garden Grove"}
         ))
 
-        # Should NOT match if it doesn't align with word boundaries
+        # Bad boundaries: "Mo" is a substring of "Mod Pizza", but not a word
         self.assertFalse(rp.is_match(
-            {"name": "The Stand", "location": "Irvine"}, 
-            {"name": "The Standard", "location": "Irvine"}
+            {"name": "Mo", "location": "Irvine"},
+            {"name": "Mod Pizza", "location": "Irvine"}
         ))
         
-        # Another boundary failure case
+        # Test Fix 2: Very short names (<3 chars) should NOT match via substring
+        # "Bo" is a word boundary prefix of "Bob's Burgers", but too short to be safe.
         self.assertFalse(rp.is_match(
-            {"name": "Mac", "location": "A"}, 
-            {"name": "MacDonalds", "location": "A"}
+            {"name": "Bo", "location": "HB"},
+            {"name": "Bob's Burgers", "location": "HB"}
         ))
+        
+        # Exact match of short name still works
+        self.assertTrue(rp.is_match(
+            {"name": "Bo", "location": "HB"},
+            {"name": "Bo", "location": "HB"}
+        ))
+
+    def test_is_match_no_location_or_coords(self):
+        # Without any location signal, even an exact name match shouldn't merge
+        # because they could be different branches.
+        self.assertFalse(rp.is_match(
+            {"name": "Brodard", "location": None, "lat": None, "lng": None},
+            {"name": "Brodard", "location": None, "lat": None, "lng": None}
+        ))
+        
+    def test_locations_match_case_insensitive_fallback(self):
+        # Test Fix 6: Case-insensitive fallback for unrecognized locations
+        self.assertTrue(rp._locations_match("katella & tustin", "Katella & Tustin"))
+        self.assertFalse(rp._locations_match("katella & tustin", "bristol & warner"))
 
     def test_is_match_proximity(self):
         # Within ~200m (0.002 degrees)
