@@ -13,7 +13,17 @@ import reddit_pipeline as rp
 
 
 def main() -> int:
-    apply = "--apply" in sys.argv[1:]
+    import argparse
+    parser = argparse.ArgumentParser(
+        description="Re-geocode currently-unmapped restaurants in the DB with the improved geocoder."
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Run geocoding and print results without writing to the DB.",
+    )
+    args = parser.parse_args()
+    apply = not args.dry_run
 
     conn = b._connect()
     cur = conn.cursor()
@@ -107,7 +117,7 @@ def main() -> int:
     if apply:
         _flush()
     else:
-        print("(dry run -- pass --apply to write)")
+        print("(dry run — pass no flags to write to the DB)")
 
     print(f"newly resolved: {total_committed if apply else pending}")
     conn.close()
