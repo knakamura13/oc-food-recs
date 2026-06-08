@@ -8,6 +8,7 @@ dependencies = [
   "lxml>=5.2",
   "psycopg[binary]>=3.2",
   "tqdm>=4.66",
+  "rapidfuzz>=3.9",
 ]
 
 [build-system]

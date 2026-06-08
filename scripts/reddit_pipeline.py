@@ -32,6 +32,11 @@ try:
 except ImportError:  # pragma: no cover - environment-dependent
     psycopg = None  # type: ignore[assignment]
 
+try:
+    from rapidfuzz import fuzz as _rapidfuzz  # type: ignore[import-not-found]
+except ImportError:  # pragma: no cover - environment-dependent
+    _rapidfuzz = None  # type: ignore[assignment]
+
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA_ROOT = ROOT / "data"
@@ -985,6 +990,12 @@ def is_match(r1: dict[str, Any], r2: dict[str, Any]) -> bool:
         name_match = True
     elif len(norm2) < len(norm1) and _is_word_boundary_match(r2["name"], r1["name"]):
         name_match = True
+    elif (
+        len(norm1) >= 3
+        and len(norm2) >= 3
+        and _name_score(r1["name"], r2["name"]) >= 0.85
+    ):
+        name_match = True
     else:
         name_match = False
 
@@ -1198,13 +1209,20 @@ def build_thread_dataset(
     }
 
 
+def _env_value(name: str) -> str:
+    value = os.environ.get(name)
+    if value:
+        return value
+    env_path = Path(".env")
+    if env_path.exists():
+        for line in env_path.read_text(encoding="utf-8").splitlines():
+            if line.startswith(f"{name}="):
+                return line.split("=", 1)[1].strip().strip('"').strip("'")
+    return ""
+
+
 def _url() -> str:
-    u = os.environ.get("DATABASE_URL")
-    if not u and os.path.exists(".env"):
-        for line in open(".env"):
-            if line.startswith("DATABASE_URL="):
-                u = line.split("=", 1)[1].strip().strip('"').strip("'")
-    return u or ""
+    return _env_value("DATABASE_URL")
 
 
 def _connect():
@@ -1244,6 +1262,8 @@ class GeocodeCache:
                 if not row:
                     return None
                 lat, lng, detail, city, retry_after = row
+                if _is_closed_permanently_detail(detail):
+                    return None, None, detail, None
                 if lat is not None:
                     return lat, lng, detail, city
                 if retry_after and retry_after > datetime.now(timezone.utc):
@@ -1467,12 +1487,66 @@ def _apply_geocode_result(
 
 # --- Google Places API (New) ------------------------------------------------
 GOOGLE_PLACES_URL = "https://places.googleapis.com/v1/places:searchText"
+CLOSED_PERMANENTLY_DETAIL = "google: closed permanently"
+
+
+def _is_closed_permanently_detail(detail: str | None) -> bool:
+    return detail == CLOSED_PERMANENTLY_DETAIL
+
+
+def _in_oc_bounds(lat: float | int | None, lng: float | int | None) -> bool:
+    return (
+        lat is not None
+        and lng is not None
+        and 33.3 <= float(lat) <= 34.0
+        and -118.2 <= float(lng) <= -117.3
+    )
+
+
+def _google_request(api_key: str, payload: dict[str, Any]) -> list[dict[str, Any]]:
+    headers = {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": api_key,
+        "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.location,places.businessStatus",
+    }
+    req = urllib.request.Request(
+        GOOGLE_PLACES_URL, data=json.dumps(payload).encode("utf-8"), headers=headers
+    )
+    with urllib.request.urlopen(req, timeout=10) as response:
+        data = json.loads(response.read())
+    return data.get("places", [])
+
+
+def _google_closed_status_lookup(
+    api_key: str, name: str, location: str | None, street: str | None
+) -> str | None:
+    """A final unbounded exact-name probe for closed places that bounded Text Search omits."""
+    query_parts = [name]
+    if street:
+        query_parts.append(street)
+    if location:
+        query_parts.append(location)
+    query_parts.append("CA")
+    query = ", ".join(p for p in query_parts if p)
+
+    places = _google_request(api_key, {"textQuery": query})
+    if not places:
+        return None
+
+    place = places[0]
+    loc = place.get("location") or {}
+    if (
+        place.get("businessStatus") == "CLOSED_PERMANENTLY"
+        and _in_oc_bounds(loc.get("latitude"), loc.get("longitude"))
+    ):
+        return CLOSED_PERMANENTLY_DETAIL
+    return None
 
 
 def _google_geocode(
     name: str, location: str | None, street: str | None
 ) -> tuple[float | None, float | None, str]:
-    api_key = os.environ.get("GOOGLE_MAPS_API_KEY")
+    api_key = _env_value("GOOGLE_MAPS_API_KEY")
     if not api_key:
         return None, None, "google: no api key"
 
@@ -1494,27 +1568,22 @@ def _google_geocode(
             }
         },
     }
-    headers = {
-        "Content-Type": "application/json",
-        "X-Goog-Api-Key": api_key,
-        "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.location",
-    }
-
     try:
-        req = urllib.request.Request(
-            GOOGLE_PLACES_URL, data=json.dumps(payload).encode("utf-8"), headers=headers
-        )
-        with urllib.request.urlopen(req, timeout=10) as response:
-            data = json.loads(response.read())
-            places = data.get("places", [])
-            if not places:
-                return None, None, "google: no results"
+        places = _google_request(api_key, payload)
+        if not places:
+            closed_detail = _google_closed_status_lookup(api_key, name, location, street)
+            if closed_detail:
+                return None, None, closed_detail
+            return None, None, "google: no results"
 
-            place = places[0]
-            lat = place["location"]["latitude"]
-            lng = place["location"]["longitude"]
-            display_name = f"{place['displayName']['text']}, {place['formattedAddress']}"
-            return lat, lng, display_name
+        place = places[0]
+        if place.get("businessStatus") == "CLOSED_PERMANENTLY":
+            return None, None, CLOSED_PERMANENTLY_DETAIL
+
+        lat = place["location"]["latitude"]
+        lng = place["location"]["longitude"]
+        display_name = f"{place['displayName']['text']}, {place['formattedAddress']}"
+        return lat, lng, display_name
     except Exception as exc:
         return None, None, f"google error: {exc}"
 
@@ -1557,10 +1626,19 @@ def _name_tokens(s: str) -> set[str]:
 def _name_score(query_name: str, result_name: str) -> float:
     """0..1 name similarity; a token-subset (query tokens ⊆ result tokens) scores
     high so 'El Indio' matches 'El Indio Botanas y Cerveza'."""
-    ratio = difflib.SequenceMatcher(None, _loc_key(query_name), _loc_key(result_name)).ratio()
+    qk = _loc_key(query_name)
+    rk = _loc_key(result_name)
     qt = _name_tokens(query_name)
     subset = bool(qt) and qt <= _name_tokens(result_name)
-    return max(ratio, 0.9 if subset else 0.0)
+    subset_score = 0.9 if subset else 0.0
+
+    if _rapidfuzz is not None:
+        wratio = _rapidfuzz.WRatio(qk, rk) / 100.0
+        token_set = _rapidfuzz.token_set_ratio(qk, rk) / 100.0
+        return max(wratio, token_set, subset_score)
+
+    ratio = difflib.SequenceMatcher(None, qk, rk).ratio()
+    return max(ratio, subset_score)
 
 
 def _mapbox_accept(query_name: str, city_key: str, feat_name: str, feat_addr: str) -> bool:
@@ -1662,7 +1740,7 @@ def default_geocode(
     provider = "google"
 
     # Tier 2: Nominatim
-    if lat is None:
+    if lat is None and not _is_closed_permanently_detail(detail):
         query = (
             f"{name}, {street}, {normalized_loc}, Orange County, CA"
             if street and normalized_loc
@@ -1702,7 +1780,7 @@ def default_geocode(
                 detail = f"nominatim error: {exc}"
 
     # Tier 3: Mapbox
-    if lat is None:
+    if lat is None and not _is_closed_permanently_detail(detail):
         mb_lat, mb_lng, mb_detail = _mapbox_geocode(name, normalized_loc or "")
         if mb_lat is not None:
             lat, lng, detail = mb_lat, mb_lng, mb_detail
@@ -1778,6 +1856,9 @@ def build_thread(
             r = futures[future]
             try:
                 lat, lng, detail, geocoded_city = future.result()
+                r["geocode_detail"] = detail
+                if _is_closed_permanently_detail(detail):
+                    continue
                 raw_loc = r.get("location") or _subreddit_city(manifest["subreddit"])
                 _apply_geocode_result(r, lat, lng, geocoded_city, raw_loc)
                 if lat is not None and lng is not None:
@@ -1796,7 +1877,10 @@ def build_thread(
                 print(f"Error geocoding {r['name']}: {exc}", file=sys.stderr)
 
     geocoded_dataset = {
-        "restaurants": restaurants,
+        "restaurants": [
+            r for r in restaurants
+            if not _is_closed_permanently_detail(r.get("geocode_detail"))
+        ],
         "meta": {
             **thread_dataset["meta"],
             "geocoded_count": geocoded_count,
@@ -1839,6 +1923,10 @@ def write_to_db(
         raise RuntimeError("DATABASE_URL is not set; cannot write to Postgres")
 
     thread_id = manifest["id"]
+    restaurants_with_geocodes = [
+        restaurant for restaurant in restaurants_with_geocodes
+        if not _is_closed_permanently_detail(restaurant.get("geocode_detail"))
+    ]
 
     restaurants_inserted = 0
     mentions_inserted = 0
@@ -1873,7 +1961,7 @@ def write_to_db(
             )
 
             # Fetch existing restaurants for cross-thread deduplication
-            cur.execute("SELECT name, slug, location, lat, lng FROM restaurants")
+            cur.execute("SELECT name, slug, location, street, lat, lng FROM restaurants")
             # psycopg 3 cursor returns tuples by default unless a row_factory is used.
             # We use column indices to ensure compatibility with any row_factory.
             desc = cur.description
@@ -1888,6 +1976,7 @@ def write_to_db(
                         "name": row[col_name["name"]],
                         "slug": row[col_name["slug"]],
                         "location": row[col_name["location"]],
+                        "street": row[col_name["street"]],
                         "lat": row[col_name["lat"]],
                         "lng": row[col_name["lng"]]
                     })
@@ -1897,11 +1986,12 @@ def write_to_db(
             for restaurant, slug in assign_slugs(deduped_restaurants, existing=existing):
                 cur.execute(
                     """
-                    INSERT INTO restaurants (name, slug, location, cuisine, lat, lng)
-                    VALUES (%s, %s, %s, %s, %s, %s)
+                    INSERT INTO restaurants (name, slug, location, street, cuisine, lat, lng)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (slug) DO UPDATE SET
                         name = CASE WHEN length(EXCLUDED.name) > length(restaurants.name) THEN EXCLUDED.name ELSE restaurants.name END,
                         location = COALESCE(restaurants.location, EXCLUDED.location),
+                        street = COALESCE(restaurants.street, EXCLUDED.street),
                         cuisine = COALESCE(restaurants.cuisine, EXCLUDED.cuisine),
                         lat = COALESCE(restaurants.lat, EXCLUDED.lat),
                         lng = COALESCE(restaurants.lng, EXCLUDED.lng),
@@ -1912,6 +2002,7 @@ def write_to_db(
                         restaurant["name"],
                         slug,
                         restaurant.get("location"),
+                        restaurant.get("street"),
                         restaurant.get("cuisine"),
                         restaurant.get("lat"),
                         restaurant.get("lng"),

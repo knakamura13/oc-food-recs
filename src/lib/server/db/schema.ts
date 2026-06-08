@@ -40,6 +40,7 @@ export const restaurants = pgTable('restaurants', {
 	name: text('name').notNull(),
 	slug: text('slug').notNull().unique(),
 	location: text('location'),
+	street: text('street'),
 	cuisine: text('cuisine'),
 	lat: real('lat'),
 	lng: real('lng'),
