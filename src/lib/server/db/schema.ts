@@ -92,9 +92,33 @@ export const mentions = pgTable(
 	})
 );
 
+/**
+ * Geocode cache to avoid redundant API calls and handle "smart negative caching".
+ * Stores both successful results and tracked failures with a retry-after timestamp.
+ */
+export const geocodeCache = pgTable(
+	'geocode_cache',
+	{
+		id: bigserial('id', { mode: 'number' }).primaryKey(),
+		query: text('query').notNull(),
+		provider: text('provider').notNull(), // 'google' | 'nominatim' | 'mapbox'
+		lat: real('lat'),
+		lng: real('lng'),
+		detail: text('detail'), // raw display name or address string
+		geocodedCity: text('geocoded_city'),
+		retryAfter: timestamp('retry_after', { withTimezone: true }), // for negative caching
+		createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+	},
+	(table) => ({
+		queryIdx: uniqueIndex('geocode_cache_query_unique').on(table.query),
+	})
+);
+
 export type Thread = typeof threads.$inferSelect;
 export type NewThread = typeof threads.$inferInsert;
 export type Restaurant = typeof restaurants.$inferSelect;
 export type NewRestaurant = typeof restaurants.$inferInsert;
 export type Mention = typeof mentions.$inferSelect;
 export type NewMention = typeof mentions.$inferInsert;
+export type GeocodeCache = typeof geocodeCache.$inferSelect;
+export type NewGeocodeCache = typeof geocodeCache.$inferInsert;

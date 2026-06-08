@@ -1,57 +1,23 @@
 #!/usr/bin/env python3
 """Re-geocode currently-unmapped restaurants in the DB with the improved geocoder.
 
-default_geocode now normalizes the location (expand abbreviations, first-of-multi-city,
-neighborhood/street -> city) and no longer caches negative results. This script:
-  1. purges negative entries from the on-disk geocode cache (so they're retried),
-  2. for each unmapped restaurant, runs default_geocode in tiers:
-       T1: LLM-extracted location (when normalize_location recognizes it),
-       T2: most-frequent subreddit's implied city (when T1 returns "missing location"
-           and the subreddit maps to a known OC city — mirrors build_thread),
-       T3: name-only OC-bounded query (when T1 returns "missing location" and no
-           subreddit hint is available — e.g. r/orangecounty + empty LLM location);
-           _mapbox_accept's score>=0.85 floor keeps fuzzy false positives bounded
-           but generic names ("Taco Shop") can still drift, so inspect dry-run
-           output before --apply,
-  3. updates lat, lng, AND location for each newly-resolved hit.
-
-Usage:
-  python3 scripts/regeocode.py            # dry run (still hits Nominatim, no DB writes)
-  python3 scripts/regeocode.py --apply    # write lat/lng/location to the DB
-
-Network calls are rate-limited to Nominatim's ~1 req/s; ~N-with-location seconds.
+Uses the tiered DB-backed geocoder (Google -> Nominatim -> Mapbox) and parallelizes
+requests.
 """
 from __future__ import annotations
-import sys, os, json, tqdm
+import sys, os, concurrent.futures, tqdm
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import db_backup as b
 import reddit_pipeline as rp
 
 
-def purge_negative_cache() -> int:
-    path = rp.GEOCODE_CACHE_PATH
-    if not path.exists():
-        return 0
-    cache = json.loads(path.read_text(encoding="utf-8"))
-    negatives = [k for k, v in cache.items() if not v or v[0] is None]
-    for k in negatives:
-        del cache[k]
-    path.write_text(json.dumps(cache, ensure_ascii=False), encoding="utf-8")
-    rp._geocode_cache = None  # force reload on next default_geocode
-    return len(negatives)
-
-
 def main() -> int:
     apply = "--apply" in sys.argv[1:]
-    print(f"purged {purge_negative_cache()} negative cache entries")
 
     conn = b._connect()
     cur = conn.cursor()
-    # Also fetch each restaurant's most-frequent subreddit (via mentions → threads).
-    # When the LLM-extracted location is unrecognized — and normalize_location returns
-    # None — we retry default_geocode with the subreddit's implied city, mirroring
-    # what build_thread does for fresh ingests.
+    # Fetch unmapped restaurants and their most-frequent subreddit for fallback city hints.
     cur.execute(
         """
         SELECT r.id, r.name, r.location,
@@ -87,42 +53,47 @@ def main() -> int:
         print(f"  ... committed {total_committed} updates so far")
         batch.clear()
 
-    retried_subreddit = retried_name_only = 0
-    pbar = tqdm.tqdm(rows, desc="Geocoding", unit="restaurant")
-    for rid, name, location, subreddit in pbar:
-        # Tier 1: use the LLM-extracted city (if any).
+    def _regeocode_worker(rid, name, location, subreddit):
+        # Tier 1: use the existing extracted location.
         lat, lng, detail, geocoded_city = rp.default_geocode(name, location)
 
-        # Tier 2 / Tier 3: only fire when normalize_location returned None — other
-        # failure modes (no in-OC hit, outside-bounds, etc.) have already been tried
-        # with a valid city hint, so retrying with a different city won't help.
+        # Tier 2 / Tier 3: fallback when location is missing or unrecognized.
         if lat is None and detail == "missing location":
             sub_city = rp._subreddit_city(subreddit)
             if sub_city:
-                # Tier 2: subreddit-implied city (e.g. r/Anaheim → Anaheim).
+                # Subreddit-implied city (e.g. r/Anaheim -> Anaheim).
                 lat, lng, detail, geocoded_city = rp.default_geocode(name, sub_city)
-                if lat is not None:
-                    retried_subreddit += 1
-                    detail = f"(via r/{subreddit}) {detail}"
             else:
-                # Tier 3: no city signal anywhere (e.g. r/orangecounty + empty location).
-                # Name-only OC-bounded retry; _mapbox_accept's score>=0.85 floor keeps
-                # fuzzy false-positives bounded. Inspect the output before --apply if
-                # the restaurant name is generic.
+                # Name-only OC-bounded retry.
                 lat, lng, detail, geocoded_city = rp.default_geocode(
                     name, None, allow_name_only=True
                 )
-                if lat is not None:
-                    retried_name_only += 1
-                    detail = f"(name-only OC bbox) {detail}"
+        return rid, lat, lng, geocoded_city, location
 
-        if lat is not None:
-            canonical = geocoded_city or rp.normalize_location(location)
-            pending += 1
-            if apply:
-                batch.append((lat, lng, canonical, rid))
-                if len(batch) >= BATCH_SIZE:
-                    _flush()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        futures = {
+            executor.submit(_regeocode_worker, rid, name, loc, sub): (rid, name)
+            for rid, name, loc, sub in rows
+        }
+        pbar = tqdm.tqdm(
+            concurrent.futures.as_completed(futures),
+            total=len(rows),
+            desc="Geocoding",
+            unit="restaurant",
+        )
+        for future in pbar:
+            try:
+                rid, lat, lng, geocoded_city, location = future.result()
+                if lat is not None:
+                    canonical = geocoded_city or rp.normalize_location(location)
+                    pending += 1
+                    if apply:
+                        batch.append((lat, lng, canonical, rid))
+                        if len(batch) >= BATCH_SIZE:
+                            _flush()
+            except Exception as exc:
+                rid, name = futures[future]
+                print(f"Error geocoding {name} (id={rid}): {exc}", file=sys.stderr)
     pbar.close()
 
     if apply:
@@ -130,17 +101,7 @@ def main() -> int:
     else:
         print("(dry run -- pass --apply to write)")
 
-    print(
-        f"newly resolved: {total_committed if apply else pending} "
-        f"({retried_subreddit} via subreddit, {retried_name_only} via name-only)"
-    )
-
-    if apply:
-        cur.execute("SELECT count(*) FROM restaurants WHERE lat IS NOT NULL AND lng IS NOT NULL")
-        geo = cur.fetchone()[0]
-        cur.execute("SELECT count(*) FROM restaurants")
-        tot = cur.fetchone()[0]
-        print(f"APPLIED. mapped now: {geo}/{tot} ({100 * geo // tot}%)")
+    print(f"newly resolved: {total_committed if apply else pending}")
     conn.close()
     return 0
 
