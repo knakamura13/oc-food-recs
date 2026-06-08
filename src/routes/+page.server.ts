@@ -131,7 +131,8 @@ export const load: PageServerLoad = async (): Promise<{ dataset: RestaurantData 
 			score: m.score,
 			role: m.role,
 			comment_date: m.comment_date
-		}))
+		})),
+		endorsement_count: (row.mentions ?? []).filter((m) => m.role === 'endorsement').length
 	}));
 
 	// Thread summaries — restaurant_count is the distinct count of restaurants

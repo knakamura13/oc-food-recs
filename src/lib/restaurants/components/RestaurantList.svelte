@@ -1,9 +1,15 @@
 <script lang="ts">
 	import { ChevronRight, MapPin } from 'lucide-svelte';
 	import { tick } from 'svelte';
-	import { slide } from 'svelte/transition';
+	import {
+		Virtualizer,
+		elementScroll,
+		observeElementOffset,
+		observeElementRect,
+		measureElement as measureVirtualElement,
+		type VirtualItem
+	} from '@tanstack/virtual-core';
 	import { TableHandler } from '@vincjo/datatables';
-	import NumberFlow, { NumberFlowGroup } from '@number-flow/svelte';
 	import type { Mention, Restaurant } from '$lib/restaurants/types';
 	import { appState, normalizeCuisine } from '$lib/restaurants/stores.svelte';
 	import { toast } from '$lib/toast';
@@ -13,6 +19,9 @@
 	}
 
 	let { restaurants }: Props = $props();
+
+	const reduceMotion = () =>
+		typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 	// Full mentions are lazy-loaded per restaurant on first expand (kept out of the
 	// prerendered page payload). Cached by slug; `undefined` = not yet loaded.
@@ -51,7 +60,7 @@
 	}
 
 	$effect(() => {
-		table.setRows([...restaurants]);
+		table.setRows(restaurants);
 		if (appState.sortKey === 'score' && !scoreSort.isActive) {
 			applySortFromAppState();
 		} else if (appState.sortKey === 'name' && !nameSort.isActive) {
@@ -73,41 +82,74 @@
 		} else {
 			appState.sortKey = null;
 			table.clearSort();
-			table.setRows([...restaurants]);
+			table.setRows(restaurants);
 		}
 	}
 
-	function scrollRestaurantRowIntoView(el: HTMLElement) {
-		const pane = el.closest('.list-pane') as HTMLElement | null;
-		const inner = el.closest('.list-scroll') as HTMLElement | null;
+	let listScrollEl = $state<HTMLDivElement | undefined>();
+	let virtualizer = $state<Virtualizer<HTMLDivElement, HTMLDivElement> | null>(null);
+	let virtualItems = $state<VirtualItem[]>([]);
+	let totalSize = $state(0);
 
-		function centerIn(scroller: HTMLElement) {
-			const sTop = scroller.getBoundingClientRect().top;
-			const eTop = el.getBoundingClientRect().top;
-			const delta = eTop - sTop + scroller.scrollTop;
-			const next = delta - scroller.clientHeight / 2 + el.offsetHeight / 2;
-			scroller.scrollTo({ top: Math.max(0, next), behavior: 'smooth' });
-		}
+	function syncVirtualState(instance: Virtualizer<HTMLDivElement, HTMLDivElement>) {
+		virtualItems = instance.getVirtualItems();
+		totalSize = instance.getTotalSize();
+	}
 
-		if (inner && inner.scrollHeight > inner.clientHeight + 1) {
-			centerIn(inner);
-		} else if (pane && pane.scrollHeight > pane.clientHeight + 1) {
-			centerIn(pane);
-		} else {
-			el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-		}
+	$effect(() => {
+		if (!listScrollEl) return;
+
+		const instance = new Virtualizer<HTMLDivElement, HTMLDivElement>({
+			count: table.rows.length,
+			getScrollElement: () => listScrollEl ?? null,
+			estimateSize: () => 72,
+			overscan: 8,
+			scrollToFn: elementScroll,
+			observeElementRect,
+			observeElementOffset,
+			measureElement: measureVirtualElement,
+			getItemKey: (index) => table.rows[index]?.slug ?? index,
+			onChange: (inst) => {
+				syncVirtualState(inst);
+			}
+		});
+
+		virtualizer = instance;
+		syncVirtualState(instance);
+
+		return () => {
+			virtualizer = null;
+		};
+	});
+
+	$effect(() => {
+		const rows = table.rows;
+		if (!virtualizer) return;
+		virtualizer.setOptions({
+			count: rows.length,
+			getItemKey: (index: number) => rows[index]?.slug ?? index
+		} as Parameters<Virtualizer<HTMLDivElement, HTMLDivElement>['setOptions']>[0]);
+		virtualizer.measure();
+		syncVirtualState(virtualizer);
+	});
+
+	function remeasureList() {
+		virtualizer?.measure();
 	}
 
 	$effect(() => {
 		const slug = appState.listScrollTarget;
-		if (slug) {
-			appState.selectedRestaurantSlug = slug;
-			appState.listScrollTarget = null;
-			tick().then(() => {
-				const el = document.getElementById(`restaurant-${slug}`);
-				if (el) scrollRestaurantRowIntoView(el);
+		if (!slug || !virtualizer) return;
+		appState.selectedRestaurantSlug = slug;
+		appState.listScrollTarget = null;
+		const index = table.rows.findIndex((r) => r.slug === slug);
+		if (index < 0) return;
+		tick().then(() => {
+			virtualizer?.scrollToIndex(index, {
+				align: 'center',
+				behavior: reduceMotion() ? 'auto' : 'smooth'
 			});
-		}
+		});
 	});
 
 	function toggleRow(restaurant: Restaurant) {
@@ -120,6 +162,25 @@
 				appState.mapTarget = { slug, lat: restaurant.lat, lng: restaurant.lng };
 			}
 		}
+		tick().then(() => remeasureList());
+	}
+
+	function onDrawerTransitionEnd(e: TransitionEvent) {
+		if (e.propertyName === 'grid-template-rows') remeasureList();
+	}
+
+	function bindRowElement(el: HTMLDivElement, index: number) {
+		el.dataset.index = String(index);
+		virtualizer?.measureElement(el);
+		return {
+			update(newIndex: number) {
+				el.dataset.index = String(newIndex);
+				virtualizer?.measureElement(el);
+			},
+			destroy() {
+				virtualizer?.measureElement(null);
+			}
+		};
 	}
 
 	function setHovered(restaurant: Restaurant) {
@@ -186,10 +247,6 @@
 		}
 		return groups;
 	}
-
-	function endorsementCount(restaurant: Restaurant): number {
-		return restaurant.mentions.filter((m) => m.role === 'endorsement').length;
-	}
 </script>
 
 <div class="restaurant-list">
@@ -209,62 +266,79 @@
 			</button>
 		{/each}
 		<span class="result-count" aria-live="polite">
-			<NumberFlow value={restaurants.length} /> restaurants
+			{restaurants.length} restaurants
 		</span>
 	</div>
 
-	<div class="list-scroll" role="region" aria-label="Restaurant results">
+	<div class="list-scroll" bind:this={listScrollEl} role="region" aria-label="Restaurant results">
 		{#if table.rows.length === 0}
 			<div class="empty-state">
 				<span class="empty-icon">&#x1F50D;</span>
 				<p class="empty-title">No restaurants found</p>
 				<p class="empty-hint">Try adjusting your filters or search terms</p>
 			</div>
-		{/if}
-		{#each table.rows as restaurant (restaurant.slug)}
-			{@const slug = restaurant.slug}
-			{@const isOpen = appState.selectedRestaurantSlug === slug}
+		{:else}
+			<div class="virtual-spacer" style:height="{totalSize}px">
+				{#each virtualItems as virtualRow (virtualRow.key)}
+					{@const restaurant = table.rows[virtualRow.index]}
+					{@const slug = restaurant.slug}
+					{@const isOpen = appState.selectedRestaurantSlug === slug}
 
-			<div class="row" class:expanded={isOpen} class:hovered={appState.hoveredRestaurantSlug === slug} id="restaurant-{slug}">
-				<button
-					class="row-header"
-					onclick={() => toggleRow(restaurant)}
-					onmouseenter={() => setHovered(restaurant)}
-					onmouseleave={() => clearHovered(restaurant)}
-					onfocus={() => setHovered(restaurant)}
-					onblur={() => clearHovered(restaurant)}
-					aria-expanded={isOpen}
-					aria-controls={isOpen ? `drawer-${slug}` : undefined}
-				>
-					<div class="row-main">
-						<span class="row-name">{restaurant.name}</span>
-						<div class="row-tags">
-							{#if restaurant.cuisine}
-								<span class="tag cuisine-tag">{normalizeCuisine(restaurant.cuisine)}</span>
-							{/if}
-							{#if restaurant.location}
-								<span class="tag location-tag">{restaurant.location}</span>
-							{/if}
-						</div>
-					</div>
-					<NumberFlowGroup>
-						<div class="row-stats">
-							<span class="stat score">
-								<NumberFlow value={restaurant.aggregate_score} /> <small>pts</small>
-							</span>
-							<span class="stat">
-								<NumberFlow value={endorsementCount(restaurant)} /> <small>endorse</small>
-							</span>
-							<span class="stat">
-								<NumberFlow value={restaurant.mention_count} /> <small>mentions</small>
-							</span>
-						</div>
-					</NumberFlowGroup>
-					<span class="chevron" class:open={isOpen} aria-hidden="true"><ChevronRight size={20} /></span>
-				</button>
+					<div
+						class="virtual-row"
+						style:transform="translateY({virtualRow.start}px)"
+						use:bindRowElement={virtualRow.index}
+					>
+						<div
+							class="row"
+							class:expanded={isOpen}
+							class:hovered={appState.hoveredRestaurantSlug === slug}
+							id="restaurant-{slug}"
+						>
+							<button
+								class="row-header"
+								onclick={() => toggleRow(restaurant)}
+								onmouseenter={() => setHovered(restaurant)}
+								onmouseleave={() => clearHovered(restaurant)}
+								onfocus={() => setHovered(restaurant)}
+								onblur={() => clearHovered(restaurant)}
+								aria-expanded={isOpen}
+								aria-controls={isOpen ? `drawer-${slug}` : undefined}
+							>
+								<div class="row-main">
+									<span class="row-name">{restaurant.name}</span>
+									<div class="row-tags">
+										{#if restaurant.cuisine}
+											<span class="tag cuisine-tag">{normalizeCuisine(restaurant.cuisine)}</span>
+										{/if}
+										{#if restaurant.location}
+											<span class="tag location-tag">{restaurant.location}</span>
+										{/if}
+									</div>
+								</div>
+								<div class="row-stats">
+									<span class="stat score">
+										{restaurant.aggregate_score} <small>pts</small>
+									</span>
+									<span class="stat">
+										{restaurant.endorsement_count} <small>endorse</small>
+									</span>
+									<span class="stat">
+										{restaurant.mention_count} <small>mentions</small>
+									</span>
+								</div>
+								<span class="chevron" class:open={isOpen} aria-hidden="true"><ChevronRight size={20} /></span>
+							</button>
 
-				{#if isOpen}
-					<div class="drawer" id="drawer-{slug}" role="region" aria-label="{restaurant.name} details" transition:slide={{ duration: 200 }}>
+							<div
+								class="drawer-reveal"
+								class:open={isOpen}
+								class:no-motion={reduceMotion()}
+								ontransitionend={onDrawerTransitionEnd}
+							>
+								<div class="drawer-inner">
+									{#if isOpen}
+										<div class="drawer" id="drawer-{slug}" role="region" aria-label="{restaurant.name} details">
 						{#if details[slug] === undefined}
 							<p class="drawer-loading">Loading comments…</p>
 						{:else}
@@ -373,32 +447,37 @@
 						{/if}
 						{/if}
 
-						<div class="drawer-actions">
-							{#if restaurant.lat && restaurant.lng}
-								<button class="map-link" onclick={() => showOnMap(restaurant)}>
-									Show on map
-								</button>
-							{/if}
+										<div class="drawer-actions">
+											{#if restaurant.lat && restaurant.lng}
+												<button class="map-link" onclick={() => showOnMap(restaurant)}>
+													Show on map
+												</button>
+											{/if}
 
-							<button type="button" class="share-link" onclick={() => copyShareLink(restaurant)} aria-label="Copy link to {restaurant.name}">
-								<svg class="share-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-								Copy link
-							</button>
-							<a
-								class="maps-link"
-								href={googleMapsUrl(restaurant)}
-								target="_blank"
-								rel="noopener noreferrer"
-								aria-label="Open {restaurant.name} in Google Maps"
-							>
-								<span class="maps-icon" aria-hidden="true"><MapPin size={14} /></span>
-								Google Maps
-							</a>
+											<button type="button" class="share-link" onclick={() => copyShareLink(restaurant)} aria-label="Copy link to {restaurant.name}">
+												<svg class="share-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+												Copy link
+											</button>
+											<a
+												class="maps-link"
+												href={googleMapsUrl(restaurant)}
+												target="_blank"
+												rel="noopener noreferrer"
+												aria-label="Open {restaurant.name} in Google Maps"
+											>
+												<span class="maps-icon" aria-hidden="true"><MapPin size={14} /></span>
+												Google Maps
+											</a>
+										</div>
+										</div>
+									{/if}
+								</div>
+							</div>
 						</div>
 					</div>
-				{/if}
+				{/each}
 			</div>
-		{/each}
+		{/if}
 	</div>
 </div>
 
@@ -469,6 +548,37 @@
 		min-height: 0;
 		overflow-y: auto;
 		overscroll-behavior: contain;
+	}
+
+	.virtual-spacer {
+		position: relative;
+		width: 100%;
+	}
+
+	.virtual-row {
+		position: absolute;
+		top: 0;
+		left: 0;
+		width: 100%;
+	}
+
+	.drawer-reveal {
+		display: grid;
+		grid-template-rows: 0fr;
+		transition: grid-template-rows 0.2s ease;
+	}
+
+	.drawer-reveal.open {
+		grid-template-rows: 1fr;
+	}
+
+	.drawer-reveal.no-motion {
+		transition: none;
+	}
+
+	.drawer-inner {
+		overflow: hidden;
+		min-height: 0;
 	}
 
 	@media (max-width: 1023px) {

@@ -25,6 +25,7 @@ export function makeRestaurant(overrides: Partial<Restaurant> = {}): Restaurant 
 		cuisine: 'American',
 		aggregate_score: 10,
 		mention_count: 2,
+		endorsement_count: 0,
 		lat: 33.6846,
 		lng: -117.8265,
 		mentions: [],
