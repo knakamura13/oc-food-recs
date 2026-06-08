@@ -21,6 +21,8 @@ export interface Restaurant {
 	cuisine: string | null;
 	aggregate_score: number;
 	mention_count: number;
+	/** Count of mentions with role === 'endorsement' for the current mention slice. */
+	endorsement_count: number;
 	lat: number | null;
 	lng: number | null;
 	mentions: ListMention[];
