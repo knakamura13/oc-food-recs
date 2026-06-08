@@ -2193,6 +2193,38 @@ def ingest_batch(
     return 1 if failures else 0
 
 
+def reingest_all(
+    *, limit: int | None = None, dry_run: bool = False
+) -> int:
+    """Stage every archived thread for re-ingestion, then run ingest_batch.
+
+    Each ``*.html`` file in THREADS_ROOT is moved into UNINGESTED_ROOT so
+    that the normal ingest_batch loop picks it up.  On success the file is
+    moved back to THREADS_ROOT by the usual archiving step; on failure it
+    stays in UNINGESTED_ROOT so you can see exactly what needs a retry.
+
+    Skips files whose names already exist in UNINGESTED_ROOT (a previous
+    failed re-ingest left them there) to avoid clobbering them.
+    """
+    UNINGESTED_ROOT.mkdir(parents=True, exist_ok=True)
+    archived = sorted(THREADS_ROOT.glob("*.html"))
+    if not archived:
+        print(f"No .html files found in {THREADS_ROOT} — nothing to re-ingest.")
+        return 0
+
+    staged = 0
+    for src in archived:
+        dest = UNINGESTED_ROOT / src.name
+        if dest.exists():
+            print(f"Skipping {src.name}: already present in uningested-threads/")
+            continue
+        shutil.move(str(src), str(dest))
+        staged += 1
+
+    print(f"Staged {staged}/{len(archived)} thread(s) for re-ingest.")
+    return ingest_batch(limit=limit, dry_run=dry_run)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="OC Food Recs Reddit ingestion pipeline")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -2236,6 +2268,27 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
 
+    reingest_parser = subparsers.add_parser(
+        "reingest",
+        help=(
+            "Re-ingest all previously archived threads. Moves every *.html file from "
+            "./data/threads/ back into ./data/uningested-threads/, then runs a full "
+            "ingest pass. Successfully re-ingested files are archived back to "
+            "./data/threads/; failures stay in ./data/uningested-threads/ for inspection."
+        ),
+    )
+    reingest_parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Process only the first N top-level comments per thread (useful for testing)",
+    )
+    reingest_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Stage files and run parse/extract/geocode but skip the DB write",
+    )
+
     args = parser.parse_args(argv)
 
     if args.command == "init-thread":
@@ -2258,6 +2311,9 @@ def main(argv: list[str] | None = None) -> int:
         if not args.dry_run and not args.no_archive:
             _archive_ingested_html(args.html)
         return 0
+
+    if args.command == "reingest":
+        return reingest_all(limit=args.limit, dry_run=args.dry_run)
 
     parser.error(f"Unknown command: {args.command}")
     return 2
