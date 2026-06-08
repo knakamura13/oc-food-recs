@@ -166,26 +166,9 @@
 		}
 	});
 
-	function updateMarkers() {
-		if (!leafletMap || !L || !dotIcon) return;
-
-		// Markers are about to be recreated: cancel pending hover work and drop
-		// stale highlight bookkeeping so the highlight re-applies to the new set.
-		if (hoverTimer) {
-			clearTimeout(hoverTimer);
-			hoverTimer = null;
-		}
-		if (clusterHoverTimer) {
-			clearTimeout(clusterHoverTimer);
-			clusterHoverTimer = null;
-		}
-		appliedSlug = null;
-
-		// Remove old cluster group
-		if (clusterGroupRef) {
-			leafletMap.removeLayer(clusterGroupRef);
-		}
-		markers.clear();
+	function ensureClusterGroup() {
+		if (!leafletMap || !L) return null;
+		if (clusterGroupRef) return clusterGroupRef;
 
 		clusterGroupRef = L.markerClusterGroup({
 			maxClusterRadius: 40,
@@ -193,8 +176,6 @@
 			showCoverageOnHover: false
 		});
 
-		// Cluster hover popover: after a short delay, list the restaurants inside
-		// the hovered cluster (sorted by score, capped) in a tooltip above it.
 		clusterGroupRef.on('clustermouseover', (e: any) => {
 			if (clusterHoverTimer) clearTimeout(clusterHoverTimer);
 			const cluster = e.layer;
@@ -226,77 +207,102 @@
 			appState.selectedRestaurantSlug = null;
 		});
 
-		// When clusters expand/collapse, re-apply the highlight so a pin that
-		// un-clusters into view picks up an active hover/selection.
 		clusterGroupRef.on('animationend', () => applyHighlight());
 
-		for (const r of mappedRestaurants) {
-			const marker = L.marker([r.lat, r.lng], {
-				icon: dotIcon,
-				keyboard: true,
-				title: r.name,
-				riseOnHover: true
-			});
+		leafletMap.addLayer(clusterGroupRef);
+		return clusterGroupRef;
+	}
 
-			marker.on('click', (e: any) => {
-				L.DomEvent.stopPropagation(e);
-				if (appState.selectedRestaurantSlug === r.slug) {
-					appState.selectedRestaurantSlug = null;
-				} else {
-					appState.selectedRestaurantSlug = r.slug;
-					appState.listScrollTarget = r.slug;
-				}
-			});
+	function createMarker(r: Restaurant) {
+		const marker = L.marker([r.lat, r.lng], {
+			icon: dotIcon,
+			keyboard: true,
+			title: r.name,
+			riseOnHover: true
+		});
 
-			// Debounced hover so a fast mouse sweep across pins doesn't flicker.
-			marker.on('mouseover', () => {
-				if (hoverTimer) clearTimeout(hoverTimer);
-				hoverTimer = setTimeout(() => {
-					appState.hoveredRestaurantSlug = r.slug;
-					hoverTimer = null;
-				}, 150);
-			});
-			marker.on('mouseout', () => {
-				if (hoverTimer) {
-					clearTimeout(hoverTimer);
-					hoverTimer = null;
-				}
-				if (appState.hoveredRestaurantSlug === r.slug) {
-					appState.hoveredRestaurantSlug = null;
-				}
-			});
+		marker.on('click', (e: any) => {
+			L.DomEvent.stopPropagation(e);
+			const current = (marker as any).restaurant as Restaurant;
+			if (appState.selectedRestaurantSlug === current.slug) {
+				appState.selectedRestaurantSlug = null;
+			} else {
+				appState.selectedRestaurantSlug = current.slug;
+				appState.listScrollTarget = current.slug;
+			}
+		});
 
-			// Keyboard focus drives the same highlight (no-op if unsupported).
-			marker.on('focus', () => {
-				appState.hoveredRestaurantSlug = r.slug;
-			});
-			marker.on('blur', () => {
-				if (appState.hoveredRestaurantSlug === r.slug) {
-					appState.hoveredRestaurantSlug = null;
-				}
-			});
+		marker.on('mouseover', () => {
+			if (hoverTimer) clearTimeout(hoverTimer);
+			hoverTimer = setTimeout(() => {
+				appState.hoveredRestaurantSlug = ((marker as any).restaurant as Restaurant).slug;
+				hoverTimer = null;
+			}, 150);
+		});
+		marker.on('mouseout', () => {
+			if (hoverTimer) {
+				clearTimeout(hoverTimer);
+				hoverTimer = null;
+			}
+			const slug = ((marker as any).restaurant as Restaurant).slug;
+			if (appState.hoveredRestaurantSlug === slug) {
+				appState.hoveredRestaurantSlug = null;
+			}
+		});
 
-			(marker as any).restaurant = r;
-			markers.set(r.slug, marker);
-			clusterGroupRef.addLayer(marker);
+		marker.on('focus', () => {
+			appState.hoveredRestaurantSlug = ((marker as any).restaurant as Restaurant).slug;
+		});
+		marker.on('blur', () => {
+			const slug = ((marker as any).restaurant as Restaurant).slug;
+			if (appState.hoveredRestaurantSlug === slug) {
+				appState.hoveredRestaurantSlug = null;
+			}
+		});
+
+		(marker as any).restaurant = r;
+		return marker;
+	}
+
+	function syncMarkers() {
+		if (!leafletMap || !L || !dotIcon) return;
+
+		const group = ensureClusterGroup();
+		if (!group) return;
+
+		const nextSlugs = new Set(mappedRestaurants.map((r) => r.slug));
+
+		for (const [slug, marker] of [...markers.entries()]) {
+			if (!nextSlugs.has(slug)) {
+				group.removeLayer(marker);
+				markers.delete(slug);
+				if (appliedSlug === slug) appliedSlug = null;
+			}
 		}
 
-		leafletMap.addLayer(clusterGroupRef);
+		for (const r of mappedRestaurants) {
+			const existing = markers.get(r.slug);
+			if (existing) {
+				(existing as any).restaurant = r;
+				continue;
+			}
+			const marker = createMarker(r);
+			markers.set(r.slug, marker);
+			group.addLayer(marker);
+		}
 
-		// Reassert any active highlight against the freshly built markers.
 		applyHighlight();
+	}
+
+	function updateMarkers() {
+		syncMarkers();
 	}
 
 	// Re-render markers when filtered restaurants change
 	$effect(() => {
-		// Track only the restaurant data so a real filter change rebuilds the markers.
 		void mappedRestaurants;
-		// updateMarkers() ends by calling applyHighlight(), which reads the hovered/selected
-		// slug. Without untrack, those reads would make this rebuild effect re-run on every
-		// hover/selection — tearing down and recreating all markers (and collapsing any open
-		// spiderfy). untrack keeps the rebuild bound to data changes only.
 		if (leafletMap && L) {
-			untrack(() => updateMarkers());
+			untrack(() => syncMarkers());
 		}
 	});
 
@@ -317,12 +323,34 @@
 	$effect(() => {
 		if (!mapContainer || !leafletMap) return;
 
-		const ro = new ResizeObserver(() => {
-			leafletMap.invalidateSize({ animate: !reduceMotion() });
-		});
+		const mapPane = mapContainer.closest('.map-pane');
+		let rafId: number | null = null;
 
+		const invalidate = () => {
+			leafletMap.invalidateSize({ animate: false });
+		};
+
+		const scheduleInvalidate = () => {
+			if (rafId !== null) return;
+			rafId = requestAnimationFrame(() => {
+				rafId = null;
+				invalidate();
+			});
+		};
+
+		const onTransitionEnd = (e: TransitionEvent) => {
+			if (e.propertyName === 'flex-basis') invalidate();
+		};
+
+		const ro = new ResizeObserver(scheduleInvalidate);
 		ro.observe(mapContainer);
-		return () => ro.disconnect();
+		mapPane?.addEventListener('transitionend', onTransitionEnd as EventListener);
+
+		return () => {
+			ro.disconnect();
+			mapPane?.removeEventListener('transitionend', onTransitionEnd as EventListener);
+			if (rafId !== null) cancelAnimationFrame(rafId);
+		};
 	});
 
 	// Teardown: clear pending timers and dispose the Leaflet map (which drops all

@@ -7,9 +7,13 @@
 		appState,
 		normalizeCuisine,
 		normalizeCity,
-		weightedAggregates,
 		dateExtentOf
 	} from '$lib/restaurants/stores.svelte';
+	import {
+		countEndorsements,
+		createSliceCache,
+		sliceRestaurantMentions
+	} from '$lib/restaurants/filter-restaurants';
 	import Hero from '$lib/restaurants/components/Hero.svelte';
 	import SearchBar from '$lib/restaurants/components/SearchBar.svelte';
 	import FilterBar from '$lib/restaurants/components/FilterBar.svelte';
@@ -20,7 +24,12 @@
 
 	let { data }: { data: PageData } = $props();
 
-	const allRestaurants: Restaurant[] = $derived(data.dataset.restaurants as Restaurant[]);
+	const allRestaurants: Restaurant[] = $derived.by(() =>
+		(data.dataset.restaurants as Restaurant[]).map((r) => ({
+			...r,
+			endorsement_count: r.endorsement_count ?? countEndorsements(r.mentions)
+		}))
+	);
 	const threadCount = $derived(data.dataset.meta.source_threads.length);
 
 	// thread_id -> subreddit, so mentions/restaurants can be attributed to their origin subreddit.
@@ -133,6 +142,9 @@
 		};
 	});
 
+	const subredditSliceCache = createSliceCache();
+	const recencySliceCache = createSliceCache();
+
 	let restaurantsBeforeFreshness = $derived.by(() => {
 		let result = allRestaurants;
 
@@ -140,22 +152,19 @@
 		// each restaurant's aggregates from that slice so datasources never blend.
 		if (appState.activeSubreddits.length > 0) {
 			const active = new Set(appState.activeSubreddits);
+			const subredditKey = appState.activeSubreddits.join(',');
 			result = result.flatMap((r) => {
 				const kept = r.mentions.filter((m) => {
 					const sub = threadSubreddit[m.thread_id];
 					return sub ? active.has(sub) : false;
 				});
-				if (kept.length === 0) return [];
-				const { aggregate_score, mention_count } = weightedAggregates(kept);
-				return [
-					{
-						...r,
-						mentions: kept,
-						mention_count,
-						aggregate_score,
-						source_threads: [...new Set(kept.map((m) => m.thread_id))]
-					}
-				];
+				const sliced = sliceRestaurantMentions(
+					r,
+					kept,
+					subredditSliceCache,
+					`${r.slug}|sub:${subredditKey}`
+				);
+				return sliced ? [sliced] : [];
 			});
 		}
 
@@ -193,17 +202,13 @@
 				const t = Date.parse(m.comment_date);
 				return Number.isNaN(t) || t >= cutoff;
 			});
-			if (kept.length === 0) return [];
-			const { aggregate_score, mention_count } = weightedAggregates(kept);
-			return [
-				{
-					...r,
-					mentions: kept,
-					mention_count,
-					aggregate_score,
-					source_threads: [...new Set(kept.map((m) => m.thread_id))]
-				}
-			];
+			const sliced = sliceRestaurantMentions(
+				r,
+				kept,
+				recencySliceCache,
+				`${r.slug}|cutoff:${cutoff}`
+			);
+			return sliced ? [sliced] : [];
 		});
 	});
 
@@ -567,6 +572,7 @@
 			height: 100%;
 			min-height: 0;
 			min-width: 0;
+			will-change: flex-basis;
 			transition: flex-basis 0.4s ease;
 		}
 
@@ -583,7 +589,8 @@
 			overscroll-behavior: contain;
 			background: #fff;
 			border-radius: 12px 0 0 0;
-			transition: flex-basis 0.4s ease, margin-left 0.4s ease, box-shadow 0.4s ease;
+			will-change: flex-basis, margin-left;
+			transition: flex-basis 0.4s ease, margin-left 0.4s ease;
 		}
 
 		/* Hover: map expands to 1/3, list retreats, layered depth collapses to flat */
