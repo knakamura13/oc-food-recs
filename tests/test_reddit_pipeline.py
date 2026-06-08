@@ -5,6 +5,7 @@ import os
 import re
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest import mock
 
@@ -33,6 +34,41 @@ def digest_files(paths):
         hasher.update(path.name.encode("utf-8"))
         hasher.update(path.read_bytes())
     return hasher.hexdigest()
+
+
+class InMemoryGeocodeCache:
+    """Faithful in-memory double for reddit_pipeline.GeocodeCache.
+
+    Replicates the get/set contract -- including smart negative caching
+    (failures stored with a 7-day retry_after) -- so geocode tests are
+    deterministic and isolated from a live Postgres connection.
+    """
+
+    def __init__(self):
+        self.rows = {}
+
+    def get(self, query):
+        row = self.rows.get(query)
+        if row is None:
+            return None
+        if row["lat"] is not None:
+            return row["lat"], row["lng"], row["detail"], row["city"]
+        if row["retry_after"] and row["retry_after"] > datetime.now(timezone.utc):
+            return None, None, "recently failed", None
+        return None
+
+    def set(self, query, result, provider, geocoded_city=None):
+        lat, lng, detail = result
+        retry_after = None
+        if lat is None:
+            retry_after = datetime.now(timezone.utc) + timedelta(days=7)
+        self.rows[query] = {
+            "lat": lat,
+            "lng": lng,
+            "detail": detail,
+            "city": geocoded_city,
+            "retry_after": retry_after,
+        }
 
 
 class RedditPipelineTest(unittest.TestCase):
@@ -635,27 +671,25 @@ class WriteToDbTest(unittest.TestCase):
             calls["n"] += 1
             return _FakeResponse()
 
-        with tempfile.TemporaryDirectory() as tmpdir:
-            orig_path = pipeline.GEOCODE_CACHE_PATH
-            try:
-                pipeline.GEOCODE_CACHE_PATH = Path(tmpdir) / "geocode-cache.json"
-                pipeline._geocode_cache = None
-                pipeline._last_geocode_ts = 0.0
-                with mock.patch.object(pipeline.urllib.request, "urlopen", fake_urlopen):
-                    first = pipeline.default_geocode("Taco Place", "Santa Ana")
-                    second = pipeline.default_geocode("taco place ", " santa ana")  # same normalized key
+        fake_cache = InMemoryGeocodeCache()
+        orig_ts = pipeline._last_geocode_ts
+        try:
+            pipeline._last_geocode_ts = 0.0
+            # No GOOGLE_MAPS_API_KEY -> Google tier short-circuits; Nominatim answers.
+            with mock.patch.dict(os.environ, {"GOOGLE_MAPS_API_KEY": ""}), \
+                mock.patch.object(pipeline, "_env_value", return_value=""), \
+                mock.patch.object(pipeline, "_get_db_cache", return_value=fake_cache), \
+                mock.patch.object(pipeline.urllib.request, "urlopen", fake_urlopen):
+                first = pipeline.default_geocode("Taco Place", "Santa Ana")
+                second = pipeline.default_geocode("taco place ", " santa ana")  # same normalized key
 
-                # Network hit exactly once; the repeat (case/space-insensitive) is served from cache.
-                self.assertEqual(calls["n"], 1)
-                self.assertEqual(first, (33.75, -117.85, "Taco Place, Santa Ana, CA", "Santa Ana"))
-                self.assertEqual(second, first)
-                self.assertTrue(pipeline.GEOCODE_CACHE_PATH.exists())
-                cached = json.loads(pipeline.GEOCODE_CACHE_PATH.read_text())
-                self.assertIn("taco place|santa ana", cached)
-            finally:
-                pipeline.GEOCODE_CACHE_PATH = orig_path
-                pipeline._geocode_cache = None
-                pipeline._last_geocode_ts = 0.0
+            # Network hit exactly once; the repeat (case/space-insensitive) is served from cache.
+            self.assertEqual(calls["n"], 1)
+            self.assertEqual(first, (33.75, -117.85, "Taco Place, Santa Ana, CA", "Santa Ana"))
+            self.assertEqual(second, first)
+            self.assertIn("taco place|santa ana", fake_cache.rows)
+        finally:
+            pipeline._last_geocode_ts = orig_ts
 
     def test_subreddit_city_fallback_mapping(self):
         p = self.pipeline
