@@ -54,6 +54,14 @@ def main() -> int:
         batch.clear()
 
     def _regeocode_worker(rid, name, location, subreddit):
+        # NOTE: re-geocode intentionally runs without the `street` hint. Street is
+        # extracted at ingest for geocoding precision but is NOT persisted to the
+        # restaurants table, so it can't be recovered here. Consequences:
+        #   - the cache key is name|location, which differs from ingest's
+        #     name|street|location, so street-bearing restaurants are always a fresh
+        #     lookup (and a few may stay unresolved without the street to disambiguate);
+        #   - only unmapped rows (lat/lng IS NULL) are processed, so this can never
+        #     downgrade an already-resolved restaurant.
         # Tier 1: use the existing extracted location.
         lat, lng, detail, geocoded_city = rp.default_geocode(name, location)
 
