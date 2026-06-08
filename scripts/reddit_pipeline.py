@@ -1288,14 +1288,13 @@ class GeocodeCache:
             pass
 
 
-_db_cache: GeocodeCache | None = None
+_thread_local = threading.local()
 
 
 def _get_db_cache() -> GeocodeCache:
-    global _db_cache
-    if _db_cache is None:
-        _db_cache = GeocodeCache()
-    return _db_cache
+    if not hasattr(_thread_local, "cache"):
+        _thread_local.cache = GeocodeCache()
+    return _thread_local.cache
 
 
 def _geocode_key(name: str, location: str | None, street: str | None = None) -> str:
@@ -2103,7 +2102,7 @@ def ingest(
         start=1,
     ):
         raw_location = restaurant.get("location") or _subreddit_city(manifest["subreddit"])
-        lat, lng, detail, geocoded_city = geocode_fn(restaurant["name"], raw_location)
+        lat, lng, detail, geocoded_city = geocode_fn(restaurant["name"], raw_location, restaurant.get("street"))
         _apply_geocode_result(restaurant, lat, lng, geocoded_city, raw_location)
         _emit_progress(
             {

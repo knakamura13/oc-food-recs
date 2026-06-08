@@ -1,12 +1,48 @@
 import json
+import os
 import sys
-import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 import reddit_pipeline as rp  # noqa: E402
+
+
+class InMemoryGeocodeCache:
+    """Faithful in-memory double for reddit_pipeline.GeocodeCache.
+
+    Replicates the get/set contract -- including smart negative caching
+    (failures stored with a 7-day retry_after) -- so geocode tests are
+    deterministic and isolated from a live Postgres connection.
+    """
+
+    def __init__(self):
+        self.rows = {}
+
+    def get(self, query):
+        row = self.rows.get(query)
+        if row is None:
+            return None
+        if row["lat"] is not None:
+            return row["lat"], row["lng"], row["detail"], row["city"]
+        if row["retry_after"] and row["retry_after"] > datetime.now(timezone.utc):
+            return None, None, "recently failed", None
+        return None
+
+    def set(self, query, result, provider, geocoded_city=None):
+        lat, lng, detail = result
+        retry_after = None
+        if lat is None:
+            retry_after = datetime.now(timezone.utc) + timedelta(days=7)
+        self.rows[query] = {
+            "lat": lat,
+            "lng": lng,
+            "detail": detail,
+            "city": geocoded_city,
+            "retry_after": retry_after,
+        }
 
 
 class NormalizeLocationTests(unittest.TestCase):
@@ -84,26 +120,24 @@ class TransientNetworkErrorTests(unittest.TestCase):
         def boom(request, timeout=10):
             raise ConnectionError("network unreachable")
 
-        with tempfile.TemporaryDirectory() as tmp:
-            orig = rp.GEOCODE_CACHE_PATH
-            try:
-                rp.GEOCODE_CACHE_PATH = Path(tmp) / "cache.json"
-                rp._geocode_cache = None
-                rp._last_geocode_ts = 0.0
-                rp._mapbox_token_value = ""  # disable Mapbox so we exercise only the failing path
-                with mock.patch.object(rp.urllib.request, "urlopen", boom):
-                    result = rp.default_geocode("Some Spot", "Santa Ana")
-                self.assertEqual(len(result), 4)
-                lat, lng, detail, geocoded_city = result
-                self.assertIsNone(lat)
-                self.assertIsNone(lng)
-                self.assertIn("network unreachable", detail)
-                self.assertIsNone(geocoded_city)
-            finally:
-                rp.GEOCODE_CACHE_PATH = orig
-                rp._geocode_cache = None
-                rp._last_geocode_ts = 0.0
-                rp._mapbox_token_value = None
+        fake_cache = InMemoryGeocodeCache()
+        try:
+            rp._last_geocode_ts = 0.0
+            rp._mapbox_token_value = ""  # disable Mapbox so we exercise only the failing path
+            # No GOOGLE_MAPS_API_KEY -> Google short-circuits; Nominatim raises.
+            with mock.patch.dict(os.environ, {"GOOGLE_MAPS_API_KEY": ""}), \
+                mock.patch.object(rp, "_get_db_cache", return_value=fake_cache), \
+                mock.patch.object(rp.urllib.request, "urlopen", boom):
+                result = rp.default_geocode("Some Spot", "Santa Ana")
+            self.assertEqual(len(result), 4)
+            lat, lng, detail, geocoded_city = result
+            self.assertIsNone(lat)
+            self.assertIsNone(lng)
+            self.assertIn("network unreachable", detail)
+            self.assertIsNone(geocoded_city)
+        finally:
+            rp._last_geocode_ts = 0.0
+            rp._mapbox_token_value = None
 
 
 class NameOnlyGeocodeTests(unittest.TestCase):
@@ -143,36 +177,36 @@ class NameOnlyGeocodeTests(unittest.TestCase):
                 return _Resp(b"[]")  # Nominatim: no results, force Mapbox fallback
             return _Resp(mapbox_payload)
 
-        with tempfile.TemporaryDirectory() as tmp:
-            orig = rp.GEOCODE_CACHE_PATH
-            try:
-                rp.GEOCODE_CACHE_PATH = Path(tmp) / "cache.json"
-                rp._geocode_cache = None
-                rp._last_geocode_ts = 0.0
-                rp._last_mapbox_ts = 0.0
-                rp._mapbox_token_value = "fake-token"  # enable Mapbox
-                with mock.patch.object(rp.urllib.request, "urlopen", fake_urlopen):
-                    result = rp.default_geocode("Porto's Bakery", None, allow_name_only=True)
-                lat, lng, detail, geocoded_city = result
-                self.assertAlmostEqual(lat, 33.829, places=2)
-                self.assertAlmostEqual(lng, -117.998, places=2)
-                self.assertIn("Porto's Bakery", detail)
-                self.assertEqual(geocoded_city, "Buena Park")
-                # Cache key uses "" for the city so it doesn't collide with city-hint runs.
-                cached = json.loads(rp.GEOCODE_CACHE_PATH.read_text())
-                self.assertIn("porto's bakery|", cached)
-            finally:
-                rp.GEOCODE_CACHE_PATH = orig
-                rp._geocode_cache = None
-                rp._last_geocode_ts = 0.0
-                rp._last_mapbox_ts = 0.0
-                rp._mapbox_token_value = None
+        fake_cache = InMemoryGeocodeCache()
+        orig_mapbox = rp._mapbox_token_value
+        try:
+            rp._last_geocode_ts = 0.0
+            rp._last_mapbox_ts = 0.0
+            rp._mapbox_token_value = "fake-token"  # enable Mapbox
+            # No GOOGLE_MAPS_API_KEY -> Google short-circuits; Nominatim empty -> Mapbox.
+            with mock.patch.dict(os.environ, {"GOOGLE_MAPS_API_KEY": ""}), \
+                mock.patch.object(rp, "_get_db_cache", return_value=fake_cache), \
+                mock.patch.object(rp.urllib.request, "urlopen", fake_urlopen):
+                result = rp.default_geocode("Porto's Bakery", None, allow_name_only=True)
+            lat, lng, detail, geocoded_city = result
+            self.assertAlmostEqual(lat, 33.829, places=2)
+            self.assertAlmostEqual(lng, -117.998, places=2)
+            self.assertIn("Porto's Bakery", detail)
+            self.assertEqual(geocoded_city, "Buena Park")
+            # Name-only keys on the name alone (no city), so they don't collide with city-hint runs.
+            name_only_key = rp._geocode_key("Porto's Bakery", rp.normalize_location(None), None)
+            self.assertIn(name_only_key, fake_cache.rows)
+        finally:
+            rp._last_geocode_ts = 0.0
+            rp._last_mapbox_ts = 0.0
+            rp._mapbox_token_value = orig_mapbox
 
 
 class NegativeCacheTests(unittest.TestCase):
-    """A 'no results' outcome must NOT be cached, so it is retried next run."""
+    """A failed geocode is negatively cached with a retry_after window, so the
+    immediate repeat is served from cache instead of re-hitting the network."""
 
-    def test_no_results_is_not_cached(self):
+    def test_failed_geocode_is_negatively_cached(self):
         class _Resp:
             def __enter__(self):
                 return self
@@ -181,7 +215,7 @@ class NegativeCacheTests(unittest.TestCase):
                 return False
 
             def read(self):
-                return b"[]"  # Nominatim: empty -> "no results"
+                return b"[]"  # Nominatim: empty -> no usable result
 
         calls = {"n": 0}
 
@@ -189,24 +223,24 @@ class NegativeCacheTests(unittest.TestCase):
             calls["n"] += 1
             return _Resp()
 
-        with tempfile.TemporaryDirectory() as tmp:
-            orig = rp.GEOCODE_CACHE_PATH
-            try:
-                rp.GEOCODE_CACHE_PATH = Path(tmp) / "cache.json"
-                rp._geocode_cache = None
-                rp._last_geocode_ts = 0.0
-                rp._mapbox_token_value = ""  # disable Mapbox fallback to isolate Nominatim
-                with mock.patch.object(rp.urllib.request, "urlopen", fake_urlopen):
-                    r1 = rp.default_geocode("Nonexistent Spot", "Santa Ana")
-                    r2 = rp.default_geocode("Nonexistent Spot", "Santa Ana")
-                self.assertEqual(r1, (None, None, "no results", None))
-                self.assertEqual(r2, (None, None, "no results", None))
-                self.assertEqual(calls["n"], 2)  # not cached -> queried both times
-            finally:
-                rp.GEOCODE_CACHE_PATH = orig
-                rp._geocode_cache = None
-                rp._last_geocode_ts = 0.0
-                rp._mapbox_token_value = None
+        fake_cache = InMemoryGeocodeCache()
+        try:
+            rp._last_geocode_ts = 0.0
+            rp._mapbox_token_value = ""  # disable Mapbox to isolate the failure path
+            # No GOOGLE_MAPS_API_KEY -> Google short-circuits; Nominatim returns empty.
+            with mock.patch.dict(os.environ, {"GOOGLE_MAPS_API_KEY": ""}), \
+                mock.patch.object(rp, "_get_db_cache", return_value=fake_cache), \
+                mock.patch.object(rp.urllib.request, "urlopen", fake_urlopen):
+                r1 = rp.default_geocode("Nonexistent Spot", "Santa Ana")
+                r2 = rp.default_geocode("Nonexistent Spot", "Santa Ana")
+            # First attempt fails and is negatively cached; the repeat is served
+            # from cache (the "recently failed" sentinel) without another network call.
+            self.assertEqual(r1, (None, None, "google: no api key", None))
+            self.assertEqual(r2, (None, None, "recently failed", None))
+            self.assertEqual(calls["n"], 1)
+        finally:
+            rp._last_geocode_ts = 0.0
+            rp._mapbox_token_value = None
 
 
 class MapboxAcceptGateTests(unittest.TestCase):
