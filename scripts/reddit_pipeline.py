@@ -2194,35 +2194,103 @@ def ingest_batch(
 
 
 def reingest_all(
-    *, limit: int | None = None, dry_run: bool = False
+    *, limit: int | None = None, dry_run: bool = False, confirmed: bool = False
 ) -> int:
-    """Stage every archived thread for re-ingestion, then run ingest_batch.
+    """Back up, purge, and re-ingest every archived thread HTML file.
 
-    Each ``*.html`` file in THREADS_ROOT is moved into UNINGESTED_ROOT so
-    that the normal ingest_batch loop picks it up.  On success the file is
-    moved back to THREADS_ROOT by the usual archiving step; on failure it
-    stays in UNINGESTED_ROOT so you can see exactly what needs a retry.
+    Steps (when not dry-run):
+      1. Discover HTML files: prefer THREADS_ROOT, fall back to UNINGESTED_ROOT.
+      2. Create a DB backup via db_backup.backup().
+      3. Move files from THREADS_ROOT -> UNINGESTED_ROOT (if sourced from THREADS_ROOT).
+      4. TRUNCATE threads, restaurants, and mentions.
+      5. Ingest each file; archive it back to THREADS_ROOT on success.
+         Stops on the first failure and prints the restore command.
 
-    Skips files whose names already exist in UNINGESTED_ROOT (a previous
-    failed re-ingest left them there) to avoid clobbering them.
+    Requires ``confirmed=True`` (``--yes``) to perform any destructive steps.
     """
-    UNINGESTED_ROOT.mkdir(parents=True, exist_ok=True)
-    archived = sorted(THREADS_ROOT.glob("*.html"))
-    if not archived:
-        print(f"No .html files found in {THREADS_ROOT} — nothing to re-ingest.")
+    import db_backup as b  # local import — db_backup is a sibling script, not a package dep
+
+    # Discover files: prefer threads/, fall back to uningested-threads/.
+    html_files = sorted(THREADS_ROOT.glob("*.html"))
+    source = THREADS_ROOT
+    if not html_files:
+        html_files = sorted(UNINGESTED_ROOT.glob("*.html"))
+        source = UNINGESTED_ROOT
+
+    if not html_files:
+        print(f"No .html files found in {THREADS_ROOT} or {UNINGESTED_ROOT}.")
+    else:
+        if source == UNINGESTED_ROOT:
+            print(f"No .html files in {THREADS_ROOT}; using {UNINGESTED_ROOT} instead.")
+        print(f"Found {len(html_files)} thread HTML file(s) in {source}:")
+        for p in html_files:
+            print(f"  {p.name}")
+
+    if dry_run:
+        print("Dry run — no backup, purge, or ingest performed.")
         return 0
 
-    staged = 0
-    for src in archived:
-        dest = UNINGESTED_ROOT / src.name
-        if dest.exists():
-            print(f"Skipping {src.name}: already present in uningested-threads/")
-            continue
-        shutil.move(str(src), str(dest))
-        staged += 1
+    if not confirmed:
+        print("Refusing to modify the database without --yes.", file=sys.stderr)
+        return 2
 
-    print(f"Staged {staged}/{len(archived)} thread(s) for re-ingest.")
-    return ingest_batch(limit=limit, dry_run=dry_run)
+    if not html_files:
+        return 0
+
+    print("\nCreating database backup...")
+    backup_path = b.backup()
+    print(f"Backup saved: {backup_path}")
+
+    # If files are archived in threads/, stage them into uningested-threads/ first.
+    if source == THREADS_ROOT:
+        UNINGESTED_ROOT.mkdir(parents=True, exist_ok=True)
+        staged = 0
+        for src in html_files:
+            dest = UNINGESTED_ROOT / src.name
+            if dest.exists():
+                print(f"Skipping {src.name}: already present in uningested-threads/")
+                continue
+            shutil.move(str(src), str(dest))
+            staged += 1
+        html_files = [UNINGESTED_ROOT / p.name for p in html_files if (UNINGESTED_ROOT / p.name).exists()]
+        print(f"Staged {staged} thread(s) into uningested-threads/.")
+
+    print("\nPurging ingest tables...")
+    conn = b._connect()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("TRUNCATE mentions, restaurants, threads RESTART IDENTITY CASCADE")
+        conn.commit()
+    finally:
+        conn.close()
+    print("Purge complete.")
+
+    print()
+    successes: list[str] = []
+    pbar = tqdm.tqdm(html_files, desc="Re-ingesting", unit="thread")
+    for html_path in pbar:
+        pbar.set_postfix_str(html_path.name)
+        try:
+            ingest(html_path, limit=limit)
+            _archive_ingested_html(html_path)
+        except Exception as exc:
+            pbar.close()
+            print(f"\nERROR ingesting {html_path.name}: {exc}", file=sys.stderr)
+            print(
+                f"\nIngest stopped after {len(successes)} success(es). "
+                f"Restore from backup:\n"
+                f"  python3 scripts/db_backup.py restore {backup_path}",
+                file=sys.stderr,
+            )
+            return 1
+        successes.append(html_path.name)
+        tqdm.tqdm.write(f"  OK: {html_path.name}")
+
+    print(
+        f"\nRe-ingest complete: {len(successes)}/{len(html_files)} thread(s). "
+        f"Backup: {backup_path}"
+    )
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -2278,6 +2346,11 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     reingest_parser.add_argument(
+        "--yes",
+        action="store_true",
+        help="Required to perform backup, purge, and ingest (safety gate)",
+    )
+    reingest_parser.add_argument(
         "--limit",
         type=int,
         default=None,
@@ -2286,7 +2359,7 @@ def main(argv: list[str] | None = None) -> int:
     reingest_parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Stage files and run parse/extract/geocode but skip the DB write",
+        help="List files without backup, purge, or ingest",
     )
 
     args = parser.parse_args(argv)
@@ -2313,7 +2386,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "reingest":
-        return reingest_all(limit=args.limit, dry_run=args.dry_run)
+        return reingest_all(limit=args.limit, dry_run=args.dry_run, confirmed=args.yes)
 
     parser.error(f"Unknown command: {args.command}")
     return 2
