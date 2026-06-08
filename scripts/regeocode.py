@@ -13,7 +13,17 @@ import reddit_pipeline as rp
 
 
 def main() -> int:
-    apply = "--apply" in sys.argv[1:]
+    import argparse
+    parser = argparse.ArgumentParser(
+        description="Re-geocode currently-unmapped restaurants in the DB with the improved geocoder."
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Run geocoding and print results without writing to the DB.",
+    )
+    args = parser.parse_args()
+    apply = not args.dry_run
 
     conn = b._connect()
     cur = conn.cursor()
@@ -60,6 +70,14 @@ def main() -> int:
         closed_ids.clear()
 
     def _regeocode_worker(rid, name, location, subreddit):
+        # NOTE: re-geocode intentionally runs without the `street` hint. Street is
+        # extracted at ingest for geocoding precision but is NOT persisted to the
+        # restaurants table, so it can't be recovered here. Consequences:
+        #   - the cache key is name|location, which differs from ingest's
+        #     name|street|location, so street-bearing restaurants are always a fresh
+        #     lookup (and a few may stay unresolved without the street to disambiguate);
+        #   - only unmapped rows (lat/lng IS NULL) are processed, so this can never
+        #     downgrade an already-resolved restaurant.
         # Tier 1: use the existing extracted location.
         lat, lng, detail, geocoded_city = rp.default_geocode(name, location)
 
@@ -111,7 +129,7 @@ def main() -> int:
     if apply:
         _flush()
     else:
-        print("(dry run -- pass --apply to write)")
+        print("(dry run — pass no flags to write to the DB)")
 
     print(f"newly resolved: {total_committed if apply else pending}")
     print(f"permanently closed removed: {total_closed if apply else len(closed_ids)}")
