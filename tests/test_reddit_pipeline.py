@@ -112,7 +112,7 @@ class RedditPipelineTest(unittest.TestCase):
                     }
                 ]
 
-            def geocode(name, location):
+            def geocode(name, location, street=None, **kwargs):
                 return 33.6411, -117.9187, "stub", None
 
             self.pipeline.build_thread(
@@ -177,7 +177,7 @@ class WriteToDbTest(unittest.TestCase):
             executions.append((sql, params))
             if sql.strip().upper().startswith("SELECT"):
                 cursor_mock.description = [
-                    ("name",), ("slug",), ("location",), ("lat",), ("lng",)
+                    ("name",), ("slug",), ("location",), ("street",), ("lat",), ("lng",)
                 ]
             else:
                 cursor_mock.description = None
@@ -190,6 +190,7 @@ class WriteToDbTest(unittest.TestCase):
                             row["name"],
                             row["slug"],
                             row.get("location"),
+                            row.get("street"),
                             row.get("lat"),
                             row.get("lng"),
                         )
@@ -378,7 +379,7 @@ class WriteToDbTest(unittest.TestCase):
         self.assertIn("ON CONFLICT (slug) DO UPDATE", r1_sql)
         self.assertEqual(
             r1_params,
-            ("Taqueria de Anda", "taqueria-de-anda", "Orange", "Mexican", 33.79, -117.85),
+            ("Taqueria de Anda", "taqueria-de-anda", "Orange", None, "Mexican", 33.79, -117.85),
         )
 
         # Primary mention for restaurant 1 — role=primary, classification NULL (hard-coded in SQL).
@@ -1062,6 +1063,88 @@ class WriteToDbDedupTest(WriteToDbTest):
         sql, params = delete_mentions[0]
         self.assertNotIn("ALL", sql)
         self.assertEqual(params, ("oc-x",))
+
+    def test_write_to_db_skips_permanently_closed_restaurants(self):
+        parsed_thread = {
+            "post": {"id": "x", "subreddit": "oc", "title": "t", "url": "u"},
+            "comment_count": 0,
+            "max_depth": 0,
+            "comments": [],
+        }
+        manifest = {
+            "id": "oc-x",
+            "subreddit": "oc",
+            "post_id": "x",
+            "title": "t",
+            "url": "u",
+            "comment_count": 0,
+            "max_depth": 0,
+        }
+        restaurants = [{
+            "name": "Closed Cafe",
+            "location": "Santa Ana",
+            "cuisine": "Cafe",
+            "lat": None,
+            "lng": None,
+            "geocode_detail": self.pipeline.CLOSED_PERMANENTLY_DETAIL,
+            "primary_comment": {
+                "id": "c1", "author": "a", "body": "b", "score": 1, "permalink": "p1",
+            },
+            "endorsements": [],
+        }]
+
+        factory, _conn, _cursor, executions = self._build_fake_connection([])
+        with mock.patch.dict(os.environ, {"DATABASE_URL": "postgres://stub"}):
+            result = self.pipeline.write_to_db(
+                parsed_thread, restaurants, manifest, connection_factory=factory,
+            )
+
+        self.assertEqual(result["restaurants"], 0)
+        self.assertEqual(result["mentions"], 0)
+        self.assertFalse(any("INSERT INTO restaurants" in sql for sql, _ in executions))
+        self.assertFalse(any("INSERT INTO mentions" in sql for sql, _ in executions))
+
+    def test_write_to_db_persists_street(self):
+        parsed_thread = {
+            "post": {"id": "x", "subreddit": "oc", "title": "t", "url": "u"},
+            "comment_count": 0,
+            "max_depth": 0,
+            "comments": [],
+        }
+        manifest = {
+            "id": "oc-x",
+            "subreddit": "oc",
+            "post_id": "x",
+            "title": "t",
+            "url": "u",
+            "comment_count": 0,
+            "max_depth": 0,
+        }
+        restaurants = [{
+            "name": "Pops",
+            "location": "Santa Ana",
+            "street": "Main St",
+            "cuisine": None,
+            "lat": 33.75,
+            "lng": -117.87,
+            "primary_comment": {
+                "id": "c1", "author": "a", "body": "b", "score": 1, "permalink": "p1",
+            },
+            "endorsements": [],
+        }]
+
+        factory, _conn, _cursor, executions = self._build_fake_connection([101])
+        with mock.patch.dict(os.environ, {"DATABASE_URL": "postgres://stub"}):
+            self.pipeline.write_to_db(
+                parsed_thread, restaurants, manifest, connection_factory=factory,
+            )
+
+        restaurant_upserts = [
+            params for sql, params in executions
+            if "INSERT INTO restaurants" in sql
+        ]
+        self.assertEqual(len(restaurant_upserts), 1)
+        self.assertEqual(restaurant_upserts[0][3], "Main St")
 
 
 if __name__ == "__main__":
