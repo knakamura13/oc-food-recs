@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import copy
 import difflib
 import html as html_mod
@@ -10,13 +11,14 @@ import os
 import re
 import shutil
 import sys
+import threading
 import time
 import tqdm
 import unicodedata
 import urllib.parse
 import urllib.request
 from collections import defaultdict, deque
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable
 
@@ -37,11 +39,8 @@ THREADS_ROOT = DATA_ROOT / "threads"
 UNINGESTED_ROOT = DATA_ROOT / "uningested-threads"
 GEOCODE_CACHE_PATH = DATA_ROOT / "geocode-cache.json"
 GEOCODE_MIN_INTERVAL_S = 1.05  # Nominatim usage policy: max ~1 request/second
-
-# Lazily-loaded persistent geocode cache + last-request timestamp for throttling.
-# Keyed by normalized (name, location) so repeat restaurants across threads are free.
-_geocode_cache: dict[str, list] | None = None
 _last_geocode_ts = 0.0
+_nominatim_lock = threading.Lock()
 
 OLLAMA_URL = os.environ.get("OC_FOOD_RECS_OLLAMA_URL", "http://127.0.0.1:11434/api/chat")
 OLLAMA_MODEL = os.environ.get("OC_FOOD_RECS_OLLAMA_MODEL", "gemma4:latest")
@@ -69,6 +68,7 @@ SYSTEM_PROMPT = """You are a structured data extractor. Given a Reddit comment r
 For each establishment, return:
 - "name": the establishment's PROPER name (required) -- not a description of it. For "Ake Larry, a tiny Italian fusion spot", the name is "Ake Larry", not "Italian fusion spot".
 - "location": city or neighborhood if mentioned, else null
+- "street": street name or cross-streets if mentioned (e.g. "Main St", "Bristol and Sunflower"), else null
 - "cuisine": cuisine type if inferable from the name or text, else null
 
 Include any food or drink establishment (restaurants, cafes, bakeries, ice cream shops, delis, food trucks, etc.).
@@ -80,12 +80,12 @@ Expand common Orange County abbreviations: HB = Huntington Beach, CM = Costa Mes
 If the comment is NOT recommending any food/drink establishment (e.g., a question, a meta comment, or only a closed/defunct place being reminisced about), return an empty array [].
 
 Examples:
-Comment: "Pops in Santa Ana"
-JSON: [{"name": "Pops", "location": "Santa Ana", "cuisine": null}]
+Comment: "Pops in Santa Ana on Main St"
+JSON: [{"name": "Pops", "location": "Santa Ana", "street": "Main St", "cuisine": null}]
 Comment: "Peter's Burgers in Tustin, best patty melt around"
-JSON: [{"name": "Peter's Burgers", "location": "Tustin", "cuisine": "Burgers"}]
-Comment: "Anyone know a good taco truck around here?"
-JSON: []
+JSON: [{"name": "Peter's Burgers", "location": "Tustin", "street": null, "cuisine": "Burgers"}]
+Comment: "Check out Pho 79 near Bristol and Sunflower."
+JSON: [{"name": "Pho 79", "location": null, "street": "Bristol and Sunflower", "cuisine": "Vietnamese"}]
 
 Return ONLY a valid JSON array at the top level (e.g. [ {...} ]), never an object wrapper. No explanation, no markdown fences."""
 
@@ -711,7 +711,12 @@ def normalize_extractor_result(result: Any) -> tuple[list[dict[str, Any]], str |
         cleaned.append(
             {
                 "name": name,
-                "location": normalize_text(str(entity["location"])) if entity.get("location") else None,
+                "location": normalize_text(str(entity["location"]))
+                if entity.get("location")
+                else None,
+                "street": normalize_text(str(entity["street"]))
+                if entity.get("street")
+                else None,
                 "cuisine": cuisine,
             }
         )
@@ -1193,28 +1198,113 @@ def build_thread_dataset(
     }
 
 
-def _geocode_key(name: str, location: str | None) -> str:
-    return f"{(name or '').strip().lower()}|{(location or '').strip().lower()}"
+def _url() -> str:
+    u = os.environ.get("DATABASE_URL")
+    if not u and os.path.exists(".env"):
+        for line in open(".env"):
+            if line.startswith("DATABASE_URL="):
+                u = line.split("=", 1)[1].strip().strip('"').strip("'")
+    return u or ""
 
 
-def _load_geocode_cache() -> dict[str, list]:
-    """Lazily load the on-disk geocode cache (once per process)."""
-    global _geocode_cache
-    if _geocode_cache is None:
+def _connect():
+    if psycopg is None:
+        return None
+    url = _url()
+    if not url:
+        return None
+    for u in (url, url + ("&" if "?" in url else "?") + "sslmode=require"):
         try:
-            _geocode_cache = json.loads(GEOCODE_CACHE_PATH.read_text(encoding="utf-8"))
-        except (FileNotFoundError, json.JSONDecodeError):
-            _geocode_cache = {}
-    return _geocode_cache
+            return psycopg.connect(u, connect_timeout=10)
+        except Exception:
+            continue
+    return None
 
 
-def _save_geocode_cache() -> None:
-    if _geocode_cache is None:
-        return
-    GEOCODE_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    GEOCODE_CACHE_PATH.write_text(
-        json.dumps(_geocode_cache, ensure_ascii=False), encoding="utf-8"
-    )
+class GeocodeCache:
+    def __init__(self):
+        self._conn = None
+
+    @property
+    def conn(self):
+        if self._conn is None or self._conn.closed:
+            self._conn = _connect()
+        return self._conn
+
+    def get(self, query: str) -> tuple[float | None, float | None, str | None, str | None] | None:
+        if not self.conn:
+            return None
+        try:
+            with self.conn.cursor() as cur:
+                cur.execute(
+                    "SELECT lat, lng, detail, geocoded_city, retry_after FROM geocode_cache WHERE query = %s",
+                    (query,),
+                )
+                row = cur.fetchone()
+                if not row:
+                    return None
+                lat, lng, detail, city, retry_after = row
+                if lat is not None:
+                    return lat, lng, detail, city
+                if retry_after and retry_after > datetime.now(timezone.utc):
+                    return None, None, "recently failed", None
+                return None  # Expired negative cache or query needing retry
+        except Exception:
+            return None
+
+    def set(
+        self,
+        query: str,
+        result: tuple[float | None, float | None, str | None],
+        provider: str,
+        geocoded_city: str | None = None,
+    ):
+        if not self.conn:
+            return
+        lat, lng, detail = result
+        retry_after = None
+        if lat is None:
+            retry_after = datetime.now(timezone.utc) + timedelta(days=7)
+
+        try:
+            with self.conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO geocode_cache (query, provider, lat, lng, detail, geocoded_city, retry_after)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (query) DO UPDATE SET
+                        provider = EXCLUDED.provider,
+                        lat = EXCLUDED.lat,
+                        lng = EXCLUDED.lng,
+                        detail = EXCLUDED.detail,
+                        geocoded_city = EXCLUDED.geocoded_city,
+                        retry_after = EXCLUDED.retry_after,
+                        created_at = now()
+                    """,
+                    (query, provider, lat, lng, detail, geocoded_city, retry_after),
+                )
+            self.conn.commit()
+        except Exception:
+            pass
+
+
+_db_cache: GeocodeCache | None = None
+
+
+def _get_db_cache() -> GeocodeCache:
+    global _db_cache
+    if _db_cache is None:
+        _db_cache = GeocodeCache()
+    return _db_cache
+
+
+def _geocode_key(name: str, location: str | None, street: str | None = None) -> str:
+    parts = [name or ""]
+    if street:
+        parts.append(street)
+    if location:
+        parts.append(location)
+    return "|".join(p.strip().lower() for p in parts)
 
 
 # When a comment omits the city (common in city-specific subreddits like r/Anaheim,
@@ -1272,6 +1362,10 @@ _OC_CITIES: list[str] = sorted(
         "Olive Heights", "Orange Park Acres", "Rancho Mission Viejo", "Rossmoor",
         "Santa Ana Heights", "Santiago Canyon", "Silverado Canyon",
         "Sunset Beach", "Trabuco Canyon", "Wagon Wheel",
+        # major landmarks, malls, and hubs (geocoding hints)
+        "South Coast Plaza", "Fashion Island", "Irvine Spectrum", "The Lab",
+        "The Camp", "Pacific City", "Old Towne Orange", "Downtown Disney",
+        "Anaheim Packing District", "Lido Marina Village", "SoCo",
         # nearby LA-county cities that appear in OC food discussions
         "Artesia", "Cerritos", "Long Beach", "Norwalk",
     ],
@@ -1290,6 +1384,12 @@ _LOCATION_ALIASES: dict[str, str] = {
     "aliso": "Aliso Viejo", "sanjuan": "San Juan Capistrano",
     "fhr": "Foothill Ranch", "foothillranch": "Foothill Ranch",
     "anaheimhills": "Anaheim Hills",
+    # landmarks / hubs
+    "spectrum": "Irvine Spectrum", "ocspectrum": "Irvine Spectrum",
+    "scp": "South Coast Plaza", "southcoast": "South Coast Plaza",
+    "packingdistrict": "Anaheim Packing District",
+    "thelab": "The Lab", "thecamp": "The Camp",
+    "pacificcity": "Pacific City", "lidomarina": "Lido Marina Village",
     # university campuses → host city
     "uci": "Irvine", "ucitowncenter": "Irvine", "csuf": "Fullerton",
     # landmarks / neighborhoods → city
@@ -1366,6 +1466,60 @@ def _apply_geocode_result(
         restaurant["location"] = resolved_location
 
 
+# --- Google Places API (New) ------------------------------------------------
+GOOGLE_PLACES_URL = "https://places.googleapis.com/v1/places:searchText"
+
+
+def _google_geocode(
+    name: str, location: str | None, street: str | None
+) -> tuple[float | None, float | None, str]:
+    api_key = os.environ.get("GOOGLE_MAPS_API_KEY")
+    if not api_key:
+        return None, None, "google: no api key"
+
+    query_parts = [name]
+    if street:
+        query_parts.append(street)
+    if location:
+        query_parts.append(location)
+    query = ", ".join(query_parts) + ", Orange County, CA"
+
+    # OC Bounds for locationRestriction (low and high points)
+    # viewbox: "-118.2,33.3,-117.3,34.0"
+    payload = {
+        "textQuery": query,
+        "locationRestriction": {
+            "rectangle": {
+                "low": {"latitude": 33.3, "longitude": -118.2},
+                "high": {"latitude": 34.0, "longitude": -117.3},
+            }
+        },
+    }
+    headers = {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": api_key,
+        "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.location",
+    }
+
+    try:
+        req = urllib.request.Request(
+            GOOGLE_PLACES_URL, data=json.dumps(payload).encode("utf-8"), headers=headers
+        )
+        with urllib.request.urlopen(req, timeout=10) as response:
+            data = json.loads(response.read())
+            places = data.get("places", [])
+            if not places:
+                return None, None, "google: no results"
+
+            place = places[0]
+            lat = place["location"]["latitude"]
+            lng = place["location"]["longitude"]
+            display_name = f"{place['displayName']['text']}, {place['formattedAddress']}"
+            return lat, lng, display_name
+    except Exception as exc:
+        return None, None, f"google error: {exc}"
+
+
 # --- Mapbox Search Box fallback ---------------------------------------------
 # OSM/Nominatim misses many small OC restaurants (they aren't mapped as POIs).
 # When it returns nothing, fall back to Mapbox's POI-rich Search Box API -- but
@@ -1376,6 +1530,7 @@ def _apply_geocode_result(
 MAPBOX_SEARCHBOX_URL = "https://api.mapbox.com/search/searchbox/v1/forward"
 MAPBOX_MIN_INTERVAL_S = 0.2
 _last_mapbox_ts = 0.0
+_mapbox_lock = threading.Lock()
 _mapbox_token_value: str | None = None
 _NAME_STOPWORDS = {"the", "a", "and", "restaurant", "cafe", "kitchen", "grill",
                    "grille", "bar", "taqueria", "co", "llc"}
@@ -1442,10 +1597,12 @@ def _mapbox_geocode(name: str, location: str) -> tuple[float | None, float | Non
         "limit": "5",
     })
     global _last_mapbox_ts
-    wait = MAPBOX_MIN_INTERVAL_S - (time.monotonic() - _last_mapbox_ts)
-    if wait > 0:
-        time.sleep(wait)
-    _last_mapbox_ts = time.monotonic()
+    with _mapbox_lock:
+        wait = MAPBOX_MIN_INTERVAL_S - (time.monotonic() - _last_mapbox_ts)
+        if wait > 0:
+            time.sleep(wait)
+        _last_mapbox_ts = time.monotonic()
+
     try:
         with urllib.request.urlopen(f"{MAPBOX_SEARCHBOX_URL}?{params}", timeout=10) as response:
             data = json.loads(response.read())
@@ -1475,97 +1632,89 @@ def _mapbox_geocode(name: str, location: str) -> tuple[float | None, float | Non
 def default_geocode(
     name: str,
     location: str | None,
+    street: str | None = None,
     *,
     allow_name_only: bool = False,
 ) -> tuple[float | None, float | None, str, str | None]:
-    """Geocode a restaurant by name + location hint.
+    """Geocode a restaurant by name + location hint + optional street.
 
     Returns (lat, lng, detail, geocoded_city) where geocoded_city is the canonical
     OC city/community extracted from the geocoder's address string, or None when
     geocoding fails or the result address doesn't contain a recognized OC place.
 
-    By default a missing/unrecognized location returns immediately with "missing
-    location". Pass allow_name_only=True to instead issue a name-only OC-bounded
-    query — useful only as a last-resort retry tier: _mapbox_accept's
-    score>=0.85 floor (no city to confirm against) limits fuzzy false positives
-    to very-strong name matches, but truly generic names ("Taco Shop") can still
-    drift. The cache key differs between modes (empty city vs real city), so the
-    two paths don't pollute each other.
+    Tiered provider logic:
+    1. Google Places API (New) - High precision, POI-rich.
+    2. Nominatim (OpenStreetMap) - Good coverage, free.
+    3. Mapbox Search Box - Fallback for small spots.
     """
-    location = normalize_location(location)
-    if not location and not allow_name_only:
+    normalized_loc = normalize_location(location)
+    if not normalized_loc and not allow_name_only:
         return None, None, "missing location", None
 
-    # Cache hit: skip both the network round-trip and the rate-limit sleep. Many
-    # restaurants recur across threads, so this is the dominant throughput win.
-    cache = _load_geocode_cache()
-    key = _geocode_key(name, location or "")
-    if key in cache:
-        lat, lng, detail = cache[key]
-        geocoded_city = _city_from_address_string(detail) if lat is not None else None
-        return lat, lng, detail, geocoded_city
+    cache = _get_db_cache()
+    query_key = _geocode_key(name, normalized_loc, street)
+    cached = cache.get(query_key)
+    if cached:
+        lat, lng, detail, city = cached
+        return lat, lng, detail, city
 
-    query = (
-        f"{name}, {location}, Orange County, CA" if location
-        else f"{name}, Orange County, CA"
-    )
-    params = urllib.parse.urlencode(
-        {
-            "q": query,
-            "format": "json",
-            "limit": "1",
-            "countrycodes": "us",
-            **OC_BOUNDS,
-        }
-    )
-    request = urllib.request.Request(f"{NOMINATIM_URL}?{params}", headers=HEADERS)
+    # Tier 1: Google
+    lat, lng, detail = _google_geocode(name, normalized_loc, street)
+    provider = "google"
 
-    # Throttle real network calls to honor Nominatim's ~1 req/s policy. Spacing is
-    # measured start-to-start, so the request's own latency counts toward the gap.
-    global _last_geocode_ts
-    wait = GEOCODE_MIN_INTERVAL_S - (time.monotonic() - _last_geocode_ts)
-    if wait > 0:
-        time.sleep(wait)
-    _last_geocode_ts = time.monotonic()
+    # Tier 2: Nominatim
+    if lat is None:
+        query = (
+            f"{name}, {street}, {normalized_loc}, Orange County, CA"
+            if street and normalized_loc
+            else f"{name}, {street or normalized_loc}, Orange County, CA"
+        )
+        params = urllib.parse.urlencode(
+            {
+                "q": query,
+                "format": "json",
+                "limit": "1",
+                "countrycodes": "us",
+                **OC_BOUNDS,
+            }
+        )
+        request = urllib.request.Request(f"{NOMINATIM_URL}?{params}", headers=HEADERS)
 
-    try:
-        with urllib.request.urlopen(request, timeout=10) as response:
-            results = json.loads(response.read())
-    except Exception as exc:
-        # Don't cache transient network failures — they should be retried next run.
-        return None, None, str(exc), None
+        # Rate limit Nominatim (shared across threads via global _last_geocode_ts)
+        global _last_geocode_ts
+        with _nominatim_lock:
+            wait = GEOCODE_MIN_INTERVAL_S - (time.monotonic() - _last_geocode_ts)
+            if wait > 0:
+                time.sleep(wait)
+            _last_geocode_ts = time.monotonic()
 
-    if not results:
-        result = (None, None, "no results")
-    else:
-        hit = results[0]
-        lat = float(hit["lat"])
-        lng = float(hit["lon"])
-        display_name = hit.get("display_name", "")
-        if not (33.3 <= lat <= 34.0 and -118.2 <= lng <= -117.3):
-            result = (None, None, f"outside OC bounds: {lat},{lng} ({display_name})")
-        else:
-            result = (lat, lng, display_name)
+            try:
+                with urllib.request.urlopen(request, timeout=10) as response:
+                    results = json.loads(response.read())
+                    if results:
+                        hit = results[0]
+                        n_lat = float(hit["lat"])
+                        n_lng = float(hit["lon"])
+                        dname = hit.get("display_name", "")
+                        if 33.3 <= n_lat <= 34.0 and -118.2 <= n_lng <= -117.3:
+                            lat, lng, detail = n_lat, n_lng, dname
+                            provider = "nominatim"
+            except Exception as exc:
+                detail = f"nominatim error: {exc}"
 
-    # Fallback: when Nominatim has no in-OC hit, try Mapbox's POI-rich Search Box
-    # (accepting only a strongly name+city-matched result -- see _mapbox_accept).
-    # An empty city forces _mapbox_accept's score>=0.85 floor, which is exactly
-    # the gate we want for the name-only retry path.
-    if result[0] is None:
-        mb = _mapbox_geocode(name, location or "")
-        if mb[0] is not None:
-            result = mb
+    # Tier 3: Mapbox
+    if lat is None:
+        mb_lat, mb_lng, mb_detail = _mapbox_geocode(name, normalized_loc or "")
+        if mb_lat is not None:
+            lat, lng, detail = mb_lat, mb_lng, mb_detail
+            provider = "mapbox"
 
-    # Cache only positive resolutions (from either provider). Negatives are left
-    # uncached so a later run retries them instead of being pinned to failure forever.
-    # Cache stores the 3-element (lat, lng, detail) tuple — geocoded_city is derived
-    # from detail on every read so adding cities to _OC_CITIES retroactively improves
-    # cached results without needing a cache migration.
-    if result[0] is not None:
-        cache[key] = list(result)
-        _save_geocode_cache()
-    lat, lng, detail = result
+    result = (lat, lng, detail)
     geocoded_city = _city_from_address_string(detail) if lat is not None else None
+
+    # Negative caching is handled in cache.set()
+    cache.set(query_key, result, provider, geocoded_city)
+
     return lat, lng, detail, geocoded_city
 
 
@@ -1618,21 +1767,34 @@ def build_thread(
     geocoded_count = 0
     unresolved: list[dict[str, Any]] = []
     restaurants = copy.deepcopy(thread_dataset["restaurants"])
-    for restaurant in restaurants:
-        raw_location = restaurant.get("location") or _subreddit_city(manifest["subreddit"])
-        lat, lng, detail, geocoded_city = geocode_fn(restaurant["name"], raw_location)
-        _apply_geocode_result(restaurant, lat, lng, geocoded_city, raw_location)
-        if lat is not None and lng is not None:
-            geocoded_count += 1
-        else:
-            unresolved.append(
-                {
-                    "name": restaurant["name"],
-                    "location": restaurant.get("location"),
-                    "cuisine": restaurant.get("cuisine"),
-                    "reason": detail,
-                }
-            )
+
+    def _geocode_worker(r):
+        raw_loc = r.get("location") or _subreddit_city(manifest["subreddit"])
+        street = r.get("street")
+        return geocode_fn(r["name"], raw_loc, street)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        futures = {executor.submit(_geocode_worker, r): r for r in restaurants}
+        for future in concurrent.futures.as_completed(futures):
+            r = futures[future]
+            try:
+                lat, lng, detail, geocoded_city = future.result()
+                raw_loc = r.get("location") or _subreddit_city(manifest["subreddit"])
+                _apply_geocode_result(r, lat, lng, geocoded_city, raw_loc)
+                if lat is not None and lng is not None:
+                    geocoded_count += 1
+                else:
+                    unresolved.append(
+                        {
+                            "name": r["name"],
+                            "location": r.get("location"),
+                            "street": r.get("street"),
+                            "cuisine": r.get("cuisine"),
+                            "reason": detail,
+                        }
+                    )
+            except Exception as exc:
+                print(f"Error geocoding {r['name']}: {exc}", file=sys.stderr)
 
     geocoded_dataset = {
         "restaurants": restaurants,
@@ -1857,7 +2019,7 @@ def write_to_db(
 
 def _emit_progress(event: dict[str, Any]) -> None:
     """Emit a JSON-lines progress event to stdout (consumed by the SSE endpoint)."""
-    print(json.dumps(event), flush=True)
+    tqdm.tqdm.write(json.dumps(event), file=sys.stdout)
 
 
 def ingest(
@@ -1920,7 +2082,7 @@ def ingest(
         _emit_progress(
             {
                 "stage": "extract",
-                "progress": index / total_roots,
+                "progress": round(index / total_roots, 2),
                 "message": f"extracted entities from comment {index}/{total_roots}",
                 "comment_id": root["id"],
                 "entity_count": len(entities),
@@ -1946,7 +2108,7 @@ def ingest(
         _emit_progress(
             {
                 "stage": "geocode",
-                "progress": index / total_restaurants,
+                "progress": round(index / total_restaurants, 2),
                 "message": f"geocoded {restaurant['name']} ({index}/{total_restaurants})",
                 "name": restaurant["name"],
                 "resolved": lat is not None and lng is not None,
