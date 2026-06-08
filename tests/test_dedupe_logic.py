@@ -29,6 +29,11 @@ class TestDedupeLogic(unittest.TestCase):
         r2 = {"name": "Mo Ran Gak Restaurant", "location": "Garden Grove"}
         self.assertTrue(rp.is_match(r1, r2))
 
+    def test_is_match_fuzzy_reordered_name(self):
+        r1 = {"name": "Los Grandes", "location": "Santa Ana"}
+        r2 = {"name": "Taqueria Los Grandes", "location": "Santa Ana"}
+        self.assertTrue(rp.is_match(r1, r2))
+
     def test_is_match_substring_word_boundary_edge_cases(self):
         # Good boundaries
         self.assertTrue(rp.is_match(

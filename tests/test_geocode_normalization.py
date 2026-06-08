@@ -1,4 +1,5 @@
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -169,6 +170,115 @@ class NameOnlyGeocodeTests(unittest.TestCase):
                 rp._mapbox_token_value = None
 
 
+class GoogleApiKeyEnvTests(unittest.TestCase):
+    def test_google_geocode_reads_api_key_from_dotenv(self):
+        class _Resp:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def read(self):
+                return json.dumps({
+                    "places": [{
+                        "displayName": {"text": "Pops Cafe"},
+                        "formattedAddress": "123 Main St, Santa Ana, CA",
+                        "location": {"latitude": 33.745, "longitude": -117.867},
+                    }]
+                }).encode()
+
+        seen_headers = []
+
+        def fake_urlopen(request, timeout=10):
+            seen_headers.append(dict(request.header_items()))
+            return _Resp()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            old_cwd = os.getcwd()
+            try:
+                Path(tmp, ".env").write_text("GOOGLE_MAPS_API_KEY=fake-google-key\n", encoding="utf-8")
+                os.chdir(tmp)
+                with mock.patch.dict(os.environ, {"GOOGLE_MAPS_API_KEY": ""}, clear=False), \
+                    mock.patch.object(rp.urllib.request, "urlopen", fake_urlopen):
+                    result = rp._google_geocode("Pops Cafe", "Santa Ana", None)
+            finally:
+                os.chdir(old_cwd)
+
+        self.assertEqual(result, (33.745, -117.867, "Pops Cafe, 123 Main St, Santa Ana, CA"))
+        self.assertEqual(seen_headers[0]["X-goog-api-key"], "fake-google-key")
+
+    def test_google_geocode_reports_permanently_closed(self):
+        class _Resp:
+            def __init__(self, payload=None):
+                self.payload = payload or {
+                    "places": [{
+                        "displayName": {"text": "Closed Cafe"},
+                        "formattedAddress": "123 Main St, Santa Ana, CA",
+                        "businessStatus": "CLOSED_PERMANENTLY",
+                    }]
+                }
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def read(self):
+                return json.dumps(self.payload).encode()
+
+        def fake_urlopen(request, timeout=10):
+            self.assertIn("places.businessStatus", dict(request.header_items())["X-goog-fieldmask"])
+            return _Resp()
+
+        with mock.patch.dict(os.environ, {"GOOGLE_MAPS_API_KEY": "fake-google-key"}), \
+            mock.patch.object(rp.urllib.request, "urlopen", fake_urlopen):
+            result = rp._google_geocode("Closed Cafe", "Santa Ana", None)
+
+        self.assertEqual(result, (None, None, rp.CLOSED_PERMANENTLY_DETAIL))
+
+    def test_google_geocode_fallback_finds_closed_place_when_bounded_search_misses(self):
+        class _Resp:
+            def __init__(self, payload):
+                self.payload = payload
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def read(self):
+                return json.dumps(self.payload).encode()
+
+        payloads = [
+            {"places": []},
+            {
+                "places": [{
+                    "displayName": {"text": "Sushi Bomb"},
+                    "formattedAddress": "100 S Harbor Blvd D, Fullerton, CA 92832, USA",
+                    "businessStatus": "CLOSED_PERMANENTLY",
+                    "location": {"latitude": 33.8699905, "longitude": -117.9240157},
+                }]
+            },
+        ]
+        requests = []
+
+        def fake_urlopen(request, timeout=10):
+            requests.append(json.loads(request.data.decode("utf-8")))
+            return _Resp(payloads.pop(0))
+
+        with mock.patch.dict(os.environ, {"GOOGLE_MAPS_API_KEY": "fake-google-key"}), \
+            mock.patch.object(rp.urllib.request, "urlopen", fake_urlopen):
+            result = rp._google_geocode("Sushi Bomb", "Fullerton", None)
+
+        self.assertEqual(result, (None, None, rp.CLOSED_PERMANENTLY_DETAIL))
+        self.assertIn("locationRestriction", requests[0])
+        self.assertNotIn("locationRestriction", requests[1])
+        self.assertEqual(requests[1]["textQuery"], "Sushi Bomb, Fullerton, CA")
+
+
 class NegativeCacheTests(unittest.TestCase):
     """A 'no results' outcome must NOT be cached, so it is retried next run."""
 
@@ -216,6 +326,14 @@ class MapboxAcceptGateTests(unittest.TestCase):
         self.assertGreaterEqual(rp._name_score("El Indio", "El Indio Botanas y Cerveza"), 0.9)
         self.assertLess(rp._name_score("Sabroso Mexican Kitchen",
                                        "US Home Kitchen & Bathroom Remodeling"), 0.5)
+
+    def test_name_score_handles_reordered_tokens(self):
+        self.assertGreaterEqual(
+            rp._name_score("Los Grandes Taqueria", "Taqueria Los Grandes"), 0.85,
+        )
+
+    def test_name_score_handles_minor_typos(self):
+        self.assertGreaterEqual(rp._name_score("Porto's Bakery", "Portos Bakery & Cafe"), 0.85)
 
     def test_accepts_correct_matches(self):
         self.assertTrue(rp._mapbox_accept("Burritos La Palma", "santaana",

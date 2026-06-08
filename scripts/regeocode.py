@@ -38,20 +38,26 @@ def main() -> int:
 
     BATCH_SIZE = 25
     batch: list[tuple] = []
-    total_committed = pending = 0
+    closed_ids: list[int] = []
+    total_committed = pending = total_closed = 0
 
     def _flush() -> None:
-        nonlocal total_committed
-        if not batch:
+        nonlocal total_committed, total_closed
+        if not batch and not closed_ids:
             return
-        cur.executemany(
-            "UPDATE restaurants SET lat=%s, lng=%s, location=COALESCE(%s, location), updated_at=now() WHERE id=%s",
-            batch,
-        )
+        if batch:
+            cur.executemany(
+                "UPDATE restaurants SET lat=%s, lng=%s, location=COALESCE(%s, location), updated_at=now() WHERE id=%s",
+                batch,
+            )
+            total_committed += len(batch)
+        if closed_ids:
+            cur.execute("DELETE FROM restaurants WHERE id = ANY(%s)", (closed_ids,))
+            total_closed += len(closed_ids)
         conn.commit()
-        total_committed += len(batch)
-        print(f"  ... committed {total_committed} updates so far")
+        print(f"  ... committed {total_committed} updates, removed {total_closed} closed so far")
         batch.clear()
+        closed_ids.clear()
 
     def _regeocode_worker(rid, name, location, subreddit):
         # Tier 1: use the existing extracted location.
@@ -68,7 +74,7 @@ def main() -> int:
                 lat, lng, detail, geocoded_city = rp.default_geocode(
                     name, None, allow_name_only=True
                 )
-        return rid, lat, lng, geocoded_city, location
+        return rid, lat, lng, detail, geocoded_city, location
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
         futures = {
@@ -83,7 +89,13 @@ def main() -> int:
         )
         for future in pbar:
             try:
-                rid, lat, lng, geocoded_city, location = future.result()
+                rid, lat, lng, detail, geocoded_city, location = future.result()
+                if rp._is_closed_permanently_detail(detail):
+                    closed_ids.append(rid)
+                    if apply:
+                        if len(closed_ids) >= BATCH_SIZE:
+                            _flush()
+                    continue
                 if lat is not None:
                     canonical = geocoded_city or rp.normalize_location(location)
                     pending += 1
@@ -102,6 +114,7 @@ def main() -> int:
         print("(dry run -- pass --apply to write)")
 
     print(f"newly resolved: {total_committed if apply else pending}")
+    print(f"permanently closed removed: {total_closed if apply else len(closed_ids)}")
     conn.close()
     return 0
 
