@@ -42,7 +42,6 @@ ROOT = Path(__file__).resolve().parents[1]
 DATA_ROOT = ROOT / "data"
 THREADS_ROOT = DATA_ROOT / "threads"
 UNINGESTED_ROOT = DATA_ROOT / "uningested-threads"
-GEOCODE_CACHE_PATH = DATA_ROOT / "geocode-cache.json"
 GEOCODE_MIN_INTERVAL_S = 1.05  # Nominatim usage policy: max ~1 request/second
 _last_geocode_ts = 0.0
 _nominatim_lock = threading.Lock()
@@ -1093,6 +1092,7 @@ def build_thread_dataset(
                 {
                     "name": entity["name"],
                     "location": entity.get("location"),
+                    "street": entity.get("street"),
                     "cuisine": entity.get("cuisine"),
                     "chain_suspect": entity.get("chain_suspect", False),
                     "score": root["score"],
@@ -1195,12 +1195,14 @@ def build_thread_dataset(
             all_endorsements.sort(key=lambda endorsement: endorsement["score"], reverse=True)
             best_name = max((entry["name"] for entry in subgroup), key=len)
             best_location = next((entry["location"] for entry in subgroup if entry.get("location")), None)
+            best_street = next((entry["street"] for entry in subgroup if entry.get("street")), None)
             best_cuisine = next((entry["cuisine"] for entry in subgroup if entry.get("cuisine")), None)
 
             restaurants.append(
                 {
                     "name": best_name,
                     "location": best_location,
+                    "street": best_street,
                     "cuisine": best_cuisine,
                     "chain_suspect": any(entry.get("chain_suspect") for entry in subgroup),
                     "aggregate_score": sum(entry["score"] for entry in subgroup),
