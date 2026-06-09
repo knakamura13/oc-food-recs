@@ -1,0 +1,31 @@
+{
+	"_note": "Curated registry of brands/groups to keep off the public OC Food Recs site. Loaded by scripts/seed_exclusions.py (idempotent upsert on normalize_name(brand_name)). reason is 'chain' (national/international multi-location) or 'corporate_group' (a parent company that owns single-location boutique brands). Add a brand row + group_name to ban a new brand under an existing parent. Names are fuzzy-matched (normalize_name + 0.85 score) so 'Din Tai Fung' also catches 'DinTaiFung' and 'Din Tai Fung Costa Mesa'. Avoid seeding very short/ambiguous names (e.g. 'Pops') that could collide with independents.",
+	"brands": [
+		{ "brand_name": "Vox Kitchen", "reason": "corporate_group", "group_name": "Kei Concepts" },
+		{ "brand_name": "Nep Cafe", "reason": "corporate_group", "group_name": "Kei Concepts" },
+		{ "brand_name": "Sup Noodle Bar", "reason": "corporate_group", "group_name": "Kei Concepts" },
+		{ "brand_name": "Crawfish and Noodles", "reason": "corporate_group", "group_name": "Kei Concepts" },
+
+		{ "brand_name": "McDonald's", "reason": "chain" },
+		{ "brand_name": "Starbucks", "reason": "chain" },
+		{ "brand_name": "Chipotle", "reason": "chain" },
+		{ "brand_name": "The Cheesecake Factory", "reason": "chain" },
+		{ "brand_name": "Din Tai Fung", "reason": "chain" },
+		{ "brand_name": "In-N-Out", "reason": "chain" },
+		{ "brand_name": "Chick-fil-A", "reason": "chain" },
+		{ "brand_name": "Panera Bread", "reason": "chain" },
+		{ "brand_name": "Olive Garden", "reason": "chain" },
+		{ "brand_name": "Buffalo Wild Wings", "reason": "chain" },
+		{ "brand_name": "Broken Yolk Cafe", "reason": "chain" },
+		{ "brand_name": "Yard House", "reason": "chain" },
+		{ "brand_name": "BJ's Restaurant and Brewhouse", "reason": "chain" },
+		{ "brand_name": "The Habit Burger Grill", "reason": "chain" },
+		{ "brand_name": "Raising Cane's", "reason": "chain" },
+		{ "brand_name": "Panda Express", "reason": "chain" },
+		{ "brand_name": "Taco Bell", "reason": "chain" },
+		{ "brand_name": "Wingstop", "reason": "chain" },
+		{ "brand_name": "Shake Shack", "reason": "chain" },
+		{ "brand_name": "Cheesecake Factory", "reason": "chain" },
+		{ "brand_name": "Lazy Dog Restaurant and Bar", "reason": "chain" }
+	]
+}
