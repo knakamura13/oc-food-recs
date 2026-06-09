@@ -4,7 +4,6 @@
 	let { children } = $props();
 
 	const tabs = [
-		{ href: '/admin/ingest', label: 'Ingest' },
 		{ href: '/admin/geocode', label: 'Geocode Health' },
 		{ href: '/admin/exclusions', label: 'Exclusions' }
 	];
