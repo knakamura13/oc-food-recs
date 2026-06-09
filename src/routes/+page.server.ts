@@ -95,6 +95,10 @@ export const load: PageServerLoad = async (): Promise<{ dataset: RestaurantData 
 				) AS mentions
 			FROM restaurants r
 			INNER JOIN ranked_mentions rm ON rm.restaurant_id = r.id
+			-- Hide registry-excluded restaurants (chains / corporate groups). Only the
+			-- authoritative 'excluded' status is hidden; 'pending_review' stays public
+			-- (a fuzzy flag for the admin queue, not a confirmed exclusion).
+			WHERE r.status <> 'excluded'
 			GROUP BY r.id, r.name, r.slug, r.location, r.cuisine, r.lat, r.lng
 		)
 		SELECT
