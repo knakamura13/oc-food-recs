@@ -71,8 +71,8 @@ def main() -> int:
 
     def _regeocode_worker(rid, name, location, subreddit):
         # NOTE: re-geocode intentionally runs without the `street` hint. Street is
-        # extracted at ingest for geocoding precision but is NOT persisted to the
-        # restaurants table, so it can't be recovered here. Consequences:
+        # persisted to the restaurants table at ingest, but this query deliberately
+        # does not SELECT it, so it isn't available to the worker. Consequences:
         #   - the cache key is name|location, which differs from ingest's
         #     name|street|location, so street-bearing restaurants are always a fresh
         #     lookup (and a few may stay unresolved without the street to disambiguate);
