@@ -44,6 +44,17 @@ export const restaurants = pgTable('restaurants', {
 	cuisine: text('cuisine'),
 	lat: real('lat'),
 	lng: real('lng'),
+	// Publish gate at the restaurant level (threads have their own `included_in_publish`).
+	//   'active'         — shown on the public site (default).
+	//   'excluded'       — hidden from the public site (chain / corporate group). Only the
+	//                      authoritative registry sweep/ingest sets this automatically.
+	//   'pending_review' — a fuzzy signal (LLM/density/location-count) flagged it; still
+	//                      PUBLIC (read paths only hide 'excluded'), but queued in /admin.
+	status: text('status').default('active').notNull(),
+	exclusionReason: text('exclusion_reason'), // 'chain' | 'corporate_group' | 'llm_suspected_chain' | 'many_locations' | 'multi_city_density'
+	// Non-null once a human has confirmed/restored this row in the admin UI. Auto-logic
+	// (re-ingest ON CONFLICT, apply_exclusions sweep) NEVER touches a row where this is set.
+	reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
 	createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 	updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });
@@ -115,6 +126,23 @@ export const geocodeCache = pgTable(
 	})
 );
 
+/**
+ * Curated registry of brands/groups to keep off the public site. The Python ingest and
+ * the apply_exclusions sweep fuzzy-match an extracted restaurant name against `normalizedName`
+ * (= normalize_name(brandName)) and, on a hit, set restaurants.status='excluded'.
+ *
+ * `groupName` lets one corporate parent (e.g. 'Kei Concepts') cover several single-location
+ * brands (Vox Kitchen, Nep Cafe, …) without a second table — it's a plain label.
+ */
+export const excludedBrands = pgTable('excluded_brands', {
+	id: bigserial('id', { mode: 'number' }).primaryKey(),
+	brandName: text('brand_name').notNull(),
+	reason: text('reason').notNull(), // 'chain' | 'corporate_group'
+	groupName: text('group_name'), // e.g. 'Kei Concepts'; null for standalone chains
+	normalizedName: text('normalized_name').notNull().unique(), // normalize_name(brandName)
+	createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
 export type Thread = typeof threads.$inferSelect;
 export type NewThread = typeof threads.$inferInsert;
 export type Restaurant = typeof restaurants.$inferSelect;
@@ -123,3 +151,5 @@ export type Mention = typeof mentions.$inferSelect;
 export type NewMention = typeof mentions.$inferInsert;
 export type GeocodeCache = typeof geocodeCache.$inferSelect;
 export type NewGeocodeCache = typeof geocodeCache.$inferInsert;
+export type ExcludedBrand = typeof excludedBrands.$inferSelect;
+export type NewExcludedBrand = typeof excludedBrands.$inferInsert;

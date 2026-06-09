@@ -17,6 +17,7 @@ export const entries: EntryGenerator = async () => {
 		JOIN mentions m ON m.restaurant_id = r.id
 		JOIN threads t ON t.id = m.thread_id
 		WHERE t.included_in_publish = true
+			AND r.status <> 'excluded'
 	`);
 	return (res.rows as unknown as { slug: string }[]).map((r) => ({ slug: r.slug }));
 };
@@ -37,6 +38,7 @@ export const GET: RequestHandler = async ({ params }) => {
 		JOIN restaurants r ON r.id = m.restaurant_id
 		JOIN threads t ON t.id = m.thread_id
 		WHERE t.included_in_publish = true
+			AND r.status <> 'excluded'
 			AND r.slug = ${params.slug}
 		ORDER BY CASE WHEN m.role = 'primary' THEN 0 ELSE 1 END, m.score DESC
 	`);
