@@ -276,6 +276,8 @@ class WriteToDbTest(unittest.TestCase):
         # Special case for SELECT from restaurants
         if sql.strip().upper().startswith("SELECT") and "FROM RESTAURANTS" in sql.upper():
             return "restaurants"
+        if sql.strip().upper().startswith("SELECT") and "FROM EXCLUDED_BRANDS" in sql.upper():
+            return "excluded_brands"
         return "unknown"
 
     def test_write_to_db_emits_thread_restaurants_and_mentions_in_order(self):
@@ -371,23 +373,25 @@ class WriteToDbTest(unittest.TestCase):
         self.assertEqual(result["mentions"], 4)  # 2 primary + 2 endorsements
         self.assertEqual(result["thread_id"], "orangecounty-abc123")
 
-        # 1 threads upsert + 1 select existing + 2 restaurants upserts + 4 mentions upserts + 1 delete mentions = 9 execute() calls.
-        self.assertEqual(len(executions), 9)
+        # 1 threads upsert + 1 select existing + 1 select excluded_brands (registry) +
+        # 2 restaurants upserts + 4 mentions upserts + 1 delete mentions = 10 execute() calls.
+        self.assertEqual(len(executions), 10)
 
         # Ordering: thread first, then per-restaurant (restaurant, primary mention, endorsements...), then delete orphaned mentions.
         targets = [self._first_word(sql) for sql, _ in executions]
         self.assertEqual(
             targets,
             [
-                "threads",       # 0: thread upsert
-                "restaurants",   # 1: select existing
-                "restaurants",   # 2: restaurant 1 upsert
-                "mentions",      # 3: primary mention restaurant 1
-                "mentions",      # 4: endorsement 1a
-                "mentions",      # 5: endorsement 1b
-                "restaurants",   # 6: restaurant 2 upsert
-                "mentions",      # 7: primary mention restaurant 2
-                "mentions",      # 8: delete orphaned mentions
+                "threads",         # 0: thread upsert
+                "restaurants",     # 1: select existing
+                "excluded_brands", # 2: load exclusion registry
+                "restaurants",     # 3: restaurant 1 upsert
+                "mentions",        # 4: primary mention restaurant 1
+                "mentions",        # 5: endorsement 1a
+                "mentions",        # 6: endorsement 1b
+                "restaurants",     # 7: restaurant 2 upsert
+                "mentions",        # 8: primary mention restaurant 2
+                "mentions",        # 9: delete orphaned mentions
             ],
         )
 
@@ -410,16 +414,17 @@ class WriteToDbTest(unittest.TestCase):
         )
 
         # Restaurant 1: slug is "taqueria-de-anda" (no collision), lat/lng/etc carried through.
-        r1_sql, r1_params = executions[2]
+        # Trailing params: status='active', exclusion_reason=None (not a chain / corporate group).
+        r1_sql, r1_params = executions[3]
         self.assertIn("INSERT INTO restaurants", r1_sql)
         self.assertIn("ON CONFLICT (slug) DO UPDATE", r1_sql)
         self.assertEqual(
             r1_params,
-            ("Taqueria de Anda", "taqueria-de-anda", "Orange", None, "Mexican", 33.79, -117.85),
+            ("Taqueria de Anda", "taqueria-de-anda", "Orange", None, "Mexican", 33.79, -117.85, "active", None),
         )
 
         # Primary mention for restaurant 1 — role=primary, classification NULL (hard-coded in SQL).
-        m1_sql, m1_params = executions[3]
+        m1_sql, m1_params = executions[4]
         self.assertIn("INSERT INTO mentions", m1_sql)
         self.assertIn("'primary', NULL", m1_sql)
         self.assertIn("ON CONFLICT (thread_id, comment_id, restaurant_id) DO UPDATE", m1_sql)
@@ -438,7 +443,7 @@ class WriteToDbTest(unittest.TestCase):
         )
 
         # Endorsement 1a — role='endorsement', classification='endorsement'.
-        e1_sql, e1_params = executions[4]
+        e1_sql, e1_params = executions[5]
         self.assertIn("INSERT INTO mentions", e1_sql)
         self.assertIn("'endorsement', %s", e1_sql)
         self.assertEqual(
@@ -457,17 +462,17 @@ class WriteToDbTest(unittest.TestCase):
         )
 
         # Endorsement 1b — classification='dish_rec'.
-        e2_sql, e2_params = executions[5]
+        e2_sql, e2_params = executions[6]
         self.assertEqual(e2_params[7], "dish_rec")
         self.assertEqual(e2_params[2], "t1_ea2")
 
         # Restaurant 2 — slug "folks".
-        r2_sql, r2_params = executions[6]
+        r2_sql, r2_params = executions[7]
         self.assertEqual(r2_params[0], "Folks")
         self.assertEqual(r2_params[1], "folks")
 
         # Primary mention for restaurant 2 — uses restaurant_id 102 from fetchone.
-        m2_sql, m2_params = executions[7]
+        m2_sql, m2_params = executions[8]
         self.assertEqual(m2_params[0], 102)
         self.assertEqual(m2_params[2], "t1_pb")
 
@@ -525,12 +530,13 @@ class WriteToDbTest(unittest.TestCase):
         # Let's re-verify the order:
         # 0: threads
         # 1: SELECT from restaurants
-        # 2: restaurant 1 INSERT
-        # 3: primary mention 1 INSERT
-        # 4: restaurant 2 INSERT
-        # 5: primary mention 2 INSERT
-        self.assertEqual(executions[2][1][1], "folks")
-        self.assertEqual(executions[4][1][1], "folks-2")
+        # 2: SELECT from excluded_brands (registry)
+        # 3: restaurant 1 INSERT
+        # 4: primary mention 1 INSERT
+        # 5: restaurant 2 INSERT
+        # 6: primary mention 2 INSERT
+        self.assertEqual(executions[3][1][1], "folks")
+        self.assertEqual(executions[5][1][1], "folks-2")
 
     def test_write_to_db_raises_when_database_url_missing(self):
         factory, _conn, _cursor, _exec = self._build_fake_connection([1])

@@ -67,6 +67,16 @@ OC_BOUNDS = {
 ENDORSEMENT_TYPES = {"dish_rec", "endorsement", "personal_story"}
 THREAD_FOLDER_PATTERN = "{subreddit}-{post_id}"
 
+# --- Chain / corporate-group exclusion -------------------------------------
+# How many distinct OC cities one normalized name must appear in (within the batch /
+# corpus) before the density heuristic flags it for review as a likely chain.
+DENSITY_CITY_THRESHOLD = int(os.environ.get("OC_FOOD_RECS_DENSITY_CITIES", "3"))
+# OFF by default: an unbounded Google Places probe that counts how many results a bare
+# name returns. Unreliable + paid, so it only ever routes to 'pending_review', never
+# auto-excludes. Enable with OC_FOOD_RECS_CHAIN_PROBE=1.
+CHAIN_PROBE_ENABLED = os.environ.get("OC_FOOD_RECS_CHAIN_PROBE", "").strip().lower() in ("1", "true", "yes")
+CHAIN_LOCATION_THRESHOLD = int(os.environ.get("OC_FOOD_RECS_CHAIN_LOCATION_THRESHOLD", "5"))
+
 SYSTEM_PROMPT = """You are a structured data extractor. Given a Reddit comment recommending food/drink spots, extract each establishment mentioned into a JSON array.
 
 For each establishment, return:
@@ -74,6 +84,7 @@ For each establishment, return:
 - "location": city or neighborhood if mentioned, else null
 - "street": street name or cross-streets if mentioned (e.g. "Main St", "Bristol and Sunflower"), else null
 - "cuisine": cuisine type if inferable from the name or text, else null
+- "chain_suspect": true ONLY for an obvious large national/international chain (e.g. McDonald's, Starbucks, Chipotle, In-N-Out, The Cheesecake Factory, Din Tai Fung); otherwise false. ALWAYS still extract the establishment -- this is only a hint for review, never a reason to skip it.
 
 Include any food or drink establishment (restaurants, cafes, bakeries, ice cream shops, delis, food trucks, etc.).
 A proper name IS a recommendation even if it does not sound food-related and even if it is terse: a bare name ("Keno's") or "Name in City" ("Pops in Santa Ana") must be extracted.
@@ -85,11 +96,13 @@ If the comment is NOT recommending any food/drink establishment (e.g., a questio
 
 Examples:
 Comment: "Pops in Santa Ana on Main St"
-JSON: [{"name": "Pops", "location": "Santa Ana", "street": "Main St", "cuisine": null}]
+JSON: [{"name": "Pops", "location": "Santa Ana", "street": "Main St", "cuisine": null, "chain_suspect": false}]
 Comment: "Peter's Burgers in Tustin, best patty melt around"
-JSON: [{"name": "Peter's Burgers", "location": "Tustin", "street": null, "cuisine": "Burgers"}]
+JSON: [{"name": "Peter's Burgers", "location": "Tustin", "street": null, "cuisine": "Burgers", "chain_suspect": false}]
 Comment: "Check out Pho 79 near Bristol and Sunflower."
-JSON: [{"name": "Pho 79", "location": null, "street": "Bristol and Sunflower", "cuisine": "Vietnamese"}]
+JSON: [{"name": "Pho 79", "location": null, "street": "Bristol and Sunflower", "cuisine": "Vietnamese", "chain_suspect": false}]
+Comment: "honestly In-N-Out never misses"
+JSON: [{"name": "In-N-Out", "location": null, "street": null, "cuisine": "Burgers", "chain_suspect": true}]
 
 Return ONLY a valid JSON array at the top level (e.g. [ {...} ]), never an object wrapper. No explanation, no markdown fences."""
 
@@ -500,6 +513,7 @@ def _merge_restaurant_group(entries: list[dict[str, Any]]) -> dict[str, Any]:
     merged["lng"] = lng
     merged["aggregate_score"] = sum(entry.get("aggregate_score", 0) for entry in entries)
     merged["mention_count"] = sum(entry.get("mention_count", 1) for entry in entries)
+    merged["chain_suspect"] = any(entry.get("chain_suspect") for entry in entries)
     merged["endorsements"] = all_endorsements
     merged["primary_comment"] = primary_comments[0]
     merged["primary_comments"] = primary_comments
@@ -722,6 +736,7 @@ def normalize_extractor_result(result: Any) -> tuple[list[dict[str, Any]], str |
                 if entity.get("street")
                 else None,
                 "cuisine": cuisine,
+                "chain_suspect": bool(entity.get("chain_suspect")),
             }
         )
     return cleaned, raw
@@ -1079,6 +1094,7 @@ def build_thread_dataset(
                     "location": entity.get("location"),
                     "street": entity.get("street"),
                     "cuisine": entity.get("cuisine"),
+                    "chain_suspect": entity.get("chain_suspect", False),
                     "score": root["score"],
                     "comment": {
                         "id": root["id"],
@@ -1188,6 +1204,7 @@ def build_thread_dataset(
                     "location": best_location,
                     "street": best_street,
                     "cuisine": best_cuisine,
+                    "chain_suspect": any(entry.get("chain_suspect") for entry in subgroup),
                     "aggregate_score": sum(entry["score"] for entry in subgroup),
                     "mention_count": len(subgroup),
                     "primary_comment": primary["comment"],
@@ -1898,6 +1915,136 @@ def build_thread(
     return geocoded_dataset
 
 
+def _brand_names_match(extracted_name: str, brand_name: str) -> bool:
+    """Conservative name-only match between an extracted name and a registry brand.
+
+    Registry matching has NO geographic gate (unlike ``is_match``), so it must be strict to
+    avoid hiding independents. We allow only:
+      * exact normalized equality ("DinTaiFung" == "Din Tai Fung"), and
+      * a full word-boundary substring in either direction ("Vox Kitchen" in "Vox Kitchen
+        Fountain Valley"; "Broken Yolk" in "Broken Yolk Cafe").
+    We deliberately do NOT use ``_name_score``'s token-subset/fuzzy bonus here: with no geo
+    gate it matches any name whose only distinctive token is a generic food word (e.g.
+    "B&C Burger" -> "The Habit Burger Grill" via the shared token "burger"). Add misspelling
+    variants to the registry explicitly instead.
+    """
+    ext = normalize_name(extracted_name)
+    brand = normalize_name(brand_name)
+    if not ext or not brand:
+        return False
+    if ext == brand:
+        return True
+    if len(brand) <= len(ext) and _is_word_boundary_match(brand_name, extracted_name):
+        return True
+    if len(ext) < len(brand) and _is_word_boundary_match(extracted_name, brand_name):
+        return True
+    return False
+
+
+def match_excluded_brand(
+    name: str, registry: list[dict[str, Any]]
+) -> tuple[str, str | None] | None:
+    """Return ``(reason, group_name)`` when ``name`` matches a registry brand, else None.
+
+    Fast path: exact normalized-name equality. Fallback: the fuzzy name match above.
+    ``registry`` rows are dicts with keys brand_name, reason, group_name, normalized_name.
+    """
+    norm = normalize_name(name)
+    for entry in registry:  # fast exact path
+        if entry.get("normalized_name") and entry["normalized_name"] == norm:
+            return entry.get("reason") or "chain", entry.get("group_name")
+    for entry in registry:  # fuzzy fallback
+        if _brand_names_match(name, entry["brand_name"]):
+            return entry.get("reason") or "chain", entry.get("group_name")
+    return None
+
+
+def _load_excluded_brands(cur: Any) -> list[dict[str, Any]]:
+    """Load the ``excluded_brands`` registry via an existing psycopg cursor.
+
+    Returns [] if the table is missing (e.g. migration not yet applied) so ingest still
+    works -- exclusion just becomes a no-op until the table exists.
+    """
+    try:
+        cur.execute("SELECT brand_name, reason, group_name, normalized_name FROM excluded_brands")
+    except Exception:
+        return []
+    rows = cur.fetchall()
+    desc = cur.description
+    idx = {d[0]: i for i, d in enumerate(desc)} if desc else {}
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        if isinstance(row, dict):
+            out.append(row)
+        else:
+            out.append(
+                {
+                    "brand_name": row[idx["brand_name"]],
+                    "reason": row[idx["reason"]],
+                    "group_name": row[idx["group_name"]],
+                    "normalized_name": row[idx["normalized_name"]],
+                }
+            )
+    return out
+
+
+def batch_city_counts(restaurants: list[dict[str, Any]]) -> dict[str, set[str]]:
+    """Map ``normalize_name(name)`` -> set of distinct canonical cities across a batch.
+    Feeds the density heuristic: one name spread across many cities is a likely chain."""
+    counts: dict[str, set[str]] = defaultdict(set)
+    for r in restaurants:
+        city = normalize_location(r.get("location"))
+        if city:
+            counts[normalize_name(r["name"])].add(city)
+    return counts
+
+
+def google_location_count(name: str) -> int | None:
+    """OFF by default. Unbounded Google Places Text Search count for a bare name -- an
+    unreliable, paid chain signal that only ever routes to 'pending_review'. Returns None
+    when disabled or on any error (never raises into the pipeline)."""
+    if not CHAIN_PROBE_ENABLED:
+        return None
+    api_key = _env_value("GOOGLE_MAPS_API_KEY")
+    if not api_key:
+        return None
+    try:
+        return len(_google_request(api_key, {"textQuery": name}))
+    except Exception:
+        return None
+
+
+def classify_restaurant_status(
+    restaurant: dict[str, Any],
+    *,
+    registry: list[dict[str, Any]],
+    city_counts: dict[str, set[str]] | None = None,
+) -> tuple[str, str | None]:
+    """Decide a restaurant's publish status from all exclusion layers.
+
+    Precedence: the registry is authoritative (-> 'excluded'); every fuzzy signal only
+    ever routes to 'pending_review'. Fuzzy reason priority: LLM > location-count > density.
+    Returns ('active', None) when nothing fires.
+    """
+    hit = match_excluded_brand(restaurant["name"], registry)
+    if hit is not None:
+        return "excluded", hit[0]
+
+    if restaurant.get("chain_suspect"):
+        return "pending_review", "llm_suspected_chain"
+
+    count = restaurant.get("chain_location_count")
+    if count is not None and count > CHAIN_LOCATION_THRESHOLD:
+        return "pending_review", "many_locations"
+
+    if city_counts is not None:
+        cities = city_counts.get(normalize_name(restaurant["name"]))
+        if cities is not None and len(cities) >= DENSITY_CITY_THRESHOLD:
+            return "pending_review", "multi_city_density"
+
+    return "active", None
+
+
 def write_to_db(
     parsed_thread: dict[str, Any],
     restaurants_with_geocodes: list[dict[str, Any]],
@@ -1985,11 +2132,22 @@ def write_to_db(
 
             # 2. Restaurants — collapse batch duplicates, assign slugs, upsert
             deduped_restaurants = collapse_duplicate_restaurants(restaurants_with_geocodes)
+            # Chain / corporate-group exclusion: the registry is authoritative ('excluded');
+            # fuzzy signals (LLM chain_suspect, optional Google count, multi-city density)
+            # only ever -> 'pending_review'. Status is set on INSERT for NEW rows only; the
+            # ON CONFLICT clause below deliberately leaves status/exclusion_reason/reviewed_at
+            # untouched, so a human's admin decision (and apply_exclusions sweep) own existing
+            # rows. Growing the registry retro-applies via scripts/apply_exclusions.py.
+            registry = _load_excluded_brands(cur)
+            city_counts = batch_city_counts(deduped_restaurants)
             for restaurant, slug in assign_slugs(deduped_restaurants, existing=existing):
+                status, exclusion_reason = classify_restaurant_status(
+                    restaurant, registry=registry, city_counts=city_counts
+                )
                 cur.execute(
                     """
-                    INSERT INTO restaurants (name, slug, location, street, cuisine, lat, lng)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    INSERT INTO restaurants (name, slug, location, street, cuisine, lat, lng, status, exclusion_reason)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (slug) DO UPDATE SET
                         name = CASE WHEN length(EXCLUDED.name) > length(restaurants.name) THEN EXCLUDED.name ELSE restaurants.name END,
                         location = COALESCE(restaurants.location, EXCLUDED.location),
@@ -2008,6 +2166,8 @@ def write_to_db(
                         restaurant.get("cuisine"),
                         restaurant.get("lat"),
                         restaurant.get("lng"),
+                        status,
+                        exclusion_reason,
                     ),
                 )
                 row = cur.fetchone()
@@ -2197,6 +2357,10 @@ def ingest(
         raw_location = restaurant.get("location") or _subreddit_city(manifest["subreddit"])
         lat, lng, detail, geocoded_city = geocode_fn(restaurant["name"], raw_location, restaurant.get("street"))
         _apply_geocode_result(restaurant, lat, lng, geocoded_city, raw_location)
+        # Optional, OFF by default: count global Google results as a (weak) chain signal.
+        # Done here (outside write_to_db's transaction) and consumed by classify_restaurant_status.
+        if CHAIN_PROBE_ENABLED:
+            restaurant["chain_location_count"] = google_location_count(restaurant["name"])
         _emit_progress(
             {
                 "stage": "geocode",
