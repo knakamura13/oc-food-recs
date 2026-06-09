@@ -38,8 +38,5 @@ data/uningested-threads/*
 # archived HTML exports moved here after a successful ingest (derived, not committed)
 data/threads/*.html
 
-# local geocode cache (derived from Nominatim; delete to force a re-geocode)
-data/geocode-cache.json
-
 # local DB backups + input snapshots (may contain data; never commit)
 data/backups/
