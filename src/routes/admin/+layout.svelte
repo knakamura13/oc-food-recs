@@ -3,10 +3,7 @@
 
 	let { children } = $props();
 
-	const tabs = [
-		{ href: '/admin/ingest', label: 'Ingest' },
-		{ href: '/admin/geocode', label: 'Geocode Health' }
-	];
+	const tabs = [{ href: '/admin/geocode', label: 'Geocode Health' }];
 
 	function isActive(href: string): boolean {
 		return page.url.pathname === href || page.url.pathname.startsWith(`${href}/`);
