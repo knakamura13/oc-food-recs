@@ -304,7 +304,7 @@
 		}
 
 		const sort = params.get('sort');
-		if (sort === 'name' || sort === 'score') {
+		if (sort === 'name' || sort === 'score' || sort === 'recency') {
 			appState.sortKey = sort;
 		}
 		const sortDir = params.get('sortdir');

@@ -47,5 +47,5 @@ export interface RestaurantData {
 	};
 }
 
-export type SortKey = 'score' | 'name' | null;
+export type SortKey = 'score' | 'recency' | 'name' | null;
 export type SortDirection = 'asc' | 'desc';

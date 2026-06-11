@@ -320,6 +320,22 @@ export function buildDateHistogram(
 	return bins;
 }
 
+/**
+ * Epoch ms of the restaurant's newest dated mention, or null when no mention has a
+ * parseable date. Backs the "Recent" sort; null lets the list comparator sink
+ * undated restaurants to the bottom in either direction.
+ */
+export function latestMentionMs(restaurant: Restaurant): number | null {
+	let latest: number | null = null;
+	for (const m of restaurant.mentions) {
+		if (!m.comment_date) continue;
+		const t = Date.parse(m.comment_date);
+		if (Number.isNaN(t)) continue;
+		if (latest === null || t > latest) latest = t;
+	}
+	return latest;
+}
+
 const MONTH_YEAR_FMT = new Intl.DateTimeFormat('en-US', { month: 'short', year: 'numeric' });
 
 /** Format an epoch-ms timestamp as e.g. "Feb 2025". */
