@@ -294,6 +294,7 @@
 			<div class="virtual-spacer" style:height="{totalSize}px">
 				{#each virtualItems as virtualRow (virtualRow.key)}
 					{@const restaurant = table.rows[virtualRow.index]}
+					{#if restaurant}
 					{@const slug = restaurant.slug}
 					{@const isOpen = appState.selectedRestaurantSlug === slug}
 
@@ -488,6 +489,7 @@
 							</div>
 						</div>
 					</div>
+					{/if}
 				{/each}
 			</div>
 		{/if}
