@@ -345,17 +345,17 @@
 		if (appState.activeCities.length > 0) params.set('city', appState.activeCities.join(','));
 		if (appState.activeSubreddits.length > 0)
 			params.set('subreddit', appState.activeSubreddits.join(','));
-		if (appState.sortKey) params.set('sort', appState.sortKey);
+		// Only write sort when non-default (default is 'score' desc — omitting keeps URLs clean).
+		if (appState.sortKey && appState.sortKey !== 'score') params.set('sort', appState.sortKey);
 		if (appState.sortDirection !== 'desc') params.set('sortdir', appState.sortDirection);
 		if (appState.selectedRestaurantSlug) params.set('restaurant', appState.selectedRestaurantSlug);
 		if (appState.freshnessCutoff !== null)
 			params.set('since', new Date(appState.freshnessCutoff).toISOString().slice(0, 10));
 
 		const qs = params.toString();
-		const newUrl = qs ? `?${qs}` : window.location.pathname;
 
 		if (window.location.search !== (qs ? `?${qs}` : '')) {
-			replaceState(newUrl, {});
+			replaceState(qs ? `?${qs}` : window.location.pathname, {});
 		}
 	});
 </script>
