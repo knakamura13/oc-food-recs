@@ -84,6 +84,7 @@
 			applySortFromAppState();
 		} else {
 			appState.sortKey = null;
+			appState.sortDirection = 'desc'; // direction is meaningless unsorted; avoids a stray ?sortdir= in the URL
 			table.clearSort();
 			table.setRows(restaurants);
 		}
@@ -118,9 +119,14 @@
 		});
 
 		virtualizer = instance;
+		// virtual-core requires the mount lifecycle to attach its rect/scroll
+		// observers; without these calls getVirtualItems() is always empty.
+		const unmount = instance._didMount();
+		instance._willUpdate();
 		syncVirtualState(instance);
 
 		return () => {
+			unmount();
 			virtualizer = null;
 		};
 	});
@@ -128,7 +134,11 @@
 	$effect(() => {
 		const rows = table.rows;
 		if (!virtualizer) return;
+		// setOptions REPLACES the options object (merging only with library defaults),
+		// so spread the existing options or estimateSize/observers/onChange are lost
+		// and the virtualizer throws during hydration.
 		virtualizer.setOptions({
+			...virtualizer.options,
 			count: rows.length,
 			getItemKey: (index: number) => rows[index]?.slug ?? index
 		} as Parameters<Virtualizer<HTMLDivElement, HTMLDivElement>['setOptions']>[0]);
