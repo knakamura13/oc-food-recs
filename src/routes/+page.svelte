@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { X } from 'lucide-svelte';
 	import { onMount, tick } from 'svelte';
-	import { replaceState } from '$app/navigation';
+	import { afterNavigate, replaceState } from '$app/navigation';
 	import type { Restaurant } from '$lib/restaurants/types';
 	import {
 		appState,
@@ -325,9 +325,18 @@
 		}
 	});
 
+	// SvelteKit's replaceState throws (dev guard) when called before the router has
+	// initialized, and the initial effect flush happens during hydration — before that.
+	// The throw also aborts the rest of the flush (the list's initial sort never
+	// activates), so gate URL writes until the initial navigation completes.
+	let routerReady = $state(false);
+	afterNavigate(() => {
+		routerReady = true;
+	});
+
 	// Sync state -> URL params
 	$effect(() => {
-		if (typeof window === 'undefined') return;
+		if (!routerReady) return;
 
 		const params = new URLSearchParams();
 
