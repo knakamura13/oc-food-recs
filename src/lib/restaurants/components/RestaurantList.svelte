@@ -10,8 +10,8 @@
 		type VirtualItem
 	} from '@tanstack/virtual-core';
 	import { TableHandler } from '@vincjo/datatables';
-	import type { Mention, Restaurant } from '$lib/restaurants/types';
-	import { appState, normalizeCuisine } from '$lib/restaurants/stores.svelte';
+	import type { Mention, Restaurant, SortKey } from '$lib/restaurants/types';
+	import { appState, latestMentionMs, normalizeCuisine } from '$lib/restaurants/stores.svelte';
 	import { toast } from '$lib/toast';
 
 	interface Props {
@@ -44,43 +44,47 @@
 
 	const table = new TableHandler<Restaurant>([], { rowsPerPage: null as unknown as number });
 	const scoreSort = table.createSort('aggregate_score');
+	// Restaurants with no dated mentions sort last in either direction (null comparator rule).
+	const recencySort = table.createSort((r: Restaurant) => latestMentionMs(r));
 	const nameSort = table.createSort('name');
 
 	const sortOptions = [
-		{ key: 'score' as const, label: 'Score', sort: scoreSort },
-		{ key: 'name' as const, label: 'Name', sort: nameSort }
+		{ key: 'score' as const, label: 'Score', sort: scoreSort, defaultDirection: 'desc' as const },
+		{ key: 'recency' as const, label: 'Recent', sort: recencySort, defaultDirection: 'desc' as const },
+		{ key: 'name' as const, label: 'Name', sort: nameSort, defaultDirection: 'asc' as const }
 	] as const;
 
+	function optionFor(key: SortKey) {
+		return sortOptions.find((o) => o.key === key);
+	}
+
 	function applySortFromAppState() {
-		if (appState.sortKey === 'score') {
-			appState.sortDirection === 'desc' ? scoreSort.desc() : scoreSort.asc();
-		} else if (appState.sortKey === 'name') {
-			appState.sortDirection === 'desc' ? nameSort.desc() : nameSort.asc();
-		}
+		const opt = optionFor(appState.sortKey);
+		if (!opt) return;
+		appState.sortDirection === 'desc' ? opt.sort.desc() : opt.sort.asc();
 	}
 
 	$effect(() => {
 		table.setRows(restaurants);
-		if (appState.sortKey === 'score' && !scoreSort.isActive) {
-			applySortFromAppState();
-		} else if (appState.sortKey === 'name' && !nameSort.isActive) {
+		const opt = optionFor(appState.sortKey);
+		if (opt && !opt.sort.isActive) {
 			applySortFromAppState();
 		}
 	});
 
-	function cycleSort(key: 'score' | 'name') {
+	function cycleSort(key: Exclude<SortKey, null>) {
+		const opt = optionFor(key);
+		if (!opt) return;
 		if (appState.sortKey !== key) {
 			appState.sortKey = key;
-			appState.sortDirection = key === 'score' ? 'desc' : 'asc';
-			key === 'score' ? scoreSort.desc() : nameSort.asc();
-		} else if (
-			(key === 'score' && appState.sortDirection === 'desc') ||
-			(key === 'name' && appState.sortDirection === 'asc')
-		) {
-			appState.sortDirection = appState.sortDirection === 'desc' ? 'asc' : 'desc';
-			key === 'score' ? scoreSort.asc() : nameSort.desc();
+			appState.sortDirection = opt.defaultDirection;
+			applySortFromAppState();
+		} else if (appState.sortDirection === opt.defaultDirection) {
+			appState.sortDirection = opt.defaultDirection === 'desc' ? 'asc' : 'desc';
+			applySortFromAppState();
 		} else {
 			appState.sortKey = null;
+			appState.sortDirection = 'desc'; // direction is meaningless unsorted; avoids a stray ?sortdir= in the URL
 			table.clearSort();
 			table.setRows(restaurants);
 		}
@@ -115,9 +119,14 @@
 		});
 
 		virtualizer = instance;
+		// virtual-core requires the mount lifecycle to attach its rect/scroll
+		// observers; without these calls getVirtualItems() is always empty.
+		const unmount = instance._didMount();
+		instance._willUpdate();
 		syncVirtualState(instance);
 
 		return () => {
+			unmount();
 			virtualizer = null;
 		};
 	});
@@ -125,7 +134,11 @@
 	$effect(() => {
 		const rows = table.rows;
 		if (!virtualizer) return;
+		// setOptions REPLACES the options object (merging only with library defaults),
+		// so spread the existing options or estimateSize/observers/onChange are lost
+		// and the virtualizer throws during hydration.
 		virtualizer.setOptions({
+			...virtualizer.options,
 			count: rows.length,
 			getItemKey: (index: number) => rows[index]?.slug ?? index
 		} as Parameters<Virtualizer<HTMLDivElement, HTMLDivElement>['setOptions']>[0]);
@@ -266,7 +279,7 @@
 			</button>
 		{/each}
 		<span class="result-count" aria-live="polite">
-			{restaurants.length} restaurants
+			{restaurants.length} {restaurants.length === 1 ? 'restaurant' : 'restaurants'}
 		</span>
 	</div>
 
