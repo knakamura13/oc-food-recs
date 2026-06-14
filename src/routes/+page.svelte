@@ -14,7 +14,9 @@
 		createSliceCache
 	} from '$lib/restaurants/filter-restaurants';
 	import { filterPageRestaurants } from '$lib/restaurants/filter-page-restaurants';
-	import { buildSearchParams, parseSearchParams } from '$lib/restaurants/url-state';
+	import { buildPageTitle, buildPageDescription, buildCanonicalShareUrl } from '$lib/restaurants/page-meta';
+	import { applyUrlStateSnapshot } from '$lib/restaurants/apply-url-state';
+	import { buildSearchParams } from '$lib/restaurants/url-state';
 	import { setLastVisitNow } from '$lib/restaurants/visit-tracker';
 	import Hero from '$lib/restaurants/components/Hero.svelte';
 	import SearchBar from '$lib/restaurants/components/SearchBar.svelte';
@@ -80,30 +82,42 @@
 
 	const MOBILE_MAX_PX = 1023;
 
+	let clientHydrated = $state(false);
+
+	$effect.pre(() => {
+		if (typeof window === 'undefined') return;
+		applyUrlStateSnapshot(data.urlState ?? {}, data.dataset.restaurants as Restaurant[]);
+		clientHydrated = true;
+	});
+
 	const pageTitle = $derived.by(() => {
-		const parts: string[] = [];
-		if (appState.searchQuery) parts.push(`"${appState.searchQuery}"`);
-		if (appState.activeCuisines.length === 1) parts.push(appState.activeCuisines[0]);
-		else if (appState.activeCuisines.length > 1) parts.push(`${appState.activeCuisines.length} cuisines`);
-		if (appState.activeCities.length === 1) parts.push(`in ${appState.activeCities[0]}`);
-		else if (appState.activeCities.length > 1) parts.push(`in ${appState.activeCities.length} cities`);
-		if (parts.length === 0) return 'Best Mom & Pop Restaurants in Orange County | Reddit Community Picks';
-		return `${parts.join(' ')} — OC Food Recs`;
+		if (!clientHydrated) return data.pageMeta.title;
+		return buildPageTitle({
+			searchQuery: appState.searchQuery,
+			activeCuisines: appState.activeCuisines,
+			activeCities: appState.activeCities
+		});
 	});
 
 	const pageDescription = $derived.by(() => {
-		const count = filteredRestaurants.length;
-		const base = `${count} community-recommended mom and pop restaurants in Orange County`;
-		if (appState.searchQuery) return `${base} matching "${appState.searchQuery}".`;
-		if (appState.activeCuisines.length > 0 || appState.activeCities.length > 0) {
-			return `${base} with your current filters applied.`;
-		}
-		return `Explore ${allRestaurants.length} community-recommended mom and pop restaurants in Orange County, CA — curated from ${threadCount} Reddit ${threadCount === 1 ? 'thread' : 'threads'} and ${data.dataset.meta.total_comments_processed} comments.`;
+		if (!clientHydrated) return data.pageMeta.description;
+		return buildPageDescription(
+			{
+				searchQuery: appState.searchQuery,
+				activeCuisines: appState.activeCuisines,
+				activeCities: appState.activeCities,
+				activeSubreddits: appState.activeSubreddits,
+				showUnmapped: appState.showUnmapped,
+				freshnessCutoff: appState.freshnessCutoff
+			},
+			allRestaurants,
+			data.dataset.meta,
+			threadSubreddit
+		);
 	});
 
 	const shareUrl = $derived.by(() => {
-		if (typeof window === 'undefined') return 'https://oc-food-recs-production.up.railway.app/';
-		const params = buildSearchParams({
+		const state = {
 			searchQuery: appState.searchQuery,
 			activeCuisines: appState.activeCuisines,
 			activeCities: appState.activeCities,
@@ -113,9 +127,11 @@
 			sortKey: appState.sortKey,
 			sortDirection: appState.sortDirection,
 			selectedRestaurantSlug: appState.selectedRestaurantSlug
-		});
-		const qs = params.toString();
-		return qs ? `${window.location.origin}${window.location.pathname}?${qs}` : window.location.href;
+		};
+		if (!clientHydrated) return data.pageMeta.shareUrl;
+		const origin = typeof window !== 'undefined' ? window.location.origin : data.pageOrigin;
+		const pathname = typeof window !== 'undefined' ? window.location.pathname : '/';
+		return buildCanonicalShareUrl(origin, pathname, state);
 	});
 
 	function isMobileViewport() {
@@ -185,33 +201,25 @@
 	const subredditSliceCache = createSliceCache();
 	const recencySliceCache = createSliceCache();
 
-	let restaurantsBeforeFreshness = $derived.by(() =>
-		filterPageRestaurants(
-			allRestaurants,
-			{
-				activeSubreddits: appState.activeSubreddits,
-				activeCuisines: appState.activeCuisines,
-				activeCities: appState.activeCities,
-				showUnmapped: appState.showUnmapped,
-				freshnessCutoff: appState.freshnessCutoff
-			},
-			{ threadSubreddit, dateExtent, subredditSliceCache, recencySliceCache }
-		).beforeFreshness
+	const pageFilterState = $derived({
+		activeSubreddits: appState.activeSubreddits,
+		activeCuisines: appState.activeCuisines,
+		activeCities: appState.activeCities,
+		showUnmapped: appState.showUnmapped,
+		freshnessCutoff: appState.freshnessCutoff
+	});
+
+	const pageFilterResult = $derived.by(() =>
+		filterPageRestaurants(allRestaurants, pageFilterState, {
+			threadSubreddit,
+			dateExtent,
+			subredditSliceCache,
+			recencySliceCache
+		})
 	);
 
-	let filteredRestaurants = $derived.by(() =>
-		filterPageRestaurants(
-			allRestaurants,
-			{
-				activeSubreddits: appState.activeSubreddits,
-				activeCuisines: appState.activeCuisines,
-				activeCities: appState.activeCities,
-				showUnmapped: appState.showUnmapped,
-				freshnessCutoff: appState.freshnessCutoff
-			},
-			{ threadSubreddit, dateExtent, subredditSliceCache, recencySliceCache }
-		).filtered
-	);
+	const restaurantsBeforeFreshness = $derived(pageFilterResult.beforeFreshness);
+	const filteredRestaurants = $derived(pageFilterResult.filtered);
 
 	// Trigger fitBounds when filters change
 	$effect(() => {
@@ -287,32 +295,6 @@
 			document.removeEventListener('visibilitychange', onVisChange);
 			clearTimeout(resizeSettleTimer);
 		};
-	});
-
-	// Sync URL params -> state on mount
-	onMount(() => {
-		const parsed = parseSearchParams(new URLSearchParams(window.location.search));
-
-		if (parsed.searchQuery !== undefined) appState.searchQuery = parsed.searchQuery;
-		if (parsed.activeCuisines !== undefined) appState.activeCuisines = parsed.activeCuisines;
-		if (parsed.activeCities !== undefined) appState.activeCities = parsed.activeCities;
-		if (parsed.activeSubreddits !== undefined) appState.activeSubreddits = parsed.activeSubreddits;
-		if (parsed.freshnessCutoff !== undefined) appState.freshnessCutoff = parsed.freshnessCutoff;
-		if (parsed.sortKey !== undefined) appState.sortKey = parsed.sortKey;
-		if (parsed.sortDirection !== undefined) appState.sortDirection = parsed.sortDirection;
-		if (parsed.showUnmapped !== undefined) appState.showUnmapped = parsed.showUnmapped;
-
-		const restaurant = parsed.selectedRestaurantSlug;
-		if (restaurant) {
-			appState.selectedRestaurantSlug = restaurant;
-			const match = allRestaurants.find((r) => r.slug === restaurant);
-			if (match) {
-				appState.listScrollTarget = match.slug;
-				if (match.lat && match.lng) {
-					appState.mapTarget = { slug: match.slug, lat: match.lat, lng: match.lng };
-				}
-			}
-		}
 	});
 
 	// SvelteKit's replaceState throws (dev guard) when called before the router has
