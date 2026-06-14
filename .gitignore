@@ -40,3 +40,6 @@ data/threads/*.html
 
 # local DB backups + input snapshots (may contain data; never commit)
 data/backups/
+data/geocode-cache.json
+
+conductor/
