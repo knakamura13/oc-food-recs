@@ -13,7 +13,7 @@ A community-driven restaurant explorer for Orange County, CA — built from real
 
 ## About
 
-OC Food Recs aggregates mom-and-pop restaurant recommendations mined from [r/orangecounty](https://www.reddit.com/r/orangecounty/) threads — starting with a popular [thread](https://www.reddit.com/r/orangecounty/comments/1sb0qo7/) asking *"What's your favorite mom-and-pop restaurant in OC?"*
+OC Food Recs aggregates mom-and-pop restaurant recommendations mined from [r/orangecounty](https://www.reddit.com/r/orangecounty/) threads — starting with a popular [thread](https://www.reddit.com/r/orangecounty/comments/1sb0qo7/) asking _"What's your favorite mom-and-pop restaurant in OC?"_
 
 The result is an interactive map + list explorer where you can:
 
@@ -28,16 +28,16 @@ The result is an interactive map + list explorer where you can:
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
-| Framework | [SvelteKit](https://kit.svelte.dev/) 2.x with Svelte 5 |
-| Language | TypeScript |
-| Database | [PostgreSQL](https://www.postgresql.org/) via [Drizzle ORM](https://orm.drizzle.team/), hosted on Railway |
-| Map | [Leaflet](https://leafletjs.com/) + [Leaflet.markercluster](https://github.com/Leaflet/Leaflet.markercluster) |
-| Search | [Fuse.js](https://www.fusejs.io/) (fuzzy search) |
+| Layer         | Technology                                                                                                                                                                                               |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Framework     | [SvelteKit](https://kit.svelte.dev/) 2.x with Svelte 5                                                                                                                                                   |
+| Language      | TypeScript                                                                                                                                                                                               |
+| Database      | [PostgreSQL](https://www.postgresql.org/) via [Drizzle ORM](https://orm.drizzle.team/), hosted on Railway                                                                                                |
+| Map           | [Leaflet](https://leafletjs.com/) + [Leaflet.markercluster](https://github.com/Leaflet/Leaflet.markercluster)                                                                                            |
+| Search        | [Fuse.js](https://www.fusejs.io/) (fuzzy search)                                                                                                                                                         |
 | Data pipeline | Python — [BeautifulSoup](https://www.crummy.com/software/BeautifulSoup/) scraping, local [Gemma 3](https://ai.google.dev/gemma) extraction via [Ollama](https://ollama.com/), Google/Nominatim geocoding |
-| Build | Vite 8 |
-| Deployment | [Railway](https://railway.com?referralCode=QCz9lp) (Node.js adapter) |
+| Build         | Vite 8                                                                                                                                                                                                   |
+| Deployment    | [Railway](https://railway.com?referralCode=QCz9lp) (Node.js adapter)                                                                                                                                     |
 
 ---
 
@@ -63,13 +63,13 @@ The database is populated by the Python pipeline in [`scripts/`](scripts/) (driv
 3. **Geocode** each restaurant (Google Geocoding with a Nominatim fallback), caching results in `geocode_cache`
 4. **Upsert** threads, restaurants, and mentions into Postgres, deduplicating restaurants across threads
 
-Ingestion runs from the CLI ([`reddit_pipeline.py`](scripts/reddit_pipeline.py)); the admin route [`/admin/geocode`](src/routes/admin/geocode) handles geocode corrections from the browser. Pipeline design notes live in [`conductor/`](conductor/).
+Ingestion runs from the CLI ([`reddit_pipeline.py`](scripts/reddit_pipeline.py)). Admin routes handle geocode corrections ([`/admin/geocode`](src/routes/admin/geocode)) and chain/corporate exclusions ([`/admin/exclusions`](src/routes/admin/exclusions)). See [`CONTRIBUTING.md`](CONTRIBUTING.md) and [`docs/INGEST_TRACKING.md`](docs/INGEST_TRACKING.md) for ingest workflow.
 
 ---
 
 ## Running Locally
 
-**Prerequisites:** Node.js 18+ and a PostgreSQL connection string.
+**Prerequisites:** Node.js 18+, Python 3.9+ (for the ingest pipeline), and a PostgreSQL connection string.
 
 The app is fully server-rendered from Postgres with **no fallback data path** — it returns HTTP 500 on every request when `DATABASE_URL` is unset. Copy the example env file and point it at your database:
 
@@ -114,6 +114,40 @@ npm run preview
 npm start
 ```
 
+### Python pipeline
+
+For ingest and maintenance scripts:
+
+```sh
+pip install -e .
+
+# Pull the default extraction model (or set OC_FOOD_RECS_OLLAMA_MODEL)
+ollama pull gemma4:latest
+
+# Run pipeline unit tests
+npm run test:pipeline
+```
+
+Ollama env vars: `OC_FOOD_RECS_OLLAMA_URL`, `OC_FOOD_RECS_OLLAMA_MODEL`, `OC_FOOD_RECS_OLLAMA_THINK`. See [`.env.example`](.env.example).
+
+### Testing
+
+```sh
+npm test              # Vitest (unit + component)
+npm run test:all      # Vitest + Python pipeline tests
+npm run test:e2e      # Playwright (requires DATABASE_URL; dev server on port 5174)
+```
+
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for CI, worktree `.env` setup, and admin auth.
+
+---
+
+## Performance
+
+The main page server-renders the full restaurant dataset on each request. List mention payloads omit comment bodies (loaded on expand via `/api/r/[slug].json`); dish highlights use lightweight SQL aggregates.
+
+Revisit architecture if the dataset exceeds ~500 restaurants or TTFB consistently exceeds ~1s. Future options: server-side filter endpoint, cursor pagination, or edge caching of read-only aggregates.
+
 ---
 
 ## Deployment
@@ -151,9 +185,9 @@ src/
 └── routes/
     ├── +page.server.ts                 # Live DB load (one row per restaurant)
     ├── +page.svelte                    # Main page (split map + list view)
-    ├── admin/                          # Ingest + geocode-correction UIs
+    ├── admin/                          # Geocode corrections + exclusion review
     └── api/r/[slug].json/              # On-demand per-restaurant mention detail
 
 scripts/                                # Python ingest pipeline (reddit_pipeline.py, …)
-conductor/                              # Pipeline design notes
+docs/                                   # Ingest tracking and contributor docs
 ```

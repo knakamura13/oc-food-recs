@@ -1,39 +1,48 @@
-import { db } from '$lib/server/db';
-import type { Mention, Restaurant, RestaurantData, ThreadSummary } from '$lib/restaurants/types';
-import { sql } from 'drizzle-orm';
-import type { PageServerLoad } from './$types';
+import { db } from "$lib/server/db";
+import type {
+  Mention,
+  Restaurant,
+  RestaurantData,
+  ThreadSummary,
+} from "$lib/restaurants/types";
+import { sql } from "drizzle-orm";
+import type { PageServerLoad } from "./$types";
 
 interface RestaurantRow {
-	name: string;
-	slug: string;
-	location: string | null;
-	cuisine: string | null;
-	lat: number | null;
-	lng: number | null;
-	aggregate_score: number;
-	mention_count: number;
-	source_threads: string[];
-	mentions: Mention[];
+  name: string;
+  slug: string;
+  location: string | null;
+  cuisine: string | null;
+  lat: number | null;
+  lng: number | null;
+  aggregate_score: number;
+  mention_count: number;
+  source_threads: string[];
+  dish_rec_count: number;
+  top_dish_snippet: string | null;
+  mentions: Mention[];
 }
 
 interface ThreadRow {
-	id: string;
-	title: string;
-	url: string;
-	subreddit: string;
-	post_id: string;
-	comment_count: number;
-	restaurant_count: number;
+  id: string;
+  title: string;
+  url: string;
+  subreddit: string;
+  post_id: string;
+  comment_count: number;
+  restaurant_count: number;
 }
 
 interface StatsRow {
-	total_comments_processed: number;
+  total_comments_processed: number;
 }
 
-export const load: PageServerLoad = async (): Promise<{ dataset: RestaurantData }> => {
-	// Restaurants joined with their mentions; aggregated to one row per restaurant.
-	// Only restaurants whose mentions belong to published threads are returned.
-	const restaurantsResult = await db.execute(sql`
+export const load: PageServerLoad = async (): Promise<{
+  dataset: RestaurantData;
+}> => {
+  // Restaurants joined with their mentions; aggregated to one row per restaurant.
+  // Only restaurants whose mentions belong to published threads are returned.
+  const restaurantsResult = await db.execute(sql`
 		WITH published_mentions AS (
 			SELECT m.*
 			FROM mentions m
@@ -77,14 +86,10 @@ export const load: PageServerLoad = async (): Promise<{ dataset: RestaurantData 
 				COALESCE(
 					JSON_AGG(
 						JSON_BUILD_OBJECT(
-							'comment_id', rm.comment_id,
 							'thread_id', rm.thread_id,
-							'permalink', rm.permalink,
 							'author', rm.author,
-							'body', rm.body,
 							'score', rm.score,
 							'role', rm.role,
-							'classification', rm.classification,
 							'comment_date', rm.comment_date
 						)
 						ORDER BY
@@ -92,7 +97,17 @@ export const load: PageServerLoad = async (): Promise<{ dataset: RestaurantData 
 							rm.score DESC
 					) FILTER (WHERE rm.id IS NOT NULL),
 					'[]'::json
-				) AS mentions
+				) AS mentions,
+				COUNT(*) FILTER (WHERE rm.classification = 'dish_rec')::int AS dish_rec_count,
+				(
+					SELECT LEFT(TRIM(sub.body), 80)
+					FROM ranked_mentions sub
+					WHERE sub.restaurant_id = r.id
+						AND sub.classification = 'dish_rec'
+						AND TRIM(sub.body) <> ''
+					ORDER BY sub.score DESC, LENGTH(sub.body) ASC
+					LIMIT 1
+				) AS top_dish_snippet
 			FROM restaurants r
 			INNER JOIN ranked_mentions rm ON rm.restaurant_id = r.id
 			-- Hide registry-excluded restaurants (chains / corporate groups). Only the
@@ -111,37 +126,48 @@ export const load: PageServerLoad = async (): Promise<{ dataset: RestaurantData 
 			aggregate_score,
 			mention_count,
 			source_threads,
-			mentions
+			mentions,
+			dish_rec_count,
+			top_dish_snippet
 		FROM restaurant_mentions
 		ORDER BY aggregate_score DESC, name ASC
 	`);
 
-	const restaurantRows = restaurantsResult.rows as unknown as RestaurantRow[];
-	const restaurants: Restaurant[] = restaurantRows.map((row) => ({
-		name: row.name,
-		slug: row.slug,
-		location: row.location,
-		cuisine: row.cuisine,
-		lat: row.lat,
-		lng: row.lng,
-		aggregate_score: row.aggregate_score,
-		mention_count: row.mention_count,
-		source_threads: row.source_threads ?? [],
-		// List view ships only fields the recency + subreddit filters and row counts need;
-		// body/permalink/comment_id/classification load on demand from /api/r/[slug].json.
-		mentions: (row.mentions ?? []).map((m) => ({
-			thread_id: m.thread_id,
-			author: m.author,
-			score: m.score,
-			role: m.role,
-			comment_date: m.comment_date
-		})),
-		endorsement_count: (row.mentions ?? []).filter((m) => m.role === 'endorsement').length
-	}));
+  const restaurantRows = restaurantsResult.rows as unknown as RestaurantRow[];
+  const restaurants: Restaurant[] = restaurantRows.map((row) => ({
+    name: row.name,
+    slug: row.slug,
+    location: row.location,
+    cuisine: row.cuisine,
+    lat: row.lat,
+    lng: row.lng,
+    aggregate_score: row.aggregate_score,
+    mention_count: row.mention_count,
+    dish_rec_count: row.dish_rec_count ?? 0,
+    top_dish_snippet: row.top_dish_snippet ?? null,
+    source_threads: row.source_threads ?? [],
+    mentions: (row.mentions ?? []).map((m) => ({
+      thread_id: m.thread_id,
+      author: m.author,
+      score: m.score,
+      role: m.role,
+      comment_date: m.comment_date,
+    })),
+    endorsement_count: (row.mentions ?? []).filter(
+      (m) => m.role === "endorsement",
+    ).length,
+  }));
 
-	// Thread summaries — restaurant_count is the distinct count of restaurants
-	// represented by published mentions in that thread.
-	const threadsResult = await db.execute(sql`
+  if (import.meta.env.DEV) {
+    const jsonBytes = JSON.stringify(restaurants).length;
+    console.info(
+      `[+page.server] ${restaurants.length} restaurants, ~${Math.round(jsonBytes / 1024)}KB payload`,
+    );
+  }
+
+  // Thread summaries — restaurant_count is the distinct count of restaurants
+  // represented by published mentions in that thread.
+  const threadsResult = await db.execute(sql`
 		SELECT
 			t.id,
 			t.title,
@@ -157,35 +183,35 @@ export const load: PageServerLoad = async (): Promise<{ dataset: RestaurantData 
 		ORDER BY t.fetched_at ASC
 	`);
 
-	const threadRows = threadsResult.rows as unknown as ThreadRow[];
-	const sourceThreads: ThreadSummary[] = threadRows.map((row) => ({
-		id: row.id,
-		title: row.title,
-		url: row.url,
-		subreddit: row.subreddit,
-		post_id: row.post_id,
-		comment_count: row.comment_count,
-		restaurant_count: row.restaurant_count
-	}));
+  const threadRows = threadsResult.rows as unknown as ThreadRow[];
+  const sourceThreads: ThreadSummary[] = threadRows.map((row) => ({
+    id: row.id,
+    title: row.title,
+    url: row.url,
+    subreddit: row.subreddit,
+    post_id: row.post_id,
+    comment_count: row.comment_count,
+    restaurant_count: row.restaurant_count,
+  }));
 
-	// Total comments processed = sum of per-thread comment_count over published threads.
-	const statsResult = await db.execute(sql`
+  // Total comments processed = sum of per-thread comment_count over published threads.
+  const statsResult = await db.execute(sql`
 		SELECT COALESCE(SUM(t.comment_count), 0)::int AS total_comments_processed
 		FROM threads t
 		WHERE t.included_in_publish = true
 	`);
 
-	const statsRow = (statsResult.rows[0] ?? {}) as Partial<StatsRow>;
+  const statsRow = (statsResult.rows[0] ?? {}) as Partial<StatsRow>;
 
-	const meta: RestaurantData['meta'] = {
-		source_threads: sourceThreads,
-		total_comments_processed: statsRow.total_comments_processed ?? 0
-	};
+  const meta: RestaurantData["meta"] = {
+    source_threads: sourceThreads,
+    total_comments_processed: statsRow.total_comments_processed ?? 0,
+  };
 
-	return {
-		dataset: {
-			restaurants,
-			meta
-		}
-	};
+  return {
+    dataset: {
+      restaurants,
+      meta,
+    },
+  };
 };
