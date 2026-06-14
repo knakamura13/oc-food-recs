@@ -19,10 +19,12 @@ Categories (each restaurant falls into one):
 
 Usage:
   python3 scripts/analyze_unmapped.py [--sample N]   # N example rows per category, default 10
+  python3 scripts/analyze_unmapped.py --csv out.csv  # write all unmapped rows to CSV
 
 Reads DATABASE_URL from env or .env (via db_backup).
 """
 from __future__ import annotations
+import csv
 import sys, os
 from collections import Counter
 
@@ -40,14 +42,27 @@ def _arg_int(flag: str, default: int) -> int:
         return default
 
 
+def _arg_value(flag: str) -> str | None:
+    try:
+        i = sys.argv.index(flag)
+        return sys.argv[i + 1]
+    except (ValueError, IndexError):
+        return None
+
+
 def main() -> int:
     sample_size = _arg_int("--sample", 10)
+    csv_path = _arg_value("--csv")
 
     conn = b._connect()
     cur = conn.cursor()
     cur.execute(
         """
-        SELECT r.id, r.name, r.location,
+        SELECT r.id, r.name, r.slug, r.location,
+               COALESCE(
+                 (SELECT SUM(m.score) FROM mentions m WHERE m.restaurant_id = r.id),
+                 0
+               ) AS aggregate_score,
                (SELECT t.subreddit
                 FROM mentions m
                 JOIN threads t ON t.id = m.thread_id
@@ -57,11 +72,21 @@ def main() -> int:
                 LIMIT 1) AS top_subreddit
         FROM restaurants r
         WHERE r.lat IS NULL OR r.lng IS NULL
-        ORDER BY r.id
+        ORDER BY aggregate_score DESC, r.id
         """
     )
     rows = cur.fetchall()
     conn.close()
+
+    if csv_path:
+        with open(csv_path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(
+                ["id", "name", "slug", "location", "aggregate_score", "top_subreddit"]
+            )
+            for rid, name, slug, location, score, sub in rows:
+                writer.writerow([rid, name, slug, location or "", score, sub or ""])
+        print(f"Wrote {len(rows)} rows to {csv_path}")
 
     total = len(rows)
     print(f"unmapped restaurants: {total}\n")
@@ -75,7 +100,7 @@ def main() -> int:
     sub_in_no_signal: Counter[str] = Counter()
     sub_in_fallback: Counter[str] = Counter()
 
-    for rid, name, location, sub in rows:
+    for rid, name, slug, location, _score, sub in rows:
         norm = rp.normalize_location(location)
         sub_city = rp._subreddit_city(sub) if sub else None
         sub_total[sub or "(none)"] += 1
@@ -97,7 +122,11 @@ def main() -> int:
 
     print("top subreddits across unmapped pool:")
     for sub, n in sub_total.most_common(15):
-        mapped = "->" + (rp._subreddit_city(sub) or "(none)") if sub != "(none)" else "(no subreddit)"
+        mapped = (
+            "->" + (rp._subreddit_city(sub) or "(none)")
+            if sub != "(none)"
+            else "(no subreddit)"
+        )
         print(f"  {n:4d}  {sub:<25s} {mapped}")
     print()
 
@@ -110,7 +139,9 @@ def main() -> int:
     for cat, rows_ in buckets.items():
         if not rows_:
             continue
-        print(f"=== sample {cat} (first {min(sample_size, len(rows_))} of {len(rows_)}) ===")
+        print(
+            f"=== sample {cat} (first {min(sample_size, len(rows_))} of {len(rows_)}) ==="
+        )
         for name, location, sub, hint in rows_[:sample_size]:
             print(
                 f"  name={name!r:<40s}  "

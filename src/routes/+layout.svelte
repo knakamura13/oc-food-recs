@@ -11,6 +11,8 @@
 
 <Toaster position="bottom-center" richColors duration={2500} closeButton />
 
+<a href="#main-content" class="skip-link">Skip to restaurant list</a>
+
 {@render children()}
 
 <style>
@@ -39,5 +41,23 @@
 	}
 	:global([data-sonner-toast][data-styled='true'] [data-title]) {
 		font-weight: 600;
+	}
+
+	:global(.skip-link) {
+		position: absolute;
+		left: -9999px;
+		top: 0;
+		z-index: 9999;
+		padding: 0.75rem 1rem;
+		background: #ff4500;
+		color: #fffdf9;
+		font-family: 'DM Sans', sans-serif;
+		font-weight: 600;
+		text-decoration: none;
+		border-radius: 0 0 8px 0;
+	}
+
+	:global(.skip-link:focus) {
+		left: 0;
 	}
 </style>

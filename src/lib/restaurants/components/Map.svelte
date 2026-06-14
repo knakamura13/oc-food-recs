@@ -17,7 +17,6 @@
 	let mapContainer: HTMLDivElement | undefined = $state();
 	let leafletMap: any = $state();
 	let markers = new Map<string, any>();
-	let showUnmapped = $state(false);
 	let mapInitialized = $state(false);
 
 	let unmappedRestaurants = $derived(restaurants.filter((r) => r.lat === null || r.lng === null));
@@ -514,12 +513,16 @@
 	{/if}
 
 	{#if unmappedRestaurants.length > 0}
-		<button class="unmapped-toggle" onclick={() => (showUnmapped = !showUnmapped)} aria-expanded={showUnmapped}>
-			{showUnmapped ? 'Hide' : 'Show'} {unmappedRestaurants.length} unmapped restaurants
-			<span class="arrow" class:open={showUnmapped} aria-hidden="true"><ChevronRight size={18} /></span>
+		<button
+			class="unmapped-toggle"
+			onclick={() => (appState.showUnmapped = !appState.showUnmapped)}
+			aria-expanded={appState.showUnmapped}
+		>
+			{appState.showUnmapped ? 'Hide' : 'Show'} {unmappedRestaurants.length} unmapped restaurants
+			<span class="arrow" class:open={appState.showUnmapped} aria-hidden="true"><ChevronRight size={18} /></span>
 		</button>
 
-		{#if showUnmapped}
+		{#if appState.showUnmapped}
 			<div class="unmapped-list">
 				{#each unmappedRestaurants as r}
 					<button class="unmapped-item" onclick={() => scrollToRestaurant(r)}>
