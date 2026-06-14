@@ -13,7 +13,12 @@ const meta = {
 };
 
 const restaurants = [
-  makeRestaurant({ cuisine: "Mexican", location: "Santa Ana" }),
+  makeRestaurant({
+    name: "La Taco Spot",
+    slug: "la-taco-spot",
+    cuisine: "Mexican",
+    location: "Santa Ana",
+  }),
   makeRestaurant({
     name: "Ramen House",
     slug: "ramen-house",
@@ -36,6 +41,29 @@ describe("page-meta", () => {
     ).toBe('"tacos" Mexican — OC Food Recs');
   });
 
+  it("includes subreddit, recency, restaurant name, and sort in the title", () => {
+    expect(
+      buildPageTitle(
+        {
+          activeSubreddits: ["orangecounty"],
+          freshnessCutoff: Date.parse("2025-01-01"),
+          sortKey: "name",
+          selectedRestaurantSlug: "la-taco-spot",
+        },
+        "La Taco Spot",
+      ),
+    ).toBe("r/orangecounty recent La Taco Spot by name — OC Food Recs");
+  });
+
+  it("summarizes multiple cuisines and cities", () => {
+    expect(
+      buildPageTitle({
+        activeCuisines: ["Mexican", "Japanese"],
+        activeCities: ["Irvine", "Santa Ana"],
+      }),
+    ).toBe("2 cuisines in 2 cities — OC Food Recs");
+  });
+
   it("describes filtered result counts", () => {
     const description = buildPageDescription(
       { activeCuisines: ["Mexican"] },
@@ -51,13 +79,18 @@ describe("page-meta", () => {
     const url = buildCanonicalShareUrl("https://example.com", "/", {
       searchQuery: "tacos",
       activeCuisines: ["Mexican"],
+      selectedRestaurantSlug: "la-taco-spot",
+      sortKey: "name",
+      sortDirection: "asc",
     });
-    expect(url).toBe("https://example.com/?q=tacos&cuisine=Mexican");
+    expect(url).toBe(
+      "https://example.com/?q=tacos&cuisine=Mexican&sort=name&sortdir=asc&restaurant=la-taco-spot",
+    );
   });
 
   it("builds combined page meta for SSR", () => {
     const pageMeta = buildPageMeta(
-      { searchQuery: "tacos" },
+      { searchQuery: "tacos", selectedRestaurantSlug: "la-taco-spot" },
       restaurants,
       meta,
       "https://example.com",
@@ -65,7 +98,9 @@ describe("page-meta", () => {
       { t1: "orangecounty" },
     );
     expect(pageMeta.title).toContain("tacos");
+    expect(pageMeta.title).toContain("La Taco Spot");
     expect(pageMeta.description).toContain("matching");
     expect(pageMeta.shareUrl).toContain("q=tacos");
+    expect(pageMeta.shareUrl).toContain("restaurant=la-taco-spot");
   });
 });

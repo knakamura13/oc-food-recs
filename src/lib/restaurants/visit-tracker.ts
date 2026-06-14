@@ -9,9 +9,7 @@ export function getLastVisitMs(): number | null {
 }
 
 /** Timestamp from the previous session (before this page load updates storage). */
-export function getPriorVisitMs(): number | null {
-  return getLastVisitMs();
-}
+export const getPriorVisitMs = getLastVisitMs;
 
 export function setLastVisitNow(): void {
   if (typeof localStorage === "undefined") return;
