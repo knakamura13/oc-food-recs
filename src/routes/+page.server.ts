@@ -1,3 +1,4 @@
+import { buildPageMeta } from "$lib/restaurants/page-meta";
 import { db } from "$lib/server/db";
 import type {
   Mention,
@@ -5,6 +6,7 @@ import type {
   RestaurantData,
   ThreadSummary,
 } from "$lib/restaurants/types";
+import { parseSearchParams } from "$lib/restaurants/url-state";
 import { sql } from "drizzle-orm";
 import type { PageServerLoad } from "./$types";
 
@@ -37,9 +39,15 @@ interface StatsRow {
   total_comments_processed: number;
 }
 
-export const load: PageServerLoad = async (): Promise<{
-  dataset: RestaurantData;
-}> => {
+function threadSubredditLookup(
+  threads: ThreadSummary[],
+): Record<string, string> {
+  const lookup: Record<string, string> = {};
+  for (const t of threads) lookup[t.id] = t.subreddit;
+  return lookup;
+}
+
+export const load: PageServerLoad = async ({ url }) => {
   // Restaurants joined with their mentions; aggregated to one row per restaurant.
   // Only restaurants whose mentions belong to published threads are returned.
   const restaurantsResult = await db.execute(sql`
@@ -208,10 +216,23 @@ export const load: PageServerLoad = async (): Promise<{
     total_comments_processed: statsRow.total_comments_processed ?? 0,
   };
 
+  const urlState = parseSearchParams(url.searchParams);
+  const pageMeta = buildPageMeta(
+    urlState,
+    restaurants,
+    meta,
+    url.origin,
+    url.pathname,
+    threadSubredditLookup(sourceThreads),
+  );
+
   return {
     dataset: {
       restaurants,
       meta,
     },
+    urlState,
+    pageMeta,
+    pageOrigin: url.origin,
   };
 };

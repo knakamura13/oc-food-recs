@@ -2002,6 +2002,27 @@ def _mapbox_geocode(name: str, location: str) -> tuple[float | None, float | Non
     return None, None, f"mapbox: rejected ({fname})"
 
 
+def geocode_with_fallback(
+    geocode_fn: Any,
+    name: str,
+    location: str | None,
+    street: str | None,
+    subreddit: str,
+) -> tuple[float | None, float | None, str, str | None]:
+    """Geocode a restaurant, mirroring the tier ladder in ``regeocode.py``."""
+    raw_loc = location or _subreddit_city(subreddit)
+    lat, lng, detail, geocoded_city = geocode_fn(name, raw_loc, street)
+    if lat is None and detail == "missing location":
+        sub_city = _subreddit_city(subreddit)
+        if sub_city and not location:
+            lat, lng, detail, geocoded_city = geocode_fn(name, sub_city, street)
+        else:
+            lat, lng, detail, geocoded_city = geocode_fn(
+                name, None, street, allow_name_only=True
+            )
+    return lat, lng, detail, geocoded_city
+
+
 def default_geocode(
     name: str,
     location: str | None,
@@ -2146,9 +2167,13 @@ def build_thread(
     restaurants = copy.deepcopy(thread_dataset["restaurants"])
 
     def _geocode_worker(r):
-        raw_loc = r.get("location") or _subreddit_city(manifest["subreddit"])
-        street = r.get("street")
-        return geocode_fn(r["name"], raw_loc, street)
+        return geocode_with_fallback(
+            geocode_fn,
+            r["name"],
+            r.get("location"),
+            r.get("street"),
+            manifest["subreddit"],
+        )
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
         futures = {executor.submit(_geocode_worker, r): r for r in restaurants}
@@ -2241,17 +2266,29 @@ def match_excluded_brand(
     return None
 
 
+_exclusion_table_warned = False
+
+
 def _load_excluded_brands(cur: Any) -> list[dict[str, Any]]:
     """Load the ``excluded_brands`` registry via an existing psycopg cursor.
 
     Returns [] if the table is missing (e.g. migration not yet applied) so ingest still
     works -- exclusion just becomes a no-op until the table exists.
     """
+    global _exclusion_table_warned
     try:
         cur.execute(
             "SELECT brand_name, reason, group_name, normalized_name FROM excluded_brands"
         )
-    except Exception:
+    except Exception as exc:
+        if not _exclusion_table_warned:
+            print(
+                "WARNING: excluded_brands table missing or unreadable; "
+                "chain exclusion is disabled until migrations are applied.",
+                file=sys.stderr,
+            )
+            _exclusion_table_warned = True
+        _ = exc
         return []
     rows = cur.fetchall()
     desc = cur.description
