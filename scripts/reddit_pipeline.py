@@ -46,14 +46,24 @@ GEOCODE_MIN_INTERVAL_S = 1.05  # Nominatim usage policy: max ~1 request/second
 _last_geocode_ts = 0.0
 _nominatim_lock = threading.Lock()
 
-OLLAMA_URL = os.environ.get("OC_FOOD_RECS_OLLAMA_URL", "http://127.0.0.1:11434/api/chat")
-OLLAMA_MODEL = os.environ.get("OC_FOOD_RECS_OLLAMA_MODEL", "gemma4:latest")
+
+def _env(name: str, legacy: str, default: str) -> str:
+    """Read env var, preferring OC_FOOD_RECS_* over legacy unprefixed name."""
+    return os.environ.get(name) or os.environ.get(legacy) or default
+
+
+OLLAMA_URL = _env(
+    "OC_FOOD_RECS_OLLAMA_URL", "OLLAMA_URL", "http://127.0.0.1:11434/api/chat"
+)
+OLLAMA_MODEL = _env("OC_FOOD_RECS_OLLAMA_MODEL", "OLLAMA_MODEL", "gemma4:latest")
 # Reasoning-capable tags (e.g. gemma4:26b) emit a chain-of-thought that consumes the
 # num_predict budget and leaves the JSON answer empty -- silently dropping the record.
 # Sending think=false makes every model answer directly; it is a no-op on non-thinking
 # tags like gemma4:latest. Override with OC_FOOD_RECS_OLLAMA_THINK=true|false|omit.
 _THINK_ENV = os.environ.get("OC_FOOD_RECS_OLLAMA_THINK", "false").strip().lower()
-OLLAMA_THINK = {"true": True, "false": False, "omit": None, "": None}.get(_THINK_ENV, False)
+OLLAMA_THINK = {"true": True, "false": False, "omit": None, "": None}.get(
+    _THINK_ENV, False
+)
 
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 HEADERS = {"User-Agent": "oc-food-recs-pipeline/1.0 (personal project)"}
@@ -74,8 +84,12 @@ DENSITY_CITY_THRESHOLD = int(os.environ.get("OC_FOOD_RECS_DENSITY_CITIES", "3"))
 # OFF by default: an unbounded Google Places probe that counts how many results a bare
 # name returns. Unreliable + paid, so it only ever routes to 'pending_review', never
 # auto-excludes. Enable with OC_FOOD_RECS_CHAIN_PROBE=1.
-CHAIN_PROBE_ENABLED = os.environ.get("OC_FOOD_RECS_CHAIN_PROBE", "").strip().lower() in ("1", "true", "yes")
-CHAIN_LOCATION_THRESHOLD = int(os.environ.get("OC_FOOD_RECS_CHAIN_LOCATION_THRESHOLD", "5"))
+CHAIN_PROBE_ENABLED = os.environ.get(
+    "OC_FOOD_RECS_CHAIN_PROBE", ""
+).strip().lower() in ("1", "true", "yes")
+CHAIN_LOCATION_THRESHOLD = int(
+    os.environ.get("OC_FOOD_RECS_CHAIN_LOCATION_THRESHOLD", "5")
+)
 
 SYSTEM_PROMPT = """You are a structured data extractor. Given a Reddit comment recommending food/drink spots, extract each establishment mentioned into a JSON array.
 
@@ -182,9 +196,9 @@ def extract_post_id(raw_html: str) -> str:
     patterns = [
         r'post-id="t3_([^"]+)"',
         r'postid="t3_([^"]+)"',
-        r'/comments/([a-z0-9]+)/comment/',
+        r"/comments/([a-z0-9]+)/comment/",
         r'"postId":"t3_([^"]+)"',
-        r'&quot;id&quot;:&quot;t3_([^&]+)&quot;',
+        r"&quot;id&quot;:&quot;t3_([^&]+)&quot;",
     ]
     for pattern in patterns:
         match = re.search(pattern, raw_html, re.IGNORECASE)
@@ -199,7 +213,7 @@ def extract_subreddit(raw_html: str, soup: BeautifulSoup) -> str:
         return subreddit_header["name"]
 
     patterns = [
-        r'prefixedName&quot;:&quot;r/([^&]+)&quot;',
+        r"prefixedName&quot;:&quot;r/([^&]+)&quot;",
         r"/r/([^/]+)/comments/",
     ]
     for pattern in patterns:
@@ -222,7 +236,9 @@ def parse_reddit_json(reddit_json: list[dict[str, Any]]) -> dict[str, Any]:
     post_url = post_data.get("url", "")
     flair = normalize_text(post_data.get("link_flair_text", "")) or ""
 
-    def parse_comment(comment_data: dict[str, Any], depth: int = 0) -> dict[str, Any] | None:
+    def parse_comment(
+        comment_data: dict[str, Any], depth: int = 0
+    ) -> dict[str, Any] | None:
         if comment_data.get("kind") != "t1":
             return None
 
@@ -304,7 +320,9 @@ def parse_saved_reddit_html(html_path: Path) -> dict[str, Any]:
     post_body = rich_text(post_body_div)
 
     post_author = ""
-    credit = soup.find("shreddit-post-credit-bar") or soup.find(attrs={"credit-bar": True})
+    credit = soup.find("shreddit-post-credit-bar") or soup.find(
+        attrs={"credit-bar": True}
+    )
     if credit and credit.get("author"):
         post_author = credit["author"]
     else:
@@ -342,7 +360,9 @@ def parse_saved_reddit_html(html_path: Path) -> dict[str, Any]:
         if body_div is None:
             slot_div = tag.find("div", attrs={"slot": "comment"})
             if slot_div:
-                body_div = slot_div.find("div", class_=lambda value: value and "rtjson-content" in value)
+                body_div = slot_div.find(
+                    "div", class_=lambda value: value and "rtjson-content" in value
+                )
                 if body_div is None:
                     body_div = slot_div
 
@@ -393,7 +413,11 @@ def parse_saved_reddit_html(html_path: Path) -> dict[str, Any]:
             "body": post_body,
             "author": post_author,
             "flair": flair,
-            "url": f"https://www.reddit.com/r/{subreddit}/comments/{post_id}/" if subreddit and post_id else "",
+            "url": (
+                f"https://www.reddit.com/r/{subreddit}/comments/{post_id}/"
+                if subreddit and post_id
+                else ""
+            ),
         },
         "comment_count": len(comments),
         "max_depth": max((comment["depth"] for comment in comments), default=0),
@@ -415,8 +439,7 @@ def slugify(value: str) -> str:
 
 
 def assign_slugs(
-    restaurants: list[dict[str, Any]],
-    existing: list[dict[str, Any]] | None = None
+    restaurants: list[dict[str, Any]], existing: list[dict[str, Any]] | None = None
 ) -> list[tuple[dict[str, Any], str]]:
     """Assign each restaurant a URL slug from its name, deduplicating against
     existing entries and suffixing -2/-3/... on true name collisions.
@@ -445,18 +468,22 @@ def assign_slugs(
             used_slugs.add(slug)
 
         out.append((r, slug))
-        existing.append({
-            "name": r["name"],
-            "slug": slug,
-            "location": r.get("location"),
-            "lat": r.get("lat"),
-            "lng": r.get("lng"),
-        })
+        existing.append(
+            {
+                "name": r["name"],
+                "slug": slug,
+                "location": r.get("location"),
+                "lat": r.get("lat"),
+                "lng": r.get("lng"),
+            }
+        )
 
     return out
 
 
-def get_connected_components(nodes: list[int], adjacency: dict[int, list[int]]) -> list[list[int]]:
+def get_connected_components(
+    nodes: list[int], adjacency: dict[int, list[int]]
+) -> list[list[int]]:
     visited: set[int] = set()
     components: list[list[int]] = []
     for node in nodes:
@@ -479,10 +506,18 @@ def get_connected_components(nodes: list[int], adjacency: dict[int, list[int]]) 
 def _merge_restaurant_group(entries: list[dict[str, Any]]) -> dict[str, Any]:
     """Collapse is_match-equivalent restaurants from the same ingest batch."""
     best_name = max((entry["name"] for entry in entries), key=len)
-    best_location = next((entry.get("location") for entry in entries if entry.get("location")), None)
-    best_cuisine = next((entry.get("cuisine") for entry in entries if entry.get("cuisine")), None)
-    lat = next((entry.get("lat") for entry in entries if entry.get("lat") is not None), None)
-    lng = next((entry.get("lng") for entry in entries if entry.get("lng") is not None), None)
+    best_location = next(
+        (entry.get("location") for entry in entries if entry.get("location")), None
+    )
+    best_cuisine = next(
+        (entry.get("cuisine") for entry in entries if entry.get("cuisine")), None
+    )
+    lat = next(
+        (entry.get("lat") for entry in entries if entry.get("lat") is not None), None
+    )
+    lng = next(
+        (entry.get("lng") for entry in entries if entry.get("lng") is not None), None
+    )
 
     all_endorsements: list[dict[str, Any]] = []
     seen_endorsements: set[str | tuple[str, str, str]] = set()
@@ -511,7 +546,9 @@ def _merge_restaurant_group(entries: list[dict[str, Any]]) -> dict[str, Any]:
     merged["cuisine"] = best_cuisine
     merged["lat"] = lat
     merged["lng"] = lng
-    merged["aggregate_score"] = sum(entry.get("aggregate_score", 0) for entry in entries)
+    merged["aggregate_score"] = sum(
+        entry.get("aggregate_score", 0) for entry in entries
+    )
     merged["mention_count"] = sum(entry.get("mention_count", 1) for entry in entries)
     merged["chain_suspect"] = any(entry.get("chain_suspect") for entry in entries)
     merged["endorsements"] = all_endorsements
@@ -520,7 +557,9 @@ def _merge_restaurant_group(entries: list[dict[str, Any]]) -> dict[str, Any]:
     return merged
 
 
-def collapse_duplicate_restaurants(restaurants: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def collapse_duplicate_restaurants(
+    restaurants: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
     """Merge transitive is_match duplicates within an ingest batch."""
     if len(restaurants) <= 1:
         return restaurants
@@ -599,12 +638,16 @@ def parse_comment_date(created_utc: Any) -> datetime | None:
     except (ValueError, OSError, OverflowError):
         pass
     try:
-        return datetime.fromisoformat(val.replace('+0000', '+00:00').replace('Z', '+00:00'))
+        return datetime.fromisoformat(
+            val.replace("+0000", "+00:00").replace("Z", "+00:00")
+        )
     except ValueError:
         return None
 
 
-def manifest_from_parsed_thread(url: str, parsed_thread: dict[str, Any]) -> dict[str, Any]:
+def manifest_from_parsed_thread(
+    url: str, parsed_thread: dict[str, Any]
+) -> dict[str, Any]:
     """Build the manifest dict for a parsed Reddit JSON thread (in-memory, no disk I/O)."""
     return {
         "id": thread_folder_name(parsed_thread),
@@ -655,30 +698,86 @@ def init_thread(html_path: Path, threads_root: Path = THREADS_ROOT) -> Path:
 SENTINEL_NAMES = {"none", "null", "n/a", "na", "unknown", "none.", "n/a."}
 # Generic descriptions the model sometimes emits as if they were establishment names.
 GENERIC_NAMES = {
-    "wine tasting place", "wine tasting", "wine bar", "taco truck", "food truck",
-    "breakfast spot", "coffee shop", "sandwich shop", "pizza place", "burger place",
-    "dumpling place", "pho place", "pho places", "ice cream shop", "the place", "a place",
+    "wine tasting place",
+    "wine tasting",
+    "wine bar",
+    "taco truck",
+    "food truck",
+    "breakfast spot",
+    "coffee shop",
+    "sandwich shop",
+    "pizza place",
+    "burger place",
+    "dumpling place",
+    "pho place",
+    "pho places",
+    "ice cream shop",
+    "the place",
+    "a place",
 }
 # Object envelopes some models wrap the array in, e.g. {"establishments": [...]}.
-_WRAPPER_KEYS = ("entities", "establishments", "restaurants", "places", "results", "items", "data")
+_WRAPPER_KEYS = (
+    "entities",
+    "establishments",
+    "restaurants",
+    "places",
+    "results",
+    "items",
+    "data",
+)
 # Backfill cuisine from an unambiguous food word in the name (most specific first).
 _CUISINE_KEYWORDS = [
     # concrete food-type words first (win over ethnonyms below)
-    ("pizzeria", "Pizza"), ("pizza", "Pizza"), ("taqueria", "Mexican"), ("taco", "Mexican"),
-    ("burrito", "Mexican"), ("birria", "Mexican"), ("cantina", "Mexican"), ("sushi", "Sushi"),
-    ("ramen", "Ramen"), ("izakaya", "Japanese"), ("teriyaki", "Japanese"), ("pho", "Vietnamese"),
-    ("delicatessen", "Deli"), ("deli", "Deli"), ("bakery", "Bakery"), ("bakehouse", "Bakery"),
-    ("patisserie", "Bakery"), ("creamery", "Ice Cream"), ("ice cream", "Ice Cream"),
-    ("custard", "Ice Cream"), ("gelato", "Ice Cream"), ("donut", "Donuts"), ("doughnut", "Donuts"),
-    ("barbecue", "BBQ"), ("bbq", "BBQ"), ("steakhouse", "Steakhouse"), ("burger", "Burgers"),
-    ("sandwich", "Sandwiches"), ("seafood", "Seafood"), ("trattoria", "Italian"),
-    ("ristorante", "Italian"), ("osteria", "Italian"), ("cucina", "Italian"),
-    ("cafe", "Cafe"), ("café", "Cafe"), ("coffee", "Coffee"),
+    ("pizzeria", "Pizza"),
+    ("pizza", "Pizza"),
+    ("taqueria", "Mexican"),
+    ("taco", "Mexican"),
+    ("burrito", "Mexican"),
+    ("birria", "Mexican"),
+    ("cantina", "Mexican"),
+    ("sushi", "Sushi"),
+    ("ramen", "Ramen"),
+    ("izakaya", "Japanese"),
+    ("teriyaki", "Japanese"),
+    ("pho", "Vietnamese"),
+    ("delicatessen", "Deli"),
+    ("deli", "Deli"),
+    ("bakery", "Bakery"),
+    ("bakehouse", "Bakery"),
+    ("patisserie", "Bakery"),
+    ("creamery", "Ice Cream"),
+    ("ice cream", "Ice Cream"),
+    ("custard", "Ice Cream"),
+    ("gelato", "Ice Cream"),
+    ("donut", "Donuts"),
+    ("doughnut", "Donuts"),
+    ("barbecue", "BBQ"),
+    ("bbq", "BBQ"),
+    ("steakhouse", "Steakhouse"),
+    ("burger", "Burgers"),
+    ("sandwich", "Sandwiches"),
+    ("seafood", "Seafood"),
+    ("trattoria", "Italian"),
+    ("ristorante", "Italian"),
+    ("osteria", "Italian"),
+    ("cucina", "Italian"),
+    ("cafe", "Cafe"),
+    ("café", "Cafe"),
+    ("coffee", "Coffee"),
     # ethnonyms last (only fire when the word literally appears in the name)
-    ("thai", "Thai"), ("greek", "Greek"), ("persian", "Persian"), ("korean", "Korean"),
-    ("vietnamese", "Vietnamese"), ("mexican", "Mexican"), ("italian", "Italian"),
-    ("japanese", "Japanese"), ("chinese", "Chinese"), ("indian", "Indian"),
-    ("mediterranean", "Mediterranean"), ("peruvian", "Peruvian"), ("burmese", "Burmese"),
+    ("thai", "Thai"),
+    ("greek", "Greek"),
+    ("persian", "Persian"),
+    ("korean", "Korean"),
+    ("vietnamese", "Vietnamese"),
+    ("mexican", "Mexican"),
+    ("italian", "Italian"),
+    ("japanese", "Japanese"),
+    ("chinese", "Chinese"),
+    ("indian", "Indian"),
+    ("mediterranean", "Mediterranean"),
+    ("peruvian", "Peruvian"),
+    ("burmese", "Burmese"),
 ]
 
 
@@ -723,18 +822,24 @@ def normalize_extractor_result(result: Any) -> tuple[list[dict[str, Any]], str |
         # ("a wine tasting place") the model sometimes emits as if they were names.
         if not low or low in SENTINEL_NAMES or low in GENERIC_NAMES:
             continue
-        cuisine = normalize_text(str(entity["cuisine"])) if entity.get("cuisine") else None
+        cuisine = (
+            normalize_text(str(entity["cuisine"])) if entity.get("cuisine") else None
+        )
         if not cuisine:
             cuisine = cuisine_from_name(name)
         cleaned.append(
             {
                 "name": name,
-                "location": normalize_text(str(entity["location"]))
-                if entity.get("location")
-                else None,
-                "street": normalize_text(str(entity["street"]))
-                if entity.get("street")
-                else None,
+                "location": (
+                    normalize_text(str(entity["location"]))
+                    if entity.get("location")
+                    else None
+                ),
+                "street": (
+                    normalize_text(str(entity["street"]))
+                    if entity.get("street")
+                    else None
+                ),
                 "cuisine": cuisine,
                 "chain_suspect": bool(entity.get("chain_suspect")),
             }
@@ -742,7 +847,11 @@ def normalize_extractor_result(result: Any) -> tuple[list[dict[str, Any]], str |
     return cleaned, raw
 
 
-def default_extract_entities(comment_text: str, comment: dict[str, Any] | None = None, manifest: dict[str, Any] | None = None) -> tuple[list[dict[str, Any]], str]:
+def default_extract_entities(
+    comment_text: str,
+    comment: dict[str, Any] | None = None,
+    manifest: dict[str, Any] | None = None,
+) -> tuple[list[dict[str, Any]], str]:
     payload = json.dumps(
         {
             "model": OLLAMA_MODEL,
@@ -789,13 +898,25 @@ def default_extract_entities(comment_text: str, comment: dict[str, Any] | None =
 def classify_reply(body_text: str) -> str:
     body = body_text.lower().strip()
 
-    if re.match(r"^[\U0001f000-\U0001ffff\s\U00002600-\U000027bf\U0000fe00-\U0000feff]+$", body):
+    if re.match(
+        r"^[\U0001f000-\U0001ffff\s\U00002600-\U000027bf\U0000fe00-\U0000feff]+$", body
+    ):
         return "filler"
 
-    if any(body.startswith(word) or body == word for word in ["yup", "yep", "same", "lol", "rip"]):
+    if any(
+        body.startswith(word) or body == word
+        for word in ["yup", "yep", "same", "lol", "rip"]
+    ):
         return "filler"
 
-    filler_words = ["thank", "thanks", "noted", "bookmarked", "adding to my list", "saved"]
+    filler_words = [
+        "thank",
+        "thanks",
+        "noted",
+        "bookmarked",
+        "adding to my list",
+        "saved",
+    ]
     if any(word in body for word in filler_words):
         food_words = [
             "taco",
@@ -959,11 +1080,11 @@ def _is_word_boundary_match(short_name: str, long_name: str) -> bool:
 
     if not short_norm or short_norm not in long_norm:
         return False
-        
+
     starts = [m.start() for m in re.finditer(re.escape(short_norm), long_norm)]
     if not starts:
         return False
-        
+
     # Process long_name with the same folding rules as normalize_name.
     long_processed = _fold_accents(long_name.lower().strip())
     long_processed = re.sub(r"['’]s$", "", long_processed)
@@ -973,23 +1094,23 @@ def _is_word_boundary_match(short_name: str, long_name: str) -> bool:
     for i, c in enumerate(long_processed):
         if re.match(r"[a-z0-9]", c):
             mapping.append(i)
-            
+
     for start in starts:
         end = start + len(short_norm) - 1
-        
+
         is_start_boundary = True
         if start > 0:
             if mapping[start] == mapping[start - 1] + 1:
                 is_start_boundary = False
-                
+
         is_end_boundary = True
         if end < len(mapping) - 1:
             if mapping[end + 1] == mapping[end] + 1:
                 is_end_boundary = False
-                
+
         if is_start_boundary and is_end_boundary:
             return True
-            
+
     return False
 
 
@@ -1046,7 +1167,11 @@ def _endorsement_dedupe_key(endorsement: dict[str, Any]) -> str | tuple[str, str
     )
 
 
-def collect_endorsements(parent_id: str, children_map: dict[str, list[dict[str, Any]]], reply_classes: dict[str, str]) -> list[dict[str, Any]]:
+def collect_endorsements(
+    parent_id: str,
+    children_map: dict[str, list[dict[str, Any]]],
+    reply_classes: dict[str, str],
+) -> list[dict[str, Any]]:
     endorsements: list[dict[str, Any]] = []
     for child in children_map.get(parent_id, []):
         reply_type = reply_classes.get(child["id"], "other")
@@ -1062,7 +1187,9 @@ def collect_endorsements(parent_id: str, children_map: dict[str, list[dict[str, 
                     "created_utc": child.get("created_utc", ""),
                 }
             )
-        endorsements.extend(collect_endorsements(child["id"], children_map, reply_classes))
+        endorsements.extend(
+            collect_endorsements(child["id"], children_map, reply_classes)
+        )
     return endorsements
 
 
@@ -1130,7 +1257,9 @@ def build_thread_dataset(
             if _names_match(e1, raw_entries[j]):
                 name_adjacency[i].append(j)
                 name_adjacency[j].append(i)
-    name_components = get_connected_components(list(range(len(raw_entries))), name_adjacency)
+    name_components = get_connected_components(
+        list(range(len(raw_entries))), name_adjacency
+    )
 
     def split_by_location(entries: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
         """Split name-similar entries by location compatibility.
@@ -1192,11 +1321,19 @@ def build_thread_dataset(
                     seen_endorsements.add(dedupe_key)
                     all_endorsements.append(endorsement)
 
-            all_endorsements.sort(key=lambda endorsement: endorsement["score"], reverse=True)
+            all_endorsements.sort(
+                key=lambda endorsement: endorsement["score"], reverse=True
+            )
             best_name = max((entry["name"] for entry in subgroup), key=len)
-            best_location = next((entry["location"] for entry in subgroup if entry.get("location")), None)
-            best_street = next((entry["street"] for entry in subgroup if entry.get("street")), None)
-            best_cuisine = next((entry["cuisine"] for entry in subgroup if entry.get("cuisine")), None)
+            best_location = next(
+                (entry["location"] for entry in subgroup if entry.get("location")), None
+            )
+            best_street = next(
+                (entry["street"] for entry in subgroup if entry.get("street")), None
+            )
+            best_cuisine = next(
+                (entry["cuisine"] for entry in subgroup if entry.get("cuisine")), None
+            )
 
             restaurants.append(
                 {
@@ -1204,7 +1341,9 @@ def build_thread_dataset(
                     "location": best_location,
                     "street": best_street,
                     "cuisine": best_cuisine,
-                    "chain_suspect": any(entry.get("chain_suspect") for entry in subgroup),
+                    "chain_suspect": any(
+                        entry.get("chain_suspect") for entry in subgroup
+                    ),
                     "aggregate_score": sum(entry["score"] for entry in subgroup),
                     "mention_count": len(subgroup),
                     "primary_comment": primary["comment"],
@@ -1268,7 +1407,9 @@ class GeocodeCache:
             self._conn = _connect()
         return self._conn
 
-    def get(self, query: str) -> tuple[float | None, float | None, str | None, str | None] | None:
+    def get(
+        self, query: str
+    ) -> tuple[float | None, float | None, str | None, str | None] | None:
         if not self.conn:
             return None
         try:
@@ -1349,25 +1490,57 @@ def _geocode_key(name: str, location: str | None, street: str | None = None) -> 
 # where the city is implied), fall back to the subreddit's city as a geocoding hint.
 # County-wide subs (orangecounty) have no single city and are intentionally absent → no fallback.
 SUBREDDIT_CITY = {
-    "anaheim": "Anaheim", "santaana": "Santa Ana", "irvine": "Irvine",
-    "huntingtonbeach": "Huntington Beach", "gardengrove": "Garden Grove", "fullerton": "Fullerton",
-    "costamesa": "Costa Mesa", "missionviejo": "Mission Viejo", "westminster": "Westminster",
-    "newportbeach": "Newport Beach", "lagunabeach": "Laguna Beach", "tustin": "Tustin",
-    "orange": "Orange", "orangeca": "Orange", "cityoforange": "Orange",
-    "lakeforest": "Lake Forest", "sanclemente": "San Clemente", "buenapark": "Buena Park",
-    "lahabra": "La Habra", "fountainvalley": "Fountain Valley", "yorbalinda": "Yorba Linda",
-    "danapoint": "Dana Point", "alisoviejo": "Aliso Viejo", "ranchosantamargarita": "Rancho Santa Margarita",
-    "lagunaniguel": "Laguna Niguel", "lagunahills": "Laguna Hills", "lagunawoods": "Laguna Woods",
-    "brea": "Brea", "placentia": "Placentia", "cypress": "Cypress",
-    "sanjuancapistrano": "San Juan Capistrano", "sealbeach": "Seal Beach", "stanton": "Stanton",
-    "losalamitos": "Los Alamitos", "villapark": "Villa Park", "lapalma": "La Palma",
+    "anaheim": "Anaheim",
+    "santaana": "Santa Ana",
+    "irvine": "Irvine",
+    "huntingtonbeach": "Huntington Beach",
+    "gardengrove": "Garden Grove",
+    "fullerton": "Fullerton",
+    "costamesa": "Costa Mesa",
+    "missionviejo": "Mission Viejo",
+    "westminster": "Westminster",
+    "newportbeach": "Newport Beach",
+    "lagunabeach": "Laguna Beach",
+    "tustin": "Tustin",
+    "orange": "Orange",
+    "orangeca": "Orange",
+    "cityoforange": "Orange",
+    "lakeforest": "Lake Forest",
+    "sanclemente": "San Clemente",
+    "buenapark": "Buena Park",
+    "lahabra": "La Habra",
+    "fountainvalley": "Fountain Valley",
+    "yorbalinda": "Yorba Linda",
+    "danapoint": "Dana Point",
+    "alisoviejo": "Aliso Viejo",
+    "ranchosantamargarita": "Rancho Santa Margarita",
+    "lagunaniguel": "Laguna Niguel",
+    "lagunahills": "Laguna Hills",
+    "lagunawoods": "Laguna Woods",
+    "brea": "Brea",
+    "placentia": "Placentia",
+    "cypress": "Cypress",
+    "sanjuancapistrano": "San Juan Capistrano",
+    "sealbeach": "Seal Beach",
+    "stanton": "Stanton",
+    "losalamitos": "Los Alamitos",
+    "villapark": "Villa Park",
+    "lapalma": "La Palma",
     # unincorporated communities
-    "laderaranch": "Ladera Ranch", "cotodecaza": "Coto de Caza", "rossmoor": "Rossmoor",
-    "northtustin": "North Tustin", "midwaycity": "Midway City", "trabucocanyon": "Trabuco Canyon",
-    "silverado": "Silverado Canyon", "sunsetbeach": "Sunset Beach",
+    "laderaranch": "Ladera Ranch",
+    "cotodecaza": "Coto de Caza",
+    "rossmoor": "Rossmoor",
+    "northtustin": "North Tustin",
+    "midwaycity": "Midway City",
+    "trabucocanyon": "Trabuco Canyon",
+    "silverado": "Silverado Canyon",
+    "sunsetbeach": "Sunset Beach",
     # campuses → nearest city
-    "uci": "Irvine", "csuf": "Fullerton", "calstatefullerton": "Fullerton",
-    "chapman": "Orange", "saddleback": "Mission Viejo",
+    "uci": "Irvine",
+    "csuf": "Fullerton",
+    "calstatefullerton": "Fullerton",
+    "chapman": "Orange",
+    "saddleback": "Mission Viejo",
     # orangecounty: intentionally omitted (county-wide → no fallback)
 }
 
@@ -1384,64 +1557,141 @@ def _subreddit_city(subreddit: str | None) -> str | None:
 _OC_CITIES: list[str] = sorted(
     [
         # 34 officially incorporated OC cities (source: ocgov.com)
-        "Aliso Viejo", "Anaheim", "Brea", "Buena Park", "Costa Mesa", "Cypress",
-        "Dana Point", "Fountain Valley", "Fullerton", "Garden Grove",
-        "Huntington Beach", "Irvine", "La Habra", "La Palma", "Laguna Beach",
-        "Laguna Hills", "Laguna Niguel", "Laguna Woods", "Lake Forest",
-        "Los Alamitos", "Mission Viejo", "Newport Beach", "Orange", "Placentia",
-        "Rancho Santa Margarita", "San Clemente", "San Juan Capistrano",
-        "Santa Ana", "Seal Beach", "Stanton", "Tustin", "Villa Park",
-        "Westminster", "Yorba Linda",
+        "Aliso Viejo",
+        "Anaheim",
+        "Brea",
+        "Buena Park",
+        "Costa Mesa",
+        "Cypress",
+        "Dana Point",
+        "Fountain Valley",
+        "Fullerton",
+        "Garden Grove",
+        "Huntington Beach",
+        "Irvine",
+        "La Habra",
+        "La Palma",
+        "Laguna Beach",
+        "Laguna Hills",
+        "Laguna Niguel",
+        "Laguna Woods",
+        "Lake Forest",
+        "Los Alamitos",
+        "Mission Viejo",
+        "Newport Beach",
+        "Orange",
+        "Placentia",
+        "Rancho Santa Margarita",
+        "San Clemente",
+        "San Juan Capistrano",
+        "Santa Ana",
+        "Seal Beach",
+        "Stanton",
+        "Tustin",
+        "Villa Park",
+        "Westminster",
+        "Yorba Linda",
         # unincorporated communities, master-planned areas, and county islands
         # source: OC Planning / community plans
-        "Anaheim Hills", "Bolsa Chica", "Corona del Mar", "Coto de Caza",
-        "El Modena", "Emerald Bay", "Foothill Ranch", "Las Flores",
-        "Ladera Ranch", "Midway City", "Modjeska Canyon", "North Tustin",
-        "Olive Heights", "Orange Park Acres", "Rancho Mission Viejo", "Rossmoor",
-        "Santa Ana Heights", "Santiago Canyon", "Silverado Canyon",
-        "Sunset Beach", "Trabuco Canyon", "Wagon Wheel",
+        "Anaheim Hills",
+        "Bolsa Chica",
+        "Corona del Mar",
+        "Coto de Caza",
+        "El Modena",
+        "Emerald Bay",
+        "Foothill Ranch",
+        "Las Flores",
+        "Ladera Ranch",
+        "Midway City",
+        "Modjeska Canyon",
+        "North Tustin",
+        "Olive Heights",
+        "Orange Park Acres",
+        "Rancho Mission Viejo",
+        "Rossmoor",
+        "Santa Ana Heights",
+        "Santiago Canyon",
+        "Silverado Canyon",
+        "Sunset Beach",
+        "Trabuco Canyon",
+        "Wagon Wheel",
         # major landmarks, malls, and hubs (geocoding hints)
-        "South Coast Plaza", "Fashion Island", "Irvine Spectrum", "The Lab",
-        "The Camp", "Pacific City", "Old Towne Orange", "Downtown Disney",
-        "Anaheim Packing District", "Lido Marina Village", "SoCo",
+        "South Coast Plaza",
+        "Fashion Island",
+        "Irvine Spectrum",
+        "The Lab",
+        "The Camp",
+        "Pacific City",
+        "Old Towne Orange",
+        "Downtown Disney",
+        "Anaheim Packing District",
+        "Lido Marina Village",
+        "SoCo",
         # nearby LA-county cities that appear in OC food discussions
-        "Artesia", "Cerritos", "Long Beach", "Norwalk",
+        "Artesia",
+        "Cerritos",
+        "Long Beach",
+        "Norwalk",
     ],
     key=len,
     reverse=True,  # match longer names first ("Anaheim Hills" before "Anaheim")
 )
 _LOCATION_ALIASES: dict[str, str] = {
     # common abbreviations
-    "hb": "Huntington Beach", "cm": "Costa Mesa", "sa": "Santa Ana",
-    "sna": "Santa Ana", "fv": "Fountain Valley", "gg": "Garden Grove",
-    "cdm": "Corona del Mar", "dp": "Dana Point", "sjc": "San Juan Capistrano",
-    "lb": "Long Beach", "mv": "Mission Viejo", "lf": "Lake Forest",
-    "rsm": "Rancho Santa Margarita", "bp": "Buena Park",
+    "hb": "Huntington Beach",
+    "cm": "Costa Mesa",
+    "sa": "Santa Ana",
+    "sna": "Santa Ana",
+    "fv": "Fountain Valley",
+    "gg": "Garden Grove",
+    "cdm": "Corona del Mar",
+    "dp": "Dana Point",
+    "sjc": "San Juan Capistrano",
+    "lb": "Long Beach",
+    "mv": "Mission Viejo",
+    "lf": "Lake Forest",
+    "rsm": "Rancho Santa Margarita",
+    "bp": "Buena Park",
     # partials / informal names
-    "newport": "Newport Beach", "huntington": "Huntington Beach",
-    "aliso": "Aliso Viejo", "sanjuan": "San Juan Capistrano",
-    "fhr": "Foothill Ranch", "foothillranch": "Foothill Ranch",
+    "newport": "Newport Beach",
+    "huntington": "Huntington Beach",
+    "aliso": "Aliso Viejo",
+    "sanjuan": "San Juan Capistrano",
+    "fhr": "Foothill Ranch",
+    "foothillranch": "Foothill Ranch",
     "anaheimhills": "Anaheim Hills",
     # landmarks / hubs
-    "spectrum": "Irvine Spectrum", "ocspectrum": "Irvine Spectrum",
-    "scp": "South Coast Plaza", "southcoast": "South Coast Plaza",
+    "spectrum": "Irvine Spectrum",
+    "ocspectrum": "Irvine Spectrum",
+    "scp": "South Coast Plaza",
+    "southcoast": "South Coast Plaza",
     "packingdistrict": "Anaheim Packing District",
-    "thelab": "The Lab", "thecamp": "The Camp",
-    "pacificcity": "Pacific City", "lidomarina": "Lido Marina Village",
+    "thelab": "The Lab",
+    "thecamp": "The Camp",
+    "pacificcity": "Pacific City",
+    "lidomarina": "Lido Marina Village",
     # university campuses → host city
-    "uci": "Irvine", "ucitowncenter": "Irvine", "csuf": "Fullerton",
+    "uci": "Irvine",
+    "ucitowncenter": "Irvine",
+    "csuf": "Fullerton",
     # landmarks / neighborhoods → city
-    "disneyland": "Anaheim", "downtowndisney": "Anaheim",
+    "disneyland": "Anaheim",
+    "downtowndisney": "Anaheim",
     "littlearabia": "Anaheim",
-    "fashionisland": "Newport Beach", "crystalcove": "Newport Beach",
+    "fashionisland": "Newport Beach",
+    "crystalcove": "Newport Beach",
     # unincorporated community shorthands
-    "silverado": "Silverado Canyon", "modjeska": "Modjeska Canyon",
+    "silverado": "Silverado Canyon",
+    "modjeska": "Modjeska Canyon",
     "trabuco": "Trabuco Canyon",
-    "rmv": "Rancho Mission Viejo", "ranchomv": "Rancho Mission Viejo",
+    "rmv": "Rancho Mission Viejo",
+    "ranchomv": "Rancho Mission Viejo",
     # common OC Reddit neighborhood / landmark shorthands
     "dtsa": "Santa Ana",
-    "oldtowneorange": "Orange", "oldtowne": "Orange",
-    "southcoastplaza": "Costa Mesa", "scp": "Costa Mesa",
+    "oldtowneorange": "Orange",
+    "oldtowne": "Orange",
+    "southcoastplaza": "Costa Mesa",
+    "scp": "Costa Mesa",
 }
 
 
@@ -1474,7 +1724,9 @@ def normalize_location(location: str | None) -> str | None:
     """
     if not location or not location.strip():
         return None
-    first = re.split(r"\s*(?:/|,|&|\bor\b|\band\b)\s*", location.strip(), maxsplit=1)[0].strip()
+    first = re.split(r"\s*(?:/|,|&|\bor\b|\band\b)\s*", location.strip(), maxsplit=1)[
+        0
+    ].strip()
     if not first:
         return None
     key = _loc_key(first)
@@ -1554,9 +1806,8 @@ def _google_closed_status_lookup(
 
     place = places[0]
     loc = place.get("location") or {}
-    if (
-        place.get("businessStatus") == "CLOSED_PERMANENTLY"
-        and _in_oc_bounds(loc.get("latitude"), loc.get("longitude"))
+    if place.get("businessStatus") == "CLOSED_PERMANENTLY" and _in_oc_bounds(
+        loc.get("latitude"), loc.get("longitude")
     ):
         return CLOSED_PERMANENTLY_DETAIL
     return None
@@ -1590,7 +1841,9 @@ def _google_geocode(
     try:
         places = _google_request(api_key, payload)
         if not places:
-            closed_detail = _google_closed_status_lookup(api_key, name, location, street)
+            closed_detail = _google_closed_status_lookup(
+                api_key, name, location, street
+            )
             if closed_detail:
                 return None, None, closed_detail
             return None, None, "google: no results"
@@ -1619,8 +1872,20 @@ MAPBOX_MIN_INTERVAL_S = 0.2
 _last_mapbox_ts = 0.0
 _mapbox_lock = threading.Lock()
 _mapbox_token_value: str | None = None
-_NAME_STOPWORDS = {"the", "a", "and", "restaurant", "cafe", "kitchen", "grill",
-                   "grille", "bar", "taqueria", "co", "llc"}
+_NAME_STOPWORDS = {
+    "the",
+    "a",
+    "and",
+    "restaurant",
+    "cafe",
+    "kitchen",
+    "grill",
+    "grille",
+    "bar",
+    "taqueria",
+    "co",
+    "llc",
+}
 
 
 def _mapbox_token() -> str:
@@ -1660,7 +1925,9 @@ def _name_score(query_name: str, result_name: str) -> float:
     return max(ratio, subset_score)
 
 
-def _mapbox_accept(query_name: str, city_key: str, feat_name: str, feat_addr: str) -> bool:
+def _mapbox_accept(
+    query_name: str, city_key: str, feat_name: str, feat_addr: str
+) -> bool:
     """Accept a Mapbox candidate only on a strong name match, or a decent name
     match confirmed by the city -- the gate that blocks fuzzy false positives."""
     score = _name_score(query_name, feat_name)
@@ -1673,8 +1940,14 @@ def _mapbox_pick(cands: list, query_name: str, city_key: str):
     multi-branch chain resolves to the right city), else the best name match."""
     if not cands:
         return None
-    scored = [(_name_score(query_name, f[2]), bool(city_key) and city_key in _loc_key(f[3]), f)
-              for f in cands]
+    scored = [
+        (
+            _name_score(query_name, f[2]),
+            bool(city_key) and city_key in _loc_key(f[3]),
+            f,
+        )
+        for f in cands
+    ]
     city_hits = [s for s in scored if s[0] >= 0.6 and s[1]]
     pool = city_hits or scored
     return max(pool, key=lambda s: s[0])[2]
@@ -1684,14 +1957,16 @@ def _mapbox_geocode(name: str, location: str) -> tuple[float | None, float | Non
     token = _mapbox_token()
     if not token:
         return None, None, "mapbox: no token"
-    params = urllib.parse.urlencode({
-        "q": f"{name} {location}",
-        "access_token": token,
-        "proximity": "-117.8,33.7",
-        "bbox": OC_BOUNDS["viewbox"],
-        "types": "poi",
-        "limit": "5",
-    })
+    params = urllib.parse.urlencode(
+        {
+            "q": f"{name} {location}",
+            "access_token": token,
+            "proximity": "-117.8,33.7",
+            "bbox": OC_BOUNDS["viewbox"],
+            "types": "poi",
+            "limit": "5",
+        }
+    )
     global _last_mapbox_ts
     with _mapbox_lock:
         wait = MAPBOX_MIN_INTERVAL_S - (time.monotonic() - _last_mapbox_ts)
@@ -1700,7 +1975,9 @@ def _mapbox_geocode(name: str, location: str) -> tuple[float | None, float | Non
         _last_mapbox_ts = time.monotonic()
 
     try:
-        with urllib.request.urlopen(f"{MAPBOX_SEARCHBOX_URL}?{params}", timeout=10) as response:
+        with urllib.request.urlopen(
+            f"{MAPBOX_SEARCHBOX_URL}?{params}", timeout=10
+        ) as response:
             data = json.loads(response.read())
     except Exception as exc:
         return None, None, f"mapbox error: {exc}"  # transient -> not cached
@@ -1817,7 +2094,9 @@ def default_geocode(
 def build_thread(
     thread_dir: Path,
     extract_entities_fn: Callable[..., Any] = default_extract_entities,
-    geocode_fn: Callable[..., tuple[float | None, float | None, str, str | None]] = default_geocode,
+    geocode_fn: Callable[
+        ..., tuple[float | None, float | None, str, str | None]
+    ] = default_geocode,
 ) -> dict[str, Any]:
     manifest_path = thread_dir / "manifest.json"
     raw_html_path = thread_dir / "raw" / "thread.html"
@@ -1828,14 +2107,16 @@ def build_thread(
     manifest = load_json(manifest_path)
     if manifest is None:
         raise FileNotFoundError(f"Missing manifest: {manifest_path}")
-    
+
     if raw_json_path.exists():
         reddit_json = load_json(raw_json_path)
         parsed_thread = parse_reddit_json(reddit_json)
     elif raw_html_path.exists():
         parsed_thread = parse_saved_reddit_html(raw_html_path)
     else:
-        raise FileNotFoundError(f"Missing raw data: neither {raw_html_path} nor {raw_json_path} found")
+        raise FileNotFoundError(
+            f"Missing raw data: neither {raw_html_path} nor {raw_json_path} found"
+        )
 
     comments_flat = flatten_comment_tree(parsed_thread["comments"])
 
@@ -1897,7 +2178,8 @@ def build_thread(
 
     geocoded_dataset = {
         "restaurants": [
-            r for r in restaurants
+            r
+            for r in restaurants
             if not _is_closed_permanently_detail(r.get("geocode_detail"))
         ],
         "meta": {
@@ -1966,7 +2248,9 @@ def _load_excluded_brands(cur: Any) -> list[dict[str, Any]]:
     works -- exclusion just becomes a no-op until the table exists.
     """
     try:
-        cur.execute("SELECT brand_name, reason, group_name, normalized_name FROM excluded_brands")
+        cur.execute(
+            "SELECT brand_name, reason, group_name, normalized_name FROM excluded_brands"
+        )
     except Exception:
         return []
     rows = cur.fetchall()
@@ -1990,7 +2274,8 @@ def _load_excluded_brands(cur: Any) -> list[dict[str, Any]]:
 
 def batch_city_counts(restaurants: list[dict[str, Any]]) -> dict[str, set[str]]:
     """Map ``normalize_name(name)`` -> set of distinct canonical cities across a batch.
-    Feeds the density heuristic: one name spread across many cities is a likely chain."""
+    Feeds the density heuristic: one name spread across many cities is a likely chain.
+    """
     counts: dict[str, set[str]] = defaultdict(set)
     for r in restaurants:
         city = normalize_location(r.get("location"))
@@ -2073,7 +2358,8 @@ def write_to_db(
 
     thread_id = manifest["id"]
     restaurants_with_geocodes = [
-        restaurant for restaurant in restaurants_with_geocodes
+        restaurant
+        for restaurant in restaurants_with_geocodes
         if not _is_closed_permanently_detail(restaurant.get("geocode_detail"))
     ]
 
@@ -2103,14 +2389,18 @@ def write_to_db(
                     manifest["post_id"],
                     manifest["url"],
                     manifest["title"],
-                    manifest.get("comment_count", parsed_thread.get("comment_count", 0)),
+                    manifest.get(
+                        "comment_count", parsed_thread.get("comment_count", 0)
+                    ),
                     manifest.get("max_depth", parsed_thread.get("max_depth", 0)),
                     manifest.get("include_in_publish", True),
                 ),
             )
 
             # Fetch existing restaurants for cross-thread deduplication
-            cur.execute("SELECT name, slug, location, street, lat, lng FROM restaurants")
+            cur.execute(
+                "SELECT name, slug, location, street, lat, lng FROM restaurants"
+            )
             # psycopg 3 cursor returns tuples by default unless a row_factory is used.
             # We use column indices to ensure compatibility with any row_factory.
             desc = cur.description
@@ -2121,17 +2411,21 @@ def write_to_db(
                 if isinstance(row, dict):
                     existing.append(row)
                 else:
-                    existing.append({
-                        "name": row[col_name["name"]],
-                        "slug": row[col_name["slug"]],
-                        "location": row[col_name["location"]],
-                        "street": row[col_name["street"]],
-                        "lat": row[col_name["lat"]],
-                        "lng": row[col_name["lng"]]
-                    })
+                    existing.append(
+                        {
+                            "name": row[col_name["name"]],
+                            "slug": row[col_name["slug"]],
+                            "location": row[col_name["location"]],
+                            "street": row[col_name["street"]],
+                            "lat": row[col_name["lat"]],
+                            "lng": row[col_name["lng"]],
+                        }
+                    )
 
             # 2. Restaurants — collapse batch duplicates, assign slugs, upsert
-            deduped_restaurants = collapse_duplicate_restaurants(restaurants_with_geocodes)
+            deduped_restaurants = collapse_duplicate_restaurants(
+                restaurants_with_geocodes
+            )
             # Chain / corporate-group exclusion: the registry is authoritative ('excluded');
             # fuzzy signals (LLM chain_suspect, optional Google count, multi-city density)
             # only ever -> 'pending_review'. Status is set on INSERT for NEW rows only; the
@@ -2140,7 +2434,9 @@ def write_to_db(
             # rows. Growing the registry retro-applies via scripts/apply_exclusions.py.
             registry = _load_excluded_brands(cur)
             city_counts = batch_city_counts(deduped_restaurants)
-            for restaurant, slug in assign_slugs(deduped_restaurants, existing=existing):
+            for restaurant, slug in assign_slugs(
+                deduped_restaurants, existing=existing
+            ):
                 status, exclusion_reason = classify_restaurant_status(
                     restaurant, registry=registry, city_counts=city_counts
                 )
@@ -2180,7 +2476,9 @@ def write_to_db(
                 restaurants_inserted += 1
 
                 # 3. Primary mention(s) — role='primary', classification NULL
-                primary_comments = restaurant.get("primary_comments") or [restaurant["primary_comment"]]
+                primary_comments = restaurant.get("primary_comments") or [
+                    restaurant["primary_comment"]
+                ]
                 for primary in primary_comments:
                     cur.execute(
                         """
@@ -2208,7 +2506,9 @@ def write_to_db(
                     )
                     row = cur.fetchone()
                     if row:
-                        inserted_mention_ids.append(row[0] if isinstance(row, (tuple, list)) else row["id"])
+                        inserted_mention_ids.append(
+                            row[0] if isinstance(row, (tuple, list)) else row["id"]
+                        )
                     mentions_inserted += 1
 
                 # 4. Endorsements — role='endorsement', classification=<type>
@@ -2243,13 +2543,15 @@ def write_to_db(
                     )
                     row = cur.fetchone()
                     if row:
-                        inserted_mention_ids.append(row[0] if isinstance(row, (tuple, list)) else row["id"])
+                        inserted_mention_ids.append(
+                            row[0] if isinstance(row, (tuple, list)) else row["id"]
+                        )
                     mentions_inserted += 1
 
             if inserted_mention_ids:
                 cur.execute(
                     "DELETE FROM mentions WHERE thread_id = %s AND id != ALL(%s)",
-                    (thread_id, inserted_mention_ids)
+                    (thread_id, inserted_mention_ids),
                 )
             else:
                 cur.execute(
@@ -2280,7 +2582,9 @@ def ingest(
     limit: int | None = None,
     dry_run: bool = False,
     extract_entities_fn: Callable[..., Any] = default_extract_entities,
-    geocode_fn: Callable[..., tuple[float | None, float | None, str, str | None]] = default_geocode,
+    geocode_fn: Callable[
+        ..., tuple[float | None, float | None, str, str | None]
+    ] = default_geocode,
 ) -> dict[str, Any]:
     """Parse a saved Reddit thread HTML export -> extract -> geocode -> DB write.
 
@@ -2354,13 +2658,19 @@ def ingest(
         ),
         start=1,
     ):
-        raw_location = restaurant.get("location") or _subreddit_city(manifest["subreddit"])
-        lat, lng, detail, geocoded_city = geocode_fn(restaurant["name"], raw_location, restaurant.get("street"))
+        raw_location = restaurant.get("location") or _subreddit_city(
+            manifest["subreddit"]
+        )
+        lat, lng, detail, geocoded_city = geocode_fn(
+            restaurant["name"], raw_location, restaurant.get("street")
+        )
         _apply_geocode_result(restaurant, lat, lng, geocoded_city, raw_location)
         # Optional, OFF by default: count global Google results as a (weak) chain signal.
         # Done here (outside write_to_db's transaction) and consumed by classify_restaurant_status.
         if CHAIN_PROBE_ENABLED:
-            restaurant["chain_location_count"] = google_location_count(restaurant["name"])
+            restaurant["chain_location_count"] = google_location_count(
+                restaurant["name"]
+            )
         _emit_progress(
             {
                 "stage": "geocode",
@@ -2437,7 +2747,9 @@ def ingest_batch(
         print(f"No .html files found in {UNINGESTED_ROOT}")
         return 0
     failures = 0
-    pbar = tqdm.tqdm(files, desc="Batch Ingesting", unit="file", disable=not sys.stderr.isatty())
+    pbar = tqdm.tqdm(
+        files, desc="Batch Ingesting", unit="file", disable=not sys.stderr.isatty()
+    )
     for html_path in pbar:
         pbar.set_postfix_str(html_path.name)
         try:
@@ -2509,14 +2821,20 @@ def reingest_all(
                 continue
             shutil.move(str(src), str(dest))
             staged += 1
-        html_files = [UNINGESTED_ROOT / p.name for p in html_files if (UNINGESTED_ROOT / p.name).exists()]
+        html_files = [
+            UNINGESTED_ROOT / p.name
+            for p in html_files
+            if (UNINGESTED_ROOT / p.name).exists()
+        ]
         print(f"Staged {staged} thread(s) into uningested-threads/.")
 
     print("\nPurging ingest tables...")
     conn = b._connect()
     try:
         with conn.cursor() as cur:
-            cur.execute("TRUNCATE mentions, restaurants, threads RESTART IDENTITY CASCADE")
+            cur.execute(
+                "TRUNCATE mentions, restaurants, threads RESTART IDENTITY CASCADE"
+            )
         conn.commit()
     finally:
         conn.close()
@@ -2551,13 +2869,19 @@ def reingest_all(
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="OC Food Recs Reddit ingestion pipeline")
+    parser = argparse.ArgumentParser(
+        description="OC Food Recs Reddit ingestion pipeline"
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    init_parser = subparsers.add_parser("init-thread", help="Create a thread folder from a saved Reddit HTML file")
+    init_parser = subparsers.add_parser(
+        "init-thread", help="Create a thread folder from a saved Reddit HTML file"
+    )
     init_parser.add_argument("--html", required=True, type=Path)
 
-    build_parser = subparsers.add_parser("build-thread", help="Parse, extract, and geocode one saved Reddit thread")
+    build_parser = subparsers.add_parser(
+        "build-thread", help="Parse, extract, and geocode one saved Reddit thread"
+    )
     build_parser.add_argument("--thread", required=True)
 
     ingest_parser = subparsers.add_parser(

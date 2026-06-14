@@ -1,6 +1,8 @@
 <script lang="ts">
 	import type { Restaurant } from '$lib/restaurants/types';
 	import { appState, normalizeCuisine, normalizeCity, formatMonthYear } from '$lib/restaurants/stores.svelte';
+	import { getLastVisitMs } from '$lib/restaurants/visit-tracker';
+	import { onMount } from 'svelte';
 	import RecencyHistogram from './RecencyHistogram.svelte';
 
 	interface Props {
@@ -19,6 +21,40 @@
 	let showCityDropdown = $state(false);
 	let showSubredditDropdown = $state(false);
 	let showRecencyDropdown = $state(false);
+	let lastVisitMs = $state<number | null>(null);
+
+	onMount(() => {
+		lastVisitMs = getLastVisitMs();
+	});
+
+	const isNewSinceVisit = $derived(
+		lastVisitMs !== null && appState.freshnessCutoff !== null && appState.freshnessCutoff === lastVisitMs
+	);
+
+	function toggleNewSinceVisit() {
+		if (lastVisitMs === null) return;
+		appState.freshnessCutoff = isNewSinceVisit ? null : lastVisitMs;
+	}
+
+	function closeAllDropdowns() {
+		showCuisineDropdown = false;
+		showCityDropdown = false;
+		showSubredditDropdown = false;
+		showRecencyDropdown = false;
+	}
+
+	function toggleDropdown(which: 'cuisine' | 'city' | 'subreddit' | 'recency') {
+		const next = {
+			cuisine: which === 'cuisine' ? !showCuisineDropdown : false,
+			city: which === 'city' ? !showCityDropdown : false,
+			subreddit: which === 'subreddit' ? !showSubredditDropdown : false,
+			recency: which === 'recency' ? !showRecencyDropdown : false
+		};
+		showCuisineDropdown = next.cuisine;
+		showCityDropdown = next.city;
+		showSubredditDropdown = next.subreddit;
+		showRecencyDropdown = next.recency;
+	}
 
 	// Flattened dated mentions for the density histogram; reacts to the other active filters.
 	let histogramMentions = $derived(restaurantsForHistogram.flatMap((r) => r.mentions));
@@ -123,12 +159,7 @@
 				aria-expanded={showCuisineDropdown}
 				aria-haspopup="listbox"
 				aria-controls={showCuisineDropdown ? 'cuisine-listbox' : undefined}
-				onclick={() => {
-					showCuisineDropdown = !showCuisineDropdown;
-					showCityDropdown = false;
-					showSubredditDropdown = false;
-					showRecencyDropdown = false;
-				}}
+				onclick={() => toggleDropdown('cuisine')}
 			>
 				Cuisine
 				{#if appState.activeCuisines.length > 0}
@@ -164,12 +195,7 @@
 				aria-expanded={showCityDropdown}
 				aria-haspopup="listbox"
 				aria-controls={showCityDropdown ? 'city-listbox' : undefined}
-				onclick={() => {
-					showCityDropdown = !showCityDropdown;
-					showCuisineDropdown = false;
-					showSubredditDropdown = false;
-					showRecencyDropdown = false;
-				}}
+				onclick={() => toggleDropdown('city')}
 			>
 				City
 				{#if appState.activeCities.length > 0}
@@ -204,12 +230,7 @@
 				class:has-active={appState.freshnessCutoff !== null}
 				aria-expanded={showRecencyDropdown}
 				aria-haspopup="dialog"
-				onclick={() => {
-					showRecencyDropdown = !showRecencyDropdown;
-					showCuisineDropdown = false;
-					showCityDropdown = false;
-					showSubredditDropdown = false;
-				}}
+				onclick={() => toggleDropdown('recency')}
 			>
 				Recency
 				<span class="arrow" aria-hidden="true" class:open={showRecencyDropdown}>&#9662;</span>
@@ -231,12 +252,7 @@
 					aria-expanded={showSubredditDropdown}
 					aria-haspopup="listbox"
 					aria-controls={showSubredditDropdown ? 'subreddit-listbox' : undefined}
-					onclick={() => {
-						showSubredditDropdown = !showSubredditDropdown;
-						showCuisineDropdown = false;
-						showCityDropdown = false;
-						showRecencyDropdown = false;
-					}}
+					onclick={() => toggleDropdown('subreddit')}
 				>
 					Subreddit
 					{#if appState.activeSubreddits.length > 0}
@@ -266,6 +282,20 @@
 		{/if}
 
 		<!-- Show-unmapped toggle -->
+		{#if lastVisitMs !== null}
+			<button
+				class="dropdown-trigger mapped-only-toggle"
+				class:has-active={isNewSinceVisit}
+				aria-pressed={isNewSinceVisit}
+				onclick={toggleNewSinceVisit}
+			>
+				{#if isNewSinceVisit}
+					<span aria-hidden="true">✓</span>
+				{/if}
+				New since last visit
+			</button>
+		{/if}
+
 		<button
 			class="dropdown-trigger mapped-only-toggle"
 			class:has-active={appState.showUnmapped}
@@ -319,19 +349,28 @@
 	onclick={(e) => {
 		const target = e.target as HTMLElement;
 		if (!target.closest('.dropdown-wrapper')) {
-			showCuisineDropdown = false;
-			showCityDropdown = false;
-			showSubredditDropdown = false;
-			showRecencyDropdown = false;
+			closeAllDropdowns();
 		}
 	}}
 	onkeydown={(e) => {
 		if (e.key === 'Escape') {
-			showCuisineDropdown = false;
-			showCityDropdown = false;
-			showSubredditDropdown = false;
-			showRecencyDropdown = false;
+			closeAllDropdowns();
+			return;
 		}
+		const open =
+			showCuisineDropdown || showCityDropdown || showSubredditDropdown || showRecencyDropdown;
+		if (!open || (e.key !== 'ArrowDown' && e.key !== 'ArrowUp')) return;
+		const panel = document.querySelector('.dropdown-panel');
+		if (!panel) return;
+		const items = [...panel.querySelectorAll<HTMLButtonElement>('.dropdown-item')];
+		if (items.length === 0) return;
+		e.preventDefault();
+		const idx = items.indexOf(document.activeElement as HTMLButtonElement);
+		const next =
+			e.key === 'ArrowDown'
+				? items[(idx + 1 + items.length) % items.length]
+				: items[(idx - 1 + items.length) % items.length];
+		next?.focus();
 	}}
 />
 
