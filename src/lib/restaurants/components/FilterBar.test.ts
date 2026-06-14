@@ -27,7 +27,10 @@ const dateExtent = {
 };
 
 describe("FilterBar", () => {
-  beforeEach(() => resetAppState());
+  beforeEach(() => {
+    resetAppState();
+    localStorage.clear();
+  });
 
   it("toggles a cuisine filter from the dropdown", async () => {
     const user = userEvent.setup();
@@ -96,5 +99,39 @@ describe("FilterBar", () => {
     expect(appState.showUnmapped).toBe(true);
     await user.click(toggle);
     expect(appState.showUnmapped).toBe(false);
+  });
+
+  it("shows a disabled new-since button when no prior visit exists", () => {
+    render(FilterBar, {
+      restaurants,
+      threadSubreddit,
+      restaurantsForHistogram: restaurants,
+      dateExtent,
+    });
+    const btn = screen.getByRole("button", {
+      name: /new since last visit — available after your next visit/i,
+    });
+    expect(btn).toBeDisabled();
+  });
+
+  it("toggles new since last visit when a prior visit exists", async () => {
+    const user = userEvent.setup();
+    const priorMs = Date.parse("2024-06-01T00:00:00Z");
+    localStorage.setItem(
+      "ocFoodRecs_lastVisit",
+      new Date(priorMs).toISOString(),
+    );
+    render(FilterBar, {
+      restaurants,
+      threadSubreddit,
+      restaurantsForHistogram: restaurants,
+      dateExtent,
+    });
+    const btn = screen.getByRole("button", { name: /^new since last visit$/i });
+    expect(btn).toBeEnabled();
+    await user.click(btn);
+    expect(appState.freshnessCutoff).toBe(priorMs);
+    await user.click(btn);
+    expect(appState.freshnessCutoff).toBeNull();
   });
 });

@@ -8,6 +8,11 @@ export function getLastVisitMs(): number | null {
   return Number.isNaN(t) ? null : t;
 }
 
+/** Timestamp from the previous session (before this page load updates storage). */
+export function getPriorVisitMs(): number | null {
+  return getLastVisitMs();
+}
+
 export function setLastVisitNow(): void {
   if (typeof localStorage === "undefined") return;
   localStorage.setItem(STORAGE_KEY, new Date().toISOString());

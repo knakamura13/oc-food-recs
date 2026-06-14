@@ -12,6 +12,8 @@
 	import { TableHandler } from '@vincjo/datatables';
 	import type { Mention, Restaurant, SortKey } from '$lib/restaurants/types';
 	import { appState, latestMentionMs, normalizeCuisine } from '$lib/restaurants/stores.svelte';
+	import { getPriorVisitMs, hasNewMentionsSince } from '$lib/restaurants/visit-tracker';
+	import { onMount } from 'svelte';
 	import { toast } from '$lib/toast';
 
 	interface Props {
@@ -20,6 +22,20 @@
 	}
 
 	let { restaurants, onShowOnMap }: Props = $props();
+
+	let priorVisitMs = $state<number | null>(null);
+
+	onMount(() => {
+		priorVisitMs = getPriorVisitMs();
+	});
+
+	function hasNewMentions(restaurant: Restaurant): boolean {
+		if (priorVisitMs === null) return false;
+		return hasNewMentionsSince(
+			priorVisitMs,
+			restaurant.mentions.map((m) => m.comment_date ?? null)
+		);
+	}
 
 	const reduceMotion = () =>
 		typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -330,7 +346,12 @@
 								aria-controls={isOpen ? `drawer-${slug}` : undefined}
 							>
 								<div class="row-main">
-									<span class="row-name">{restaurant.name}</span>
+									<div class="row-name-line">
+										<span class="row-name">{restaurant.name}</span>
+										{#if hasNewMentions(restaurant)}
+											<span class="tag new-tag" aria-label="New mentions since your last visit">New</span>
+										{/if}
+									</div>
 									<div class="row-tags">
 										{#if restaurant.cuisine}
 											<span class="tag cuisine-tag">{normalizeCuisine(restaurant.cuisine)}</span>
@@ -696,13 +717,28 @@
 		min-width: 0;
 	}
 
+	.row-name-line {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+		flex-wrap: wrap;
+	}
+
 	.row-name {
 		overflow-wrap: anywhere;
 		font-family: 'DM Serif Display', Georgia, serif;
 		font-weight: 400;
 		font-size: 1rem;
 		color: #3e2c23;
-		display: block;
+	}
+
+	.new-tag {
+		background: #ff4500;
+		color: #fff;
+		font-weight: 600;
+		font-size: 0.65rem;
+		letter-spacing: 0.02em;
+		text-transform: uppercase;
 	}
 
 	.row-tags {
