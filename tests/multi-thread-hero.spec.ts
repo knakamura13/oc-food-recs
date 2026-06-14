@@ -7,7 +7,7 @@ test("hero shows a dynamic subtitle and no hardcoded source attribution", async 
 
   // Subtitle is data-driven: references a thread count and the comment count.
   await expect(hero.locator(".summary")).toContainText(/Reddit threads?/i);
-  await expect(hero.locator(".summary")).toContainText(/community comments/i);
+  await expect(hero.locator(".summary")).toContainText(/community\s+comments/i);
 
   // The old "Source Reddit threads" section and the hardcoded r/orangecounty
   // attribution have been removed.

@@ -22,6 +22,7 @@
 		"db:generate": "drizzle-kit generate",
 		"db:migrate": "drizzle-kit migrate",
 		"db:push": "drizzle-kit push",
+		"db:seed-e2e": "tsx scripts/seed-e2e-db.ts",
 		"db:studio": "drizzle-kit studio",
 		"pipeline:init:thread-01": "python3 scripts/reddit_pipeline.py init-thread --html tests/fixtures/thread-01.html",
 		"pipeline:init:thread-02": "python3 scripts/reddit_pipeline.py init-thread --html tests/fixtures/thread-02.html",
@@ -29,6 +30,7 @@
 		"pipeline:build:thread-02": "python3 scripts/reddit_pipeline.py build-thread --thread orangecounty-1slszch",
 		"pipeline:seed-exclusions": "python3 scripts/seed_exclusions.py",
 		"pipeline:apply-exclusions": "python3 scripts/apply_exclusions.py",
+		"pipeline:ingest-batch": "python3 scripts/reddit_pipeline.py ingest",
 		"test": "vitest run",
 		"test:watch": "vitest"
 	},

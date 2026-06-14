@@ -56,10 +56,14 @@ npm run test:e2e          # Playwright (requires DATABASE_URL, port 5174)
 
 ### CI
 
-GitHub Actions runs `check`, `test`, and `test:pipeline` on every push. Playwright e2e runs when the `DATABASE_URL` repository secret is configured (use a read-only prod or staging connection string with published data):
+GitHub Actions runs `check`, `test`, and `test:pipeline` on every push. Playwright e2e runs against an ephemeral Postgres service in CI (`db:migrate` + `db:seed-e2e` before tests). For local e2e, set `DATABASE_URL` in `.env` (port 5174).
+
+To run e2e locally against the same fixture seed:
 
 ```sh
-gh secret set DATABASE_URL --body "$DATABASE_URL"
+npm run db:migrate
+E2E_SEED=1 npm run db:seed-e2e   # truncates fixture DB only — see script guard
+npm run test:e2e
 ```
 
 ## Monitoring

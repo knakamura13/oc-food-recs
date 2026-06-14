@@ -135,7 +135,7 @@ Ollama env vars: `OC_FOOD_RECS_OLLAMA_URL`, `OC_FOOD_RECS_OLLAMA_MODEL`, `OC_FOO
 ```sh
 npm test              # Vitest (unit + component)
 npm run test:all      # Vitest + Python pipeline tests
-npm run test:e2e      # Playwright (requires DATABASE_URL; dev server on port 5174)
+npm run test:e2e      # Playwright (requires DATABASE_URL; dev server on port 5174; use E2E_SEED=1 with db:seed-e2e for fixture data)
 ```
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md) for CI, worktree `.env` setup, and admin auth.
