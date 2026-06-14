@@ -148,6 +148,8 @@ The main page server-renders the full restaurant dataset on each request. List m
 
 Revisit architecture if the dataset exceeds ~500 restaurants or TTFB consistently exceeds ~1s. Future options: server-side filter endpoint, cursor pagination, or edge caching of read-only aggregates.
 
+Monitor growth via `GET /api/health` (`restaurant_count`, `thread_count`, `mention_count`).
+
 ---
 
 ## Deployment

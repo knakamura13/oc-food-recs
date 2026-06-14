@@ -56,7 +56,15 @@ npm run test:e2e          # Playwright (requires DATABASE_URL, port 5174)
 
 ### CI
 
-GitHub Actions runs `check`, `test`, and `test:pipeline` on every push. Playwright e2e runs only when the `DATABASE_URL` repository secret is configured.
+GitHub Actions runs `check`, `test`, and `test:pipeline` on every push. Playwright e2e runs when the `DATABASE_URL` repository secret is configured (use a read-only prod or staging connection string with published data):
+
+```sh
+gh secret set DATABASE_URL --body "$DATABASE_URL"
+```
+
+## Monitoring
+
+`GET /api/health` returns row counts and a timestamp — useful for TTFB/load monitoring on Railway. Revisit server-side filtering if `restaurant_count` approaches ~500 or TTFB exceeds ~1s (see README Performance section).
 
 ## Ingest pipeline
 
@@ -72,10 +80,20 @@ python3 scripts/reddit_pipeline.py ingest --thread <thread-id>
 
 ```sh
 npm run pipeline:geocode-health   # geocode cache health report
-python3 scripts/audit_comment_dates.py
-python3 scripts/backfill_comment_dates.py [--dry-run]
-python3 scripts/backfill_permalinks.py [--dry-run]
+npm run pipeline:audit-comment-dates
+npm run pipeline:backfill-comment-dates [-- --dry-run]
+npm run pipeline:backfill-permalinks [-- --dry-run]
 python3 scripts/analyze_unmapped.py --csv unmapped.csv
+```
+
+Run the audit/backfill sequence on production after deploying pipeline changes that populate `comment_date` / `permalink`:
+
+```sh
+npm run pipeline:audit-comment-dates
+npm run pipeline:backfill-comment-dates -- --dry-run   # review first
+npm run pipeline:backfill-comment-dates
+npm run pipeline:backfill-permalinks -- --dry-run
+npm run pipeline:backfill-permalinks
 ```
 
 ## Code style

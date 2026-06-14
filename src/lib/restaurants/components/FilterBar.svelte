@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Restaurant } from '$lib/restaurants/types';
 	import { appState, normalizeCuisine, normalizeCity, formatMonthYear } from '$lib/restaurants/stores.svelte';
-	import { getLastVisitMs } from '$lib/restaurants/visit-tracker';
+	import { getPriorVisitMs } from '$lib/restaurants/visit-tracker';
 	import { onMount } from 'svelte';
 	import RecencyHistogram from './RecencyHistogram.svelte';
 
@@ -22,9 +22,15 @@
 	let showSubredditDropdown = $state(false);
 	let showRecencyDropdown = $state(false);
 	let lastVisitMs = $state<number | null>(null);
+	let hasPriorVisit = $state(false);
+
+	function refreshLastVisit() {
+		lastVisitMs = getPriorVisitMs();
+		hasPriorVisit = lastVisitMs !== null;
+	}
 
 	onMount(() => {
-		lastVisitMs = getLastVisitMs();
+		refreshLastVisit();
 	});
 
 	const isNewSinceVisit = $derived(
@@ -282,7 +288,7 @@
 		{/if}
 
 		<!-- Show-unmapped toggle -->
-		{#if lastVisitMs !== null}
+		{#if hasPriorVisit}
 			<button
 				class="dropdown-trigger mapped-only-toggle"
 				class:has-active={isNewSinceVisit}
@@ -292,6 +298,15 @@
 				{#if isNewSinceVisit}
 					<span aria-hidden="true">✓</span>
 				{/if}
+				New since last visit
+			</button>
+		{:else}
+			<button
+				class="dropdown-trigger mapped-only-toggle"
+				disabled
+				title="Available after your next visit"
+				aria-label="New since last visit — available after your next visit"
+			>
 				New since last visit
 			</button>
 		{/if}

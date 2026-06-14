@@ -32,9 +32,9 @@ python3 scripts/analyze_unmapped.py --csv unmapped.csv
 ## Maintenance
 
 ```sh
-python3 scripts/audit_comment_dates.py
-python3 scripts/backfill_comment_dates.py [--dry-run]
-python3 scripts/backfill_permalinks.py [--dry-run]
+npm run pipeline:audit-comment-dates
+npm run pipeline:backfill-comment-dates [-- --dry-run]
+npm run pipeline:backfill-permalinks [-- --dry-run]
 npm run pipeline:apply-exclusions
 ```
 
