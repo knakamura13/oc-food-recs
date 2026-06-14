@@ -2,22 +2,15 @@ import { filterPageRestaurants } from "./filter-page-restaurants";
 import { createSliceCache } from "./filter-restaurants";
 import { dateExtentOf } from "./stores.svelte";
 import type { Restaurant, RestaurantData } from "./types";
-import {
-  buildSearchParams,
-  parseSearchParams,
-  type UrlStateSnapshot,
-} from "./url-state";
+import { buildSearchParams, type UrlStateSnapshot } from "./url-state";
 
 const DEFAULT_TITLE =
   "Best Mom & Pop Restaurants in Orange County | Reddit Community Picks";
 
-export function urlStateFromSearchParams(
-  params: URLSearchParams,
-): Partial<UrlStateSnapshot> {
-  return parseSearchParams(params);
-}
-
-export function buildPageTitle(state: Partial<UrlStateSnapshot>): string {
+export function buildPageTitle(
+  state: Partial<UrlStateSnapshot>,
+  restaurantName?: string | null,
+): string {
   const parts: string[] = [];
   if (state.searchQuery) parts.push(`"${state.searchQuery}"`);
   if (state.activeCuisines?.length === 1) parts.push(state.activeCuisines[0]);
@@ -27,6 +20,18 @@ export function buildPageTitle(state: Partial<UrlStateSnapshot>): string {
     parts.push(`in ${state.activeCities[0]}`);
   else if (state.activeCities && state.activeCities.length > 1)
     parts.push(`in ${state.activeCities.length} cities`);
+  if (state.activeSubreddits?.length === 1)
+    parts.push(`r/${state.activeSubreddits[0]}`);
+  else if (state.activeSubreddits && state.activeSubreddits.length > 1)
+    parts.push(`${state.activeSubreddits.length} subreddits`);
+  if (state.freshnessCutoff != null) parts.push("recent");
+  if (restaurantName) parts.push(restaurantName);
+  else if (state.selectedRestaurantSlug)
+    parts.push(state.selectedRestaurantSlug);
+  if (state.sortKey && state.sortKey !== "score") {
+    parts.push(state.sortKey === "name" ? "by name" : "by recency");
+  }
+  if (state.showUnmapped) parts.push("unmapped");
   if (parts.length === 0) return DEFAULT_TITLE;
   return `${parts.join(" ")} — OC Food Recs`;
 }
@@ -96,6 +101,14 @@ export interface PageMeta {
   shareUrl: string;
 }
 
+function restaurantNameForSlug(
+  slug: string | null | undefined,
+  allRestaurants: Restaurant[],
+): string | null {
+  if (!slug) return null;
+  return allRestaurants.find((r) => r.slug === slug)?.name ?? null;
+}
+
 export function buildPageMeta(
   urlState: Partial<UrlStateSnapshot>,
   allRestaurants: Restaurant[],
@@ -105,7 +118,10 @@ export function buildPageMeta(
   threadSubreddit: Record<string, string>,
 ): PageMeta {
   return {
-    title: buildPageTitle(urlState),
+    title: buildPageTitle(
+      urlState,
+      restaurantNameForSlug(urlState.selectedRestaurantSlug, allRestaurants),
+    ),
     description: buildPageDescription(
       urlState,
       allRestaurants,

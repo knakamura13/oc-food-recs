@@ -24,10 +24,22 @@ For each new thread HTML export:
 ## Batch operations
 
 ```sh
+# Drop HTML exports in data/uningested-threads/, then:
+npm run pipeline:ingest-batch
+
 python3 scripts/reingest_all_threads.py   # re-ingest all known threads
 npm run pipeline:geocode-health           # geocode cache health
 python3 scripts/analyze_unmapped.py --csv unmapped.csv
 ```
+
+## Next threads
+
+Track progress in [GitHub issue #18](https://github.com/knakamura13/oc-food-recs/issues/18). To add a thread:
+
+1. Export/save the Reddit thread HTML.
+2. Place it in [`data/uningested-threads/`](../data/uningested-threads/) (see README there).
+3. Run `npm run pipeline:ingest-batch` (or the per-thread checklist below).
+4. Verify on the public site; update issue #18 with the new thread row and counts from `GET /api/health`.
 
 ## Maintenance
 
