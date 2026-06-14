@@ -38,6 +38,14 @@ export async function loadExclusionQueue(limit = 200): Promise<{
     .orderBy(restaurants.name)
     .limit(limit)) as ReviewRestaurant[];
 
+  return partitionExclusionQueue(rows);
+}
+
+/** Pure partition for tests and admin UI. */
+export function partitionExclusionQueue(rows: ReviewRestaurant[]): {
+  pendingReview: ReviewRestaurant[];
+  excluded: ReviewRestaurant[];
+} {
   return {
     pendingReview: rows.filter((r) => r.status === "pending_review"),
     excluded: rows.filter((r) => r.status === "excluded"),

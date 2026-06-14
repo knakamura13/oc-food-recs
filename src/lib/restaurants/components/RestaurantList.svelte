@@ -16,9 +16,10 @@
 
 	interface Props {
 		restaurants: Restaurant[];
+		onShowOnMap?: () => void;
 	}
 
-	let { restaurants }: Props = $props();
+	let { restaurants, onShowOnMap }: Props = $props();
 
 	const reduceMotion = () =>
 		typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -26,6 +27,7 @@
 	// Full mentions are lazy-loaded per restaurant on first expand (kept out of the
 	// prerendered page payload). Cached by slug; `undefined` = not yet loaded.
 	let details = $state<Record<string, Mention[] | undefined>>({});
+	let openScoreTipSlug = $state<string | null>(null);
 	async function loadDetail(slug: string) {
 		if (details[slug] !== undefined) return;
 		try {
@@ -200,20 +202,28 @@
 		appState.hoveredRestaurantSlug = restaurant.slug;
 	}
 
+	function showOnMap(restaurant: Restaurant, e: MouseEvent) {
+		e.stopPropagation();
+		if (restaurant.lat == null || restaurant.lng == null) return;
+		appState.mapTarget = { slug: restaurant.slug, lat: restaurant.lat, lng: restaurant.lng };
+		appState.selectedRestaurantSlug = restaurant.slug;
+		onShowOnMap?.();
+		const mapEl = document.querySelector('.map-container');
+		if (mapEl) {
+			mapEl.scrollIntoView({ behavior: reduceMotion() ? 'auto' : 'smooth', block: 'center' });
+		}
+	}
+
+	function toggleScoreTip(slug: string, e: MouseEvent) {
+		e.stopPropagation();
+		openScoreTipSlug = openScoreTipSlug === slug ? null : slug;
+	}
+
 	function clearHovered(restaurant: Restaurant) {
 		// Only clear if we still own the highlight — prevents a trailing
 		// mouseleave/blur from one row wiping the highlight a sibling just set.
 		if (appState.hoveredRestaurantSlug === restaurant.slug) {
 			appState.hoveredRestaurantSlug = null;
-		}
-	}
-
-	function showOnMap(restaurant: Restaurant) {
-		if (restaurant.lat == null || restaurant.lng == null) return;
-		appState.mapTarget = { slug: restaurant.slug, lat: restaurant.lat, lng: restaurant.lng };
-		const mapEl = document.querySelector('.map-container');
-		if (mapEl) {
-			mapEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
 		}
 	}
 
@@ -283,7 +293,7 @@
 		</span>
 	</div>
 
-	<div class="list-scroll" bind:this={listScrollEl} role="region" aria-label="Restaurant results">
+	<div class="list-scroll" id="main-content" bind:this={listScrollEl} role="region" aria-label="Restaurant results">
 		{#if table.rows.length === 0}
 			<div class="empty-state">
 				<span class="empty-icon">&#x1F50D;</span>
@@ -329,8 +339,21 @@
 											<span class="tag location-tag">{restaurant.location}</span>
 										{/if}
 									</div>
+									{#if restaurant.top_dish_snippet}
+										<p class="dish-teaser">Try: {restaurant.top_dish_snippet}</p>
+									{/if}
 								</div>
 								<div class="row-stats">
+									{#if restaurant.lat != null && restaurant.lng != null}
+										<button
+											type="button"
+											class="show-on-map-btn"
+											aria-label="Show {restaurant.name} on map"
+											onclick={(e) => showOnMap(restaurant, e)}
+										>
+											<MapPin size={14} aria-hidden="true" />
+										</button>
+									{/if}
 									<span class="stat score">
 										{restaurant.aggregate_score} <small>pts</small>
 									</span>
@@ -365,9 +388,23 @@
 									<span class="comment-author">u/{primary.author}</span>
 									<span class="comment-score">
 										{primary.score} points
-										<button type="button" class="info-tip" aria-label="Score info">
+										<button
+											type="button"
+											class="info-tip"
+											aria-label="Score info"
+											aria-expanded={openScoreTipSlug === slug}
+											aria-controls="score-tip-{slug}"
+											onclick={(e) => toggleScoreTip(slug, e)}
+										>
 											<span class="info-icon" aria-hidden="true">i</span>
-											<span class="info-tooltip" role="tooltip">Total Reddit upvotes across all comments that recommended this restaurant.</span>
+											<span
+												id="score-tip-{slug}"
+												class="info-tooltip"
+												class:open={openScoreTipSlug === slug}
+												role="tooltip"
+											>
+												Total Reddit upvotes across all comments that recommended this restaurant.
+											</span>
 										</button>
 									</span>
 								</div>
@@ -463,7 +500,7 @@
 
 										<div class="drawer-actions">
 											{#if restaurant.lat && restaurant.lng}
-												<button class="map-link" onclick={() => showOnMap(restaurant)}>
+												<button class="map-link" onclick={(e) => showOnMap(restaurant, e)}>
 													Show on map
 												</button>
 											{/if}
@@ -495,6 +532,15 @@
 		{/if}
 	</div>
 </div>
+
+<svelte:window
+	onclick={() => {
+		openScoreTipSlug = null;
+	}}
+	onkeydown={(e) => {
+		if (e.key === 'Escape') openScoreTipSlug = null;
+	}}
+/>
 
 <style>
 	.restaurant-list {
@@ -749,8 +795,37 @@
 	}
 
 	.info-tip:hover .info-tooltip,
-	.info-tip:focus .info-tooltip {
+	.info-tip:focus .info-tooltip,
+	.info-tooltip.open {
 		display: block;
+	}
+
+	.dish-teaser {
+		margin: 0.25rem 0 0;
+		font-size: 0.78rem;
+		color: #7a6e63;
+		line-height: 1.35;
+		font-style: italic;
+	}
+
+	.show-on-map-btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		padding: 0.25rem;
+		margin-right: 0.25rem;
+		border: 1px solid #e8e0d6;
+		border-radius: 6px;
+		background: #fffdf9;
+		color: #ff4500;
+		cursor: pointer;
+	}
+
+	.show-on-map-btn:hover,
+	.show-on-map-btn:focus-visible {
+		background: rgba(255, 69, 0, 0.08);
+		border-color: #ff4500;
+		outline: none;
 	}
 
 	.stat small {

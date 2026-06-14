@@ -39,6 +39,12 @@
 		</p>
 	</header>
 
+	<div class="queue-summary" role="status">
+		<span><strong>{pendingReview.length}</strong> pending review</span>
+		<span aria-hidden="true">·</span>
+		<span><strong>{excluded.length}</strong> excluded</span>
+	</div>
+
 	{#if form}
 		{#if form.success}
 			<section class="feedback success" role="status" aria-live="polite">
@@ -207,6 +213,20 @@
 		font-size: 0.95rem;
 		line-height: 1.5;
 		margin: 0;
+	}
+
+	.queue-summary {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem 0.75rem;
+		align-items: center;
+		padding: 0.75rem 1rem;
+		margin-bottom: 1.25rem;
+		background: #fff3eb;
+		border: 1px solid rgba(255, 69, 0, 0.25);
+		border-radius: 10px;
+		font-size: 0.92rem;
+		color: #3e2c23;
 	}
 
 	.section-hint {
