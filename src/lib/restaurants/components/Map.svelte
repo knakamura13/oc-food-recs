@@ -635,7 +635,9 @@
 	@media (max-width: 1023px) {
 		/* Minimized mobile FAB: hide Leaflet zoom + attribution; expanded removes this class */
 		.map-panel.map-leaflet-chrome-hidden-mobile :global(.leaflet-control-container),
-		.map-panel.map-leaflet-chrome-hidden-mobile :global(.leaflet-control-attribution) {
+		.map-panel.map-leaflet-chrome-hidden-mobile :global(.leaflet-control-attribution),
+		.map-panel.map-leaflet-chrome-hidden-mobile .locate-me-btn,
+		.map-panel.map-leaflet-chrome-hidden-mobile .location-error {
 			display: none !important;
 		}
 
