@@ -12,7 +12,8 @@
 	import { TableHandler } from '@vincjo/datatables';
 	import type { Mention, Restaurant, SortKey } from '$lib/restaurants/types';
 	import { appState, latestMentionMs, normalizeCuisine } from '$lib/restaurants/stores.svelte';
-	import { getPriorVisitMs, hasNewMentionsSince } from '$lib/restaurants/visit-tracker';
+	import { buildCanonicalShareUrl } from '$lib/restaurants/page-meta';
+	import { getLastVisitMs, hasNewMentionsSince } from '$lib/restaurants/visit-tracker';
 	import { onMount } from 'svelte';
 	import { toast } from '$lib/toast';
 
@@ -26,7 +27,7 @@
 	let priorVisitMs = $state<number | null>(null);
 
 	onMount(() => {
-		priorVisitMs = getPriorVisitMs();
+		priorVisitMs = getLastVisitMs();
 	});
 
 	function hasNewMentions(restaurant: Restaurant): boolean {
@@ -48,9 +49,15 @@
 		if (details[slug] !== undefined) return;
 		try {
 			const res = await fetch(`/api/r/${slug}.json`);
-			details[slug] = res.ok ? await res.json() : [];
+			if (!res.ok) {
+				details[slug] = [];
+				toast.error('Could not load mentions');
+				return;
+			}
+			details[slug] = await res.json();
 		} catch {
 			details[slug] = [];
+			toast.error('Could not load mentions');
 		}
 	}
 
@@ -250,9 +257,17 @@
 
 
 	function shareUrl(slug: string): string {
-		const url = new URL(window.location.href);
-		url.searchParams.set('restaurant', slug);
-		return url.toString();
+		return buildCanonicalShareUrl(window.location.origin, window.location.pathname, {
+			searchQuery: appState.searchQuery,
+			activeCuisines: appState.activeCuisines,
+			activeCities: appState.activeCities,
+			activeSubreddits: appState.activeSubreddits,
+			freshnessCutoff: appState.freshnessCutoff,
+			showUnmapped: appState.showUnmapped,
+			sortKey: appState.sortKey,
+			sortDirection: appState.sortDirection,
+			selectedRestaurantSlug: slug
+		});
 	}
 
 	async function copyShareLink(restaurant: Restaurant) {

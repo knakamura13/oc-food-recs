@@ -90,14 +90,31 @@
 		clientHydrated = true;
 	});
 
+	const selectedRestaurantName = $derived.by(() => {
+		const slug = appState.selectedRestaurantSlug;
+		if (!slug) return null;
+		return allRestaurants.find((r) => r.slug === slug)?.name ?? null;
+	});
+
 	const pageTitle = $derived.by(() => {
 		if (!clientHydrated) return data.pageMeta.title;
-		return buildPageTitle({
-			searchQuery: appState.searchQuery,
-			activeCuisines: appState.activeCuisines,
-			activeCities: appState.activeCities
-		});
+		return buildPageTitle(
+			{
+				searchQuery: appState.searchQuery,
+				activeCuisines: appState.activeCuisines,
+				activeCities: appState.activeCities,
+				activeSubreddits: appState.activeSubreddits,
+				freshnessCutoff: appState.freshnessCutoff,
+				showUnmapped: appState.showUnmapped,
+				sortKey: appState.sortKey,
+				sortDirection: appState.sortDirection,
+				selectedRestaurantSlug: appState.selectedRestaurantSlug
+			},
+			selectedRestaurantName
+		);
 	});
+
+	const ogImageUrl = $derived(`${data.pageOrigin}/screenshot.jpeg`);
 
 	const pageDescription = $derived.by(() => {
 		if (!clientHydrated) return data.pageMeta.description;
@@ -337,11 +354,11 @@
 	<meta property="og:description" content={pageDescription} />
 	<meta property="og:type" content="website" />
 	<meta property="og:url" content={shareUrl} />
-	<meta property="og:image" content="https://oc-food-recs-production.up.railway.app/screenshot.jpeg" />
+	<meta property="og:image" content={ogImageUrl} />
 	<meta name="twitter:card" content="summary_large_image" />
 	<meta name="twitter:title" content={pageTitle} />
 	<meta name="twitter:description" content={pageDescription} />
-	<meta name="twitter:image" content="https://oc-food-recs-production.up.railway.app/screenshot.jpeg" />
+	<meta name="twitter:image" content={ogImageUrl} />
 	<meta name="theme-color" content="#ff4500" />
 	<link rel="dns-prefetch" href="https://a.tile.openstreetmap.org" />
 	<link rel="dns-prefetch" href="https://b.tile.openstreetmap.org" />
