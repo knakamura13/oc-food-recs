@@ -1,7 +1,14 @@
 <script lang="ts">
+	import type { FuseResult } from 'fuse.js';
 	import { Search, X } from 'lucide-svelte';
 	import type { Restaurant } from '$lib/restaurants/types';
 	import { appState, findFilterMatch } from '$lib/restaurants/stores.svelte';
+	import {
+		FUSE_SEARCH_OPTIONS,
+		prepareSearchIndex,
+		rankSearchResults,
+		type SearchableRestaurant
+	} from '$lib/restaurants/search-restaurants';
 
 	interface Props {
 		restaurants: Restaurant[];
@@ -22,19 +29,14 @@
 
 	let fuse = $derived.by(() =>
 		FuseCtor
-			? new FuseCtor(restaurants, {
-					keys: ['name', 'cuisine', 'location'],
-					threshold: 0.4,
-					distance: 200,
-					includeScore: true
-				})
+			? new FuseCtor(prepareSearchIndex(restaurants), FUSE_SEARCH_OPTIONS)
 			: null
 	);
 
 	let results = $derived.by(() => {
 		const q = appState.searchQuery.trim();
-		if (!fuse || !q) return [];
-		return fuse.search(q).slice(0, 10);
+		if (!fuse || !q) return [] as FuseResult<SearchableRestaurant>[];
+		return rankSearchResults(fuse.search(q), q).slice(0, 10);
 	});
 
 	function selectResult(restaurant: Restaurant) {
