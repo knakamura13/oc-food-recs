@@ -39,7 +39,7 @@ test.describe("Shareable URL state", () => {
 
     const row = page.locator("#restaurant-la-taco-spot");
     await expect(row).toHaveClass(/expanded/);
-    await expect(row.locator(".row-header")).toHaveAttribute(
+    await expect(row.locator(".row-toggle")).toHaveAttribute(
       "aria-expanded",
       "true",
     );
