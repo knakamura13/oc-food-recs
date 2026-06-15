@@ -524,9 +524,6 @@
 		flex-wrap: wrap;
 		gap: 0.5rem;
 		margin-top: 0.4rem;
-		max-width: 1200px;
-		margin-left: auto;
-		margin-right: auto;
 	}
 
 	.pill {

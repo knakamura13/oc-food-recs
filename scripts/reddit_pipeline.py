@@ -2389,7 +2389,7 @@ def write_to_db(
             )
         connection_factory = psycopg.connect
 
-    database_url = os.environ.get("DATABASE_URL")
+    database_url = _url()
     if not database_url:
         raise RuntimeError("DATABASE_URL is not set; cannot write to Postgres")
 
