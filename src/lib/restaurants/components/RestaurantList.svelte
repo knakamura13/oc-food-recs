@@ -67,6 +67,13 @@
 		if (slug) loadDetail(slug);
 	});
 
+	// Drawer height changes when mentions finish loading; virtualizer must catch up.
+	$effect(() => {
+		const slug = appState.selectedRestaurantSlug;
+		if (!slug || details[slug] === undefined) return;
+		scheduleRemeasure();
+	});
+
 	const table = new TableHandler<Restaurant>([], { rowsPerPage: null as unknown as number });
 	const scoreSort = table.createSort('aggregate_score');
 	// Restaurants with no dated mentions sort last in either direction (null comparator rule).
@@ -172,7 +179,24 @@
 	});
 
 	function remeasureList() {
-		virtualizer?.measure();
+		if (!virtualizer || !listScrollEl) return;
+		// measure() clears cached sizes; visible row actions only run on mount/index
+		// change, so re-read each mounted virtual row from the DOM.
+		virtualizer.measure();
+		for (const item of virtualizer.getVirtualItems()) {
+			const el = listScrollEl.querySelector<HTMLDivElement>(
+				`.virtual-row[data-index="${item.index}"]`
+			);
+			if (el) virtualizer.measureElement(el);
+		}
+		syncVirtualState(virtualizer);
+	}
+
+	function scheduleRemeasure() {
+		tick().then(() => {
+			remeasureList();
+			requestAnimationFrame(() => remeasureList());
+		});
 	}
 
 	$effect(() => {
@@ -200,11 +224,11 @@
 				appState.mapTarget = { slug, lat: restaurant.lat, lng: restaurant.lng };
 			}
 		}
-		tick().then(() => remeasureList());
+		scheduleRemeasure();
 	}
 
 	function onDrawerTransitionEnd(e: TransitionEvent) {
-		if (e.propertyName === 'grid-template-rows') remeasureList();
+		if (e.propertyName === 'grid-template-rows') scheduleRemeasure();
 	}
 
 	function bindRowElement(el: HTMLDivElement, index: number) {
@@ -349,47 +373,42 @@
 							class:expanded={isOpen}
 							class:hovered={appState.hoveredRestaurantSlug === slug}
 							id="restaurant-{slug}"
+							role="group"
+							aria-label={restaurant.name}
+							onmouseenter={() => setHovered(restaurant)}
+							onmouseleave={() => clearHovered(restaurant)}
 						>
-							<button
-								class="row-header"
-								onclick={() => toggleRow(restaurant)}
-								onmouseenter={() => setHovered(restaurant)}
-								onmouseleave={() => clearHovered(restaurant)}
-								onfocus={() => setHovered(restaurant)}
-								onblur={() => clearHovered(restaurant)}
-								aria-expanded={isOpen}
-								aria-controls={isOpen ? `drawer-${slug}` : undefined}
-							>
-								<div class="row-main">
-									<div class="row-name-line">
-										<span class="row-name">{restaurant.name}</span>
-										{#if hasNewMentions(restaurant)}
-											<span class="tag new-tag" aria-label="New mentions since your last visit">New</span>
+							<div class="row-header">
+								<button
+									type="button"
+									class="row-toggle"
+									onclick={() => toggleRow(restaurant)}
+									onfocus={() => setHovered(restaurant)}
+									onblur={() => clearHovered(restaurant)}
+									aria-expanded={isOpen}
+									aria-controls={isOpen ? `drawer-${slug}` : undefined}
+								>
+									<div class="row-main">
+										<div class="row-name-line">
+											<span class="row-name">{restaurant.name}</span>
+											{#if hasNewMentions(restaurant)}
+												<span class="tag new-tag" aria-label="New mentions since your last visit">New</span>
+											{/if}
+										</div>
+										<div class="row-tags">
+											{#if restaurant.cuisine}
+												<span class="tag cuisine-tag">{normalizeCuisine(restaurant.cuisine)}</span>
+											{/if}
+											{#if restaurant.location}
+												<span class="tag location-tag">{restaurant.location}</span>
+											{/if}
+										</div>
+										{#if restaurant.top_dish_snippet}
+											<p class="dish-teaser">Try: {restaurant.top_dish_snippet}</p>
 										{/if}
 									</div>
-									<div class="row-tags">
-										{#if restaurant.cuisine}
-											<span class="tag cuisine-tag">{normalizeCuisine(restaurant.cuisine)}</span>
-										{/if}
-										{#if restaurant.location}
-											<span class="tag location-tag">{restaurant.location}</span>
-										{/if}
-									</div>
-									{#if restaurant.top_dish_snippet}
-										<p class="dish-teaser">Try: {restaurant.top_dish_snippet}</p>
-									{/if}
-								</div>
+								</button>
 								<div class="row-stats">
-									{#if restaurant.lat != null && restaurant.lng != null}
-										<button
-											type="button"
-											class="show-on-map-btn"
-											aria-label="Show {restaurant.name} on map"
-											onclick={(e) => showOnMap(restaurant, e)}
-										>
-											<MapPin size={14} aria-hidden="true" />
-										</button>
-									{/if}
 									<span class="stat score">
 										{restaurant.aggregate_score} <small>pts</small>
 									</span>
@@ -400,8 +419,18 @@
 										{restaurant.mention_count} <small>mentions</small>
 									</span>
 								</div>
-								<span class="chevron" class:open={isOpen} aria-hidden="true"><ChevronRight size={20} /></span>
-							</button>
+								<button
+									type="button"
+									class="row-chevron-btn"
+									onclick={() => toggleRow(restaurant)}
+									onfocus={() => setHovered(restaurant)}
+									onblur={() => clearHovered(restaurant)}
+									aria-label="{isOpen ? 'Collapse' : 'Expand'} {restaurant.name} details"
+									tabindex="-1"
+								>
+									<span class="chevron" class:open={isOpen} aria-hidden="true"><ChevronRight size={20} /></span>
+								</button>
+							</div>
 
 							<div
 								class="drawer-reveal"
@@ -700,16 +729,32 @@
 		align-items: center;
 		width: 100%;
 		padding: 0.6rem 0.75rem;
-		border: none;
-		background: none;
-		cursor: pointer;
-		text-align: left;
 		gap: 0.75rem;
 		transition: background-color 0.15s ease;
 	}
 
 	.row-header:hover {
 		background: rgba(62, 44, 35, 0.02);
+	}
+
+	.row-toggle,
+	.row-chevron-btn {
+		border: none;
+		background: none;
+		cursor: pointer;
+		padding: 0;
+		text-align: left;
+	}
+
+	.row-toggle {
+		flex: 1;
+		min-width: 0;
+	}
+
+	.row-chevron-btn {
+		flex-shrink: 0;
+		display: inline-flex;
+		align-items: center;
 	}
 
 	.row:hover {
@@ -859,26 +904,6 @@
 		font-style: italic;
 	}
 
-	.show-on-map-btn {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		padding: 0.25rem;
-		margin-right: 0.25rem;
-		border: 1px solid #e8e0d6;
-		border-radius: 6px;
-		background: #fffdf9;
-		color: #ff4500;
-		cursor: pointer;
-	}
-
-	.show-on-map-btn:hover,
-	.show-on-map-btn:focus-visible {
-		background: rgba(255, 69, 0, 0.08);
-		border-color: #ff4500;
-		outline: none;
-	}
-
 	.stat small {
 		font-size: 0.7rem;
 		font-weight: 400;
@@ -897,7 +922,8 @@
 		transform: rotate(90deg);
 	}
 
-	.row-header:hover .chevron {
+	.row-header:hover .chevron,
+	.row-toggle:focus-visible ~ .row-chevron-btn .chevron {
 		color: #ff4500;
 	}
 
