@@ -98,7 +98,7 @@ For each establishment, return:
 - "location": city or neighborhood if mentioned, else null
 - "street": street name or cross-streets if mentioned (e.g. "Main St", "Bristol and Sunflower"), else null
 - "cuisine": cuisine type if inferable from the name or text, else null
-- "chain_suspect": true ONLY for an obvious large national/international chain (e.g. McDonald's, Starbucks, Chipotle, In-N-Out, The Cheesecake Factory, Din Tai Fung); otherwise false. ALWAYS still extract the establishment -- this is only a hint for review, never a reason to skip it.
+- "chain_suspect": true ONLY for an obvious large national/international chain (e.g. McDonald's, Starbucks, Chipotle, In-N-Out, The Cheesecake Factory, Din Tai Fung, Gen Korean BBQ); otherwise false. ALWAYS still extract the establishment -- this is only a hint for review, never a reason to skip it.
 
 Include any food or drink establishment (restaurants, cafes, bakeries, ice cream shops, delis, food trucks, etc.).
 A proper name IS a recommendation even if it does not sound food-related and even if it is terse: a bare name ("Keno's") or "Name in City" ("Pops in Santa Ana") must be extracted.
@@ -1031,7 +1031,7 @@ def _fold_accents(value: str) -> str:
 
 def normalize_name(name: str) -> str:
     normalized = _fold_accents(name.lower().strip())
-    normalized = re.sub(r"['’]s$", "", normalized)
+    normalized = re.sub(r"['’]?s\b", "", normalized)
     normalized = re.sub(r"\s*&\s*", " and ", normalized)
     # Aggressive normalization: strip all whitespace and non-alphanumeric
     # to catch 'Mo Ran Gak' vs 'Morangak' and 'A & B' vs 'A and B'.
@@ -1087,7 +1087,7 @@ def _is_word_boundary_match(short_name: str, long_name: str) -> bool:
 
     # Process long_name with the same folding rules as normalize_name.
     long_processed = _fold_accents(long_name.lower().strip())
-    long_processed = re.sub(r"['’]s$", "", long_processed)
+    long_processed = re.sub(r"['’]?s\b", "", long_processed)
     long_processed = re.sub(r"\s*&\s*", " and ", long_processed)
 
     mapping = []
