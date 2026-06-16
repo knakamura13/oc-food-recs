@@ -2238,6 +2238,11 @@ def build_thread(
     return geocoded_dataset
 
 
+def _name_word_count(name: str) -> int:
+    """Whitespace-delimited word count after accent folding (for registry guards)."""
+    return len(_fold_accents(name.lower().strip()).split())
+
+
 def _brand_names_match(extracted_name: str, brand_name: str) -> bool:
     """Conservative name-only match between an extracted name and a registry brand.
 
@@ -2246,6 +2251,8 @@ def _brand_names_match(extracted_name: str, brand_name: str) -> bool:
       * exact normalized equality ("DinTaiFung" == "Din Tai Fung"), and
       * a full word-boundary substring in either direction ("Vox Kitchen" in "Vox Kitchen
         Fountain Valley"; "Broken Yolk" in "Broken Yolk Cafe").
+    When the extracted name is shorter than the registry brand, it must span at least two
+  words so single-token fragments ("Panda", "King", "Taco") cannot hit multi-word chains.
     We deliberately do NOT use ``_name_score``'s token-subset/fuzzy bonus here: with no geo
     gate it matches any name whose only distinctive token is a generic food word (e.g.
     "B&C Burger" -> "The Habit Burger Grill" via the shared token "burger"). Add misspelling
@@ -2258,9 +2265,13 @@ def _brand_names_match(extracted_name: str, brand_name: str) -> bool:
     if ext == brand:
         return True
     if len(brand) <= len(ext) and _is_word_boundary_match(brand_name, extracted_name):
+        # The full registry brand appears inside a longer extracted name (e.g. "Chipotle
+        # Irvine", "Vox Kitchen Fountain Valley").
         return True
     if len(ext) < len(brand) and _is_word_boundary_match(extracted_name, brand_name):
-        return True
+        # Extracted name is a strict prefix of the brand ("Broken Yolk" -> "Broken Yolk
+        # Cafe"). Reject single-token fragments ("Panda" -> "Panda Express").
+        return _name_word_count(extracted_name) >= 2
     return False
 
 
