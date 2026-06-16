@@ -83,6 +83,17 @@ describe("normalizeSearchText", () => {
     expect(normalizeSearchText("Café Hiro")).toBe("cafehiro");
     expect(normalizeSearchText("A & B")).toBe("aandb");
   });
+
+  it("strips possessive and consonant-stem plurals without truncating vowel-final names", () => {
+    expect(normalizeSearchText("McDonald's")).toBe(
+      normalizeSearchText("McDonalds"),
+    );
+    expect(normalizeSearchText("Gen Korean BBQ")).toBe(
+      normalizeSearchText("Gens Korean BBQ"),
+    );
+    expect(normalizeSearchText("Louis")).toBe("louis");
+    expect(normalizeSearchText("Atlas")).toBe("atlas");
+  });
 });
 
 describe("searchRestaurants ranking", () => {

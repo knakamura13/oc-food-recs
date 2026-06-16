@@ -1029,10 +1029,28 @@ def _fold_accents(value: str) -> str:
     return "".join(c for c in folded if not unicodedata.combining(c))
 
 
-def normalize_name(name: str) -> str:
+def _normalize_name_pre_alnum(name: str) -> str:
+    """Shared folding before the final alphanumeric collapse.
+
+    Strips possessive ``'s`` at word boundaries, then a conservative plural ``s``
+    only when the letter before ``s`` is a consonant (``Gens`` -> ``Gen``,
+    ``McDonalds`` -> ``McDonald``) so names like ``Louis`` / ``Atlas`` stay intact.
+    """
     normalized = _fold_accents(name.lower().strip())
-    normalized = re.sub(r"['’]?s\b", "", normalized)
+    normalized = re.sub(r"['’]s\b", "", normalized)
+
+    def _strip_conservative_plural(word: str) -> str:
+        if len(word) >= 2 and word.endswith("s") and word[-2] not in "aeiou":
+            return word[:-1]
+        return word
+
+    normalized = " ".join(_strip_conservative_plural(w) for w in normalized.split())
     normalized = re.sub(r"\s*&\s*", " and ", normalized)
+    return normalized
+
+
+def normalize_name(name: str) -> str:
+    normalized = _normalize_name_pre_alnum(name)
     # Aggressive normalization: strip all whitespace and non-alphanumeric
     # to catch 'Mo Ran Gak' vs 'Morangak' and 'A & B' vs 'A and B'.
     normalized = re.sub(r"[^a-z0-9]", "", normalized)
@@ -1086,9 +1104,7 @@ def _is_word_boundary_match(short_name: str, long_name: str) -> bool:
         return False
 
     # Process long_name with the same folding rules as normalize_name.
-    long_processed = _fold_accents(long_name.lower().strip())
-    long_processed = re.sub(r"['’]?s\b", "", long_processed)
-    long_processed = re.sub(r"\s*&\s*", " and ", long_processed)
+    long_processed = _normalize_name_pre_alnum(long_name)
 
     mapping = []
     for i, c in enumerate(long_processed):
