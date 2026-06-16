@@ -101,6 +101,18 @@ class TestDedupeLogic(unittest.TestCase):
         self.assertEqual(rp.normalize_name("A & B"), rp.normalize_name("A and B"))
         self.assertEqual(rp.normalize_name("A&B"), rp.normalize_name("A and B"))
 
+    def test_normalize_name_possessive_and_plural_variants(self):
+        self.assertEqual(rp.normalize_name("McDonald's"), rp.normalize_name("McDonalds"))
+        self.assertEqual(rp.normalize_name("Gen Korean BBQ"), rp.normalize_name("Gens Korean BBQ"))
+        self.assertEqual(rp.normalize_name("Chris's Tacos"), rp.normalize_name("Chris Tacos"))
+
+    def test_normalize_name_preserves_terminal_s_after_vowel(self):
+        # Do not truncate real names ending in 's' (Louis, Atlas, James, ...).
+        self.assertEqual(rp.normalize_name("Louis"), "louis")
+        self.assertEqual(rp.normalize_name("Atlas"), "atlas")
+        self.assertEqual(rp.normalize_name("James Kitchen"), "jameskitchen")
+        self.assertNotEqual(rp.normalize_name("Louis"), rp.normalize_name("Loui"))
+
     def test_is_match_accent_variants(self):
         r1 = {"name": "Café Hiro", "location": "Costa Mesa"}
         r2 = {"name": "Cafe Hiro", "location": "Costa Mesa"}

@@ -50,11 +50,11 @@ class TestRegistryMatching(unittest.TestCase):
         self.assertIsNotNone(rp.match_excluded_brand("In N Out", REG))
 
     def test_plural_and_possessive_variants(self):
-        # normalize_name strips trailing 's' and possessive "'s".
-        self.assertIsNotNone(rp.match_excluded_brand("McDonalds", REG))
-        self.assertIsNotNone(rp.match_excluded_brand("McDonald's", REG))
-        self.assertIsNotNone(rp.match_excluded_brand("Gens Korean bbq", REG))
-        self.assertIsNotNone(rp.match_excluded_brand("Gen Korean bbq", REG))
+        # Possessive 's and consonant-stem plurals collapse to the registry key.
+        self.assertEqual(rp.match_excluded_brand("McDonalds", REG), ("chain", None))
+        self.assertEqual(rp.match_excluded_brand("McDonald's", REG), ("chain", None))
+        self.assertEqual(rp.match_excluded_brand("Gens Korean bbq", REG), ("chain", None))
+        self.assertEqual(rp.match_excluded_brand("Gen Korean bbq", REG), ("chain", None))
 
     def test_brand_in_city_still_matches(self):
         # "Vox Kitchen Fountain Valley" -> word-boundary / token-subset hit on "Vox Kitchen".
