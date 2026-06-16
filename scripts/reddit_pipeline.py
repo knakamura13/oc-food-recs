@@ -1029,10 +1029,28 @@ def _fold_accents(value: str) -> str:
     return "".join(c for c in folded if not unicodedata.combining(c))
 
 
-def normalize_name(name: str) -> str:
+def _normalize_name_pre_alnum(name: str) -> str:
+    """Shared folding before the final alphanumeric collapse.
+
+    Strips possessive ``'s`` at word boundaries, then a conservative plural ``s``
+    only when the letter before ``s`` is a consonant (``Gens`` -> ``Gen``,
+    ``McDonalds`` -> ``McDonald``) so names like ``Louis`` / ``Atlas`` stay intact.
+    """
     normalized = _fold_accents(name.lower().strip())
-    normalized = re.sub(r"['’]?s\b", "", normalized)
+    normalized = re.sub(r"['’]s\b", "", normalized)
+
+    def _strip_conservative_plural(word: str) -> str:
+        if len(word) >= 2 and word.endswith("s") and word[-2] not in "aeiou":
+            return word[:-1]
+        return word
+
+    normalized = " ".join(_strip_conservative_plural(w) for w in normalized.split())
     normalized = re.sub(r"\s*&\s*", " and ", normalized)
+    return normalized
+
+
+def normalize_name(name: str) -> str:
+    normalized = _normalize_name_pre_alnum(name)
     # Aggressive normalization: strip all whitespace and non-alphanumeric
     # to catch 'Mo Ran Gak' vs 'Morangak' and 'A & B' vs 'A and B'.
     normalized = re.sub(r"[^a-z0-9]", "", normalized)
@@ -1086,9 +1104,7 @@ def _is_word_boundary_match(short_name: str, long_name: str) -> bool:
         return False
 
     # Process long_name with the same folding rules as normalize_name.
-    long_processed = _fold_accents(long_name.lower().strip())
-    long_processed = re.sub(r"['’]?s\b", "", long_processed)
-    long_processed = re.sub(r"\s*&\s*", " and ", long_processed)
+    long_processed = _normalize_name_pre_alnum(long_name)
 
     mapping = []
     for i, c in enumerate(long_processed):
@@ -2222,6 +2238,11 @@ def build_thread(
     return geocoded_dataset
 
 
+def _name_word_count(name: str) -> int:
+    """Whitespace-delimited word count after accent folding (for registry guards)."""
+    return len(_fold_accents(name.lower().strip()).split())
+
+
 def _brand_names_match(extracted_name: str, brand_name: str) -> bool:
     """Conservative name-only match between an extracted name and a registry brand.
 
@@ -2230,6 +2251,8 @@ def _brand_names_match(extracted_name: str, brand_name: str) -> bool:
       * exact normalized equality ("DinTaiFung" == "Din Tai Fung"), and
       * a full word-boundary substring in either direction ("Vox Kitchen" in "Vox Kitchen
         Fountain Valley"; "Broken Yolk" in "Broken Yolk Cafe").
+    When the extracted name is shorter than the registry brand, it must span at least two
+  words so single-token fragments ("Panda", "King", "Taco") cannot hit multi-word chains.
     We deliberately do NOT use ``_name_score``'s token-subset/fuzzy bonus here: with no geo
     gate it matches any name whose only distinctive token is a generic food word (e.g.
     "B&C Burger" -> "The Habit Burger Grill" via the shared token "burger"). Add misspelling
@@ -2242,9 +2265,13 @@ def _brand_names_match(extracted_name: str, brand_name: str) -> bool:
     if ext == brand:
         return True
     if len(brand) <= len(ext) and _is_word_boundary_match(brand_name, extracted_name):
+        # The full registry brand appears inside a longer extracted name (e.g. "Chipotle
+        # Irvine", "Vox Kitchen Fountain Valley").
         return True
     if len(ext) < len(brand) and _is_word_boundary_match(extracted_name, brand_name):
-        return True
+        # Extracted name is a strict prefix of the brand ("Broken Yolk" -> "Broken Yolk
+        # Cafe"). Reject single-token fragments ("Panda" -> "Panda Express").
+        return _name_word_count(extracted_name) >= 2
     return False
 
 

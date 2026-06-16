@@ -31,6 +31,10 @@ REG = _registry(
     ("Broken Yolk Cafe", "chain", None),
     ("Gen Korean BBQ", "chain", None),
     ("McDonald's", "chain", None),
+    ("Panda Express", "chain", None),
+    ("Jack in the Box", "chain", None),
+    ("Burger King", "chain", None),
+    ("Taco Bell", "chain", None),
 )
 
 
@@ -50,11 +54,11 @@ class TestRegistryMatching(unittest.TestCase):
         self.assertIsNotNone(rp.match_excluded_brand("In N Out", REG))
 
     def test_plural_and_possessive_variants(self):
-        # normalize_name strips trailing 's' and possessive "'s".
-        self.assertIsNotNone(rp.match_excluded_brand("McDonalds", REG))
-        self.assertIsNotNone(rp.match_excluded_brand("McDonald's", REG))
-        self.assertIsNotNone(rp.match_excluded_brand("Gens Korean bbq", REG))
-        self.assertIsNotNone(rp.match_excluded_brand("Gen Korean bbq", REG))
+        # Possessive 's and consonant-stem plurals collapse to the registry key.
+        self.assertEqual(rp.match_excluded_brand("McDonalds", REG), ("chain", None))
+        self.assertEqual(rp.match_excluded_brand("McDonald's", REG), ("chain", None))
+        self.assertEqual(rp.match_excluded_brand("Gens Korean bbq", REG), ("chain", None))
+        self.assertEqual(rp.match_excluded_brand("Gen Korean bbq", REG), ("chain", None))
 
     def test_brand_in_city_still_matches(self):
         # "Vox Kitchen Fountain Valley" -> word-boundary / token-subset hit on "Vox Kitchen".
@@ -78,6 +82,31 @@ class TestRegistryMatching(unittest.TestCase):
         # Burger Grill"). Caught in a real dry-run before this guard was added.
         self.assertIsNone(rp.match_excluded_brand("B&C Burger", REG))
         self.assertIsNone(rp.match_excluded_brand("Burger Boy", REG))
+
+    def test_no_false_positive_on_single_token_chain_fragment(self):
+        # Single-token fragments must not hit multi-word registry brands via substring match.
+        for name in (
+            "Panda",
+            "Jack",
+            "King",
+            "Taco",
+            "Del",
+            "Gen",
+            "Express",
+            "Burger",
+            "Grill",
+            "Sub",
+        ):
+            with self.subTest(name=name):
+                self.assertIsNone(rp.match_excluded_brand(name, REG))
+
+    def test_single_word_chain_still_matches_exact_and_with_city(self):
+        self.assertEqual(rp.match_excluded_brand("McDonald's", REG), ("chain", None))
+        self.assertIsNotNone(rp.match_excluded_brand("McDonald's Irvine", REG))
+        self.assertEqual(rp.match_excluded_brand("Panda Express", REG), ("chain", None))
+        self.assertIsNotNone(rp.match_excluded_brand("Panda Express Costa Mesa", REG))
+        self.assertEqual(rp.match_excluded_brand("In-N-Out", REG), ("chain", None))
+        self.assertIsNotNone(rp.match_excluded_brand("In N Out Costa Mesa", REG))
 
     def test_reverse_word_boundary_match(self):
         # The extracted name is a full word-boundary prefix of the registry brand.
