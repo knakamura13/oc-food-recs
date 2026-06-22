@@ -452,7 +452,7 @@ def assign_slugs(
         matched_slug = None
 
         for e in existing:
-            if is_match(r, e):
+            if is_match(r, e, all_restaurants=existing):
                 matched_slug = e["slug"]
                 break
 
@@ -567,7 +567,7 @@ def collapse_duplicate_restaurants(
     adjacency: dict[int, list[int]] = defaultdict(list)
     for i, r1 in enumerate(restaurants):
         for j in range(i + 1, len(restaurants)):
-            if is_match(r1, restaurants[j]):
+            if is_match(r1, restaurants[j], all_restaurants=restaurants):
                 adjacency[i].append(j)
                 adjacency[j].append(i)
 
@@ -1130,45 +1130,199 @@ def _is_word_boundary_match(short_name: str, long_name: str) -> bool:
     return False
 
 
-def is_match(r1: dict[str, Any], r2: dict[str, Any]) -> bool:
+GEO_MATCH_DEG = 0.002  # ~200 m — ingest dedup proximity
+HIGH_CONFIDENCE_GEO_DEG = 0.0005  # ~50 m — offline high-confidence merge
+FUZZY_NAME_MATCH_THRESHOLD = 0.85
+
+
+def _has_coords(r: dict[str, Any]) -> bool:
+    return r.get("lat") is not None and r.get("lng") is not None
+
+
+def _has_location(r: dict[str, Any]) -> bool:
+    location = r.get("location")
+    return bool(location and str(location).strip())
+
+
+def _coord_distance_deg(r1: dict[str, Any], r2: dict[str, Any]) -> float | None:
+    if not (_has_coords(r1) and _has_coords(r2)):
+        return None
+    dlat = float(r1["lat"]) - float(r2["lat"])
+    dlng = float(r1["lng"]) - float(r2["lng"])
+    return (dlat**2 + dlng**2) ** 0.5
+
+
+def _coord_distance_from(lat: float, lng: float, r: dict[str, Any]) -> float | None:
+    if not _has_coords(r):
+        return None
+    dlat = lat - float(r["lat"])
+    dlng = lng - float(r["lng"])
+    return (dlat**2 + dlng**2) ** 0.5
+
+
+def _is_exact_or_substring_name_match(r1: dict[str, Any], r2: dict[str, Any]) -> bool:
     norm1 = normalize_name(r1["name"])
     norm2 = normalize_name(r2["name"])
-
-    # Substring matching (e.g., "Mo Ran Gak" matches "Mo Ran Gak Restaurant")
     if norm1 == norm2:
-        name_match = True
-    elif len(norm1) <= len(norm2) and _is_word_boundary_match(r1["name"], r2["name"]):
-        name_match = True
-    elif len(norm2) < len(norm1) and _is_word_boundary_match(r2["name"], r1["name"]):
-        name_match = True
-    elif (
+        return True
+    if len(norm1) <= len(norm2) and _is_word_boundary_match(r1["name"], r2["name"]):
+        return True
+    if len(norm2) < len(norm1) and _is_word_boundary_match(r2["name"], r1["name"]):
+        return True
+    return False
+
+
+def _is_fuzzy_name_match(r1: dict[str, Any], r2: dict[str, Any]) -> bool:
+    if _is_exact_or_substring_name_match(r1, r2):
+        return True
+    norm1 = normalize_name(r1["name"])
+    norm2 = normalize_name(r2["name"])
+    return (
         len(norm1) >= 3
         and len(norm2) >= 3
-        and _name_score(r1["name"], r2["name"]) >= 0.85
-    ):
-        name_match = True
-    else:
-        name_match = False
+        and _name_score(r1["name"], r2["name"]) >= FUZZY_NAME_MATCH_THRESHOLD
+    )
 
-    if not name_match:
+
+def _names_match_pair(e1: dict[str, Any], e2: dict[str, Any]) -> bool:
+    """Name-only match for within-thread grouping."""
+    return _is_fuzzy_name_match(e1, e2)
+
+
+def _nearby_geocoded_fuzzy_matches(
+    name: str,
+    lat: float,
+    lng: float,
+    all_restaurants: list[dict[str, Any]],
+    *,
+    threshold: float = FUZZY_NAME_MATCH_THRESHOLD,
+    max_dist: float = GEO_MATCH_DEG,
+) -> list[dict[str, Any]]:
+    matches: list[dict[str, Any]] = []
+    for candidate in all_restaurants:
+        if not _has_coords(candidate):
+            continue
+        distance = _coord_distance_from(lat, lng, candidate)
+        if distance is None or distance >= max_dist:
+            continue
+        if (
+            len(normalize_name(candidate["name"])) >= 3
+            and _name_score(name, candidate["name"]) >= threshold
+        ):
+            matches.append(candidate)
+    return matches
+
+
+def _fuzzy_collocation_ambiguous(
+    r1: dict[str, Any],
+    r2: dict[str, Any],
+    all_restaurants: list[dict[str, Any]] | None,
+) -> bool:
+    """True when multiple nearby geocoded POIs could match this fuzzy pair."""
+    if not all_restaurants or _is_exact_or_substring_name_match(r1, r2):
         return False
 
-    # Proximity check: same city or within ~200m (0.002 degrees)
+    anchor = r1 if _has_coords(r1) else r2 if _has_coords(r2) else None
+    if anchor is None:
+        return False
+
+    lat, lng = float(anchor["lat"]), float(anchor["lng"])
+    cluster_count = 0
+    for candidate in all_restaurants:
+        if not _has_coords(candidate):
+            continue
+        distance = _coord_distance_from(lat, lng, candidate)
+        if distance is None or distance >= GEO_MATCH_DEG:
+            continue
+        best_score = max(
+            _name_score(r1["name"], candidate["name"]),
+            _name_score(r2["name"], candidate["name"]),
+        )
+        if best_score >= FUZZY_NAME_MATCH_THRESHOLD:
+            cluster_count += 1
+
+    return cluster_count > 2
+
+
+def _proximity_only_match(
+    r1: dict[str, Any],
+    r2: dict[str, Any],
+    all_restaurants: list[dict[str, Any]] | None,
+) -> bool:
+    """One side geocoded, the other lacks coords and city — high-confidence typo path."""
+    if _has_coords(r1) and not _has_coords(r2) and not _has_location(r2):
+        geocoded, ungeocoded = r1, r2
+    elif _has_coords(r2) and not _has_coords(r1) and not _has_location(r1):
+        geocoded, ungeocoded = r2, r1
+    else:
+        return False
+
+    if not _is_fuzzy_name_match(geocoded, ungeocoded):
+        return False
+
+    if all_restaurants is None:
+        return _name_score(geocoded["name"], ungeocoded["name"]) >= 0.90
+
+    lat, lng = float(geocoded["lat"]), float(geocoded["lng"])
+    partners = _nearby_geocoded_fuzzy_matches(
+        ungeocoded["name"], lat, lng, all_restaurants
+    )
+    return (
+        len(partners) == 1
+        and _name_score(ungeocoded["name"], partners[0]["name"])
+        >= FUZZY_NAME_MATCH_THRESHOLD
+    )
+
+
+def is_match(
+    r1: dict[str, Any],
+    r2: dict[str, Any],
+    *,
+    all_restaurants: list[dict[str, Any]] | None = None,
+) -> bool:
+    if not _is_fuzzy_name_match(r1, r2):
+        return False
+
     loc_match = _locations_match(r1.get("location"), r2.get("location"))
 
     dist_match = False
-    if (
-        r1.get("lat") is not None
-        and r1.get("lng") is not None
-        and r2.get("lat") is not None
-        and r2.get("lng") is not None
-    ):
-        dlat = float(r1["lat"]) - float(r2["lat"])
-        dlng = float(r1["lng"]) - float(r2["lng"])
-        if (dlat**2 + dlng**2) ** 0.5 < 0.002:
-            dist_match = True
+    distance = _coord_distance_deg(r1, r2)
+    if distance is not None and distance < GEO_MATCH_DEG:
+        dist_match = True
 
-    return loc_match or dist_match
+    if loc_match or dist_match:
+        if (
+            not _is_exact_or_substring_name_match(r1, r2)
+            and (dist_match or loc_match)
+            and _fuzzy_collocation_ambiguous(r1, r2, all_restaurants)
+        ):
+            return False
+        return True
+
+    return _proximity_only_match(r1, r2, all_restaurants)
+
+
+def is_high_confidence_match(
+    r1: dict[str, Any],
+    r2: dict[str, Any],
+    *,
+    all_restaurants: list[dict[str, Any]] | None = None,
+) -> bool:
+    """Stricter merge gate for offline dedupe: fuzzy name + tight geo or city agreement."""
+    if not is_match(r1, r2, all_restaurants=all_restaurants):
+        return False
+
+    if _is_exact_or_substring_name_match(r1, r2):
+        return True
+
+    distance = _coord_distance_deg(r1, r2)
+    if distance is not None and distance <= HIGH_CONFIDENCE_GEO_DEG:
+        return not _fuzzy_collocation_ambiguous(r1, r2, all_restaurants)
+
+    if _locations_match(r1.get("location"), r2.get("location")):
+        return _name_score(r1["name"], r2["name"]) >= FUZZY_NAME_MATCH_THRESHOLD
+
+    return _proximity_only_match(r1, r2, all_restaurants)
 
 
 def _endorsement_dedupe_key(endorsement: dict[str, Any]) -> str | tuple[str, str, str]:
@@ -1257,15 +1411,7 @@ def build_thread_dataset(
     # because their normalize_name values differ.
     def _names_match(e1: dict[str, Any], e2: dict[str, Any]) -> bool:
         """Name-only match (ignoring location) for within-thread grouping."""
-        n1 = normalize_name(e1["name"])
-        n2 = normalize_name(e2["name"])
-        if n1 == n2:
-            return True
-        if len(n1) <= len(n2) and _is_word_boundary_match(e1["name"], e2["name"]):
-            return True
-        if len(n2) < len(n1) and _is_word_boundary_match(e2["name"], e1["name"]):
-            return True
-        return False
+        return _names_match_pair(e1, e2)
 
     name_adjacency: dict[int, list[int]] = defaultdict(list)
     for i, e1 in enumerate(raw_entries):
@@ -1758,18 +1904,51 @@ def normalize_location(location: str | None) -> str | None:
     return None  # unrecognized → unmapped rather than inventing a city name
 
 
+def _poi_name_from_geocode_detail(detail: str | None) -> str | None:
+    """Extract a POI label from a geocoder detail string."""
+    if not detail or not detail.strip():
+        return None
+    text = detail.strip()
+    if text.startswith("mapbox: "):
+        text = text[len("mapbox: ") :]
+    if text.startswith("google:"):
+        return None
+    if "," not in text:
+        return text.strip() or None
+    return text.split(",", 1)[0].strip() or None
+
+
+def _maybe_adopt_geocoder_name(
+    restaurant: dict[str, Any], geocode_detail: str | None
+) -> None:
+    """Replace a typo LLM name with the geocoder POI name when similarity is high."""
+    if not geocode_detail or restaurant.get("lat") is None:
+        return
+    detail = geocode_detail.strip()
+    if not detail.startswith("mapbox: ") and "," not in detail:
+        return
+    poi_name = _poi_name_from_geocode_detail(geocode_detail)
+    if not poi_name:
+        return
+    extracted_name = restaurant.get("name", "")
+    if _name_score(extracted_name, poi_name) >= FUZZY_NAME_MATCH_THRESHOLD:
+        restaurant["name"] = poi_name
+
+
 def _apply_geocode_result(
     restaurant: dict[str, Any],
     lat: float | None,
     lng: float | None,
     geocoded_city: str | None,
     raw_location: str | None,
+    geocode_detail: str | None = None,
 ) -> None:
     restaurant["lat"] = lat
     restaurant["lng"] = lng
     resolved_location = geocoded_city or normalize_location(raw_location)
     if resolved_location is not None:
         restaurant["location"] = resolved_location
+    _maybe_adopt_geocoder_name(restaurant, geocode_detail)
 
 
 # --- Google Places API (New) ------------------------------------------------
@@ -2201,7 +2380,9 @@ def build_thread(
                 if _is_closed_permanently_detail(detail):
                     continue
                 raw_loc = r.get("location") or _subreddit_city(manifest["subreddit"])
-                _apply_geocode_result(r, lat, lng, geocoded_city, raw_loc)
+                _apply_geocode_result(
+                    r, lat, lng, geocoded_city, raw_loc, geocode_detail=detail
+                )
                 if lat is not None and lng is not None:
                     geocoded_count += 1
                 else:
@@ -2246,17 +2427,17 @@ def _name_word_count(name: str) -> int:
 def _brand_names_match(extracted_name: str, brand_name: str) -> bool:
     """Conservative name-only match between an extracted name and a registry brand.
 
-    Registry matching has NO geographic gate (unlike ``is_match``), so it must be strict to
-    avoid hiding independents. We allow only:
-      * exact normalized equality ("DinTaiFung" == "Din Tai Fung"), and
-      * a full word-boundary substring in either direction ("Vox Kitchen" in "Vox Kitchen
-        Fountain Valley"; "Broken Yolk" in "Broken Yolk Cafe").
-    When the extracted name is shorter than the registry brand, it must span at least two
-  words so single-token fragments ("Panda", "King", "Taco") cannot hit multi-word chains.
-    We deliberately do NOT use ``_name_score``'s token-subset/fuzzy bonus here: with no geo
-    gate it matches any name whose only distinctive token is a generic food word (e.g.
-    "B&C Burger" -> "The Habit Burger Grill" via the shared token "burger"). Add misspelling
-    variants to the registry explicitly instead.
+      Registry matching has NO geographic gate (unlike ``is_match``), so it must be strict to
+      avoid hiding independents. We allow only:
+        * exact normalized equality ("DinTaiFung" == "Din Tai Fung"), and
+        * a full word-boundary substring in either direction ("Vox Kitchen" in "Vox Kitchen
+          Fountain Valley"; "Broken Yolk" in "Broken Yolk Cafe").
+      When the extracted name is shorter than the registry brand, it must span at least two
+    words so single-token fragments ("Panda", "King", "Taco") cannot hit multi-word chains.
+      We deliberately do NOT use ``_name_score``'s token-subset/fuzzy bonus here: with no geo
+      gate it matches any name whose only distinctive token is a generic food word (e.g.
+      "B&C Burger" -> "The Habit Burger Grill" via the shared token "burger"). Add misspelling
+      variants to the registry explicitly instead.
     """
     ext = normalize_name(extracted_name)
     brand = normalize_name(brand_name)
@@ -2728,7 +2909,9 @@ def ingest(
         lat, lng, detail, geocoded_city = geocode_fn(
             restaurant["name"], raw_location, restaurant.get("street")
         )
-        _apply_geocode_result(restaurant, lat, lng, geocoded_city, raw_location)
+        _apply_geocode_result(
+            restaurant, lat, lng, geocoded_city, raw_location, geocode_detail=detail
+        )
         # Optional, OFF by default: count global Google results as a (weak) chain signal.
         # Done here (outside write_to_db's transaction) and consumed by classify_restaurant_status.
         if CHAIN_PROBE_ENABLED:

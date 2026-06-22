@@ -48,6 +48,9 @@ npm run pipeline:audit-comment-dates
 npm run pipeline:backfill-comment-dates [-- --dry-run]
 npm run pipeline:backfill-permalinks [-- --dry-run]
 npm run pipeline:apply-exclusions
+python3 scripts/dedupe_restaurants.py          # review duplicate groups (dry run)
+python3 scripts/dedupe_restaurants.py --apply  # merge high-confidence duplicates
+python3 scripts/find_duplicate_candidates.py --csv duplicates.csv  # audit near-miss pairs
 ```
 
 ## Admin review

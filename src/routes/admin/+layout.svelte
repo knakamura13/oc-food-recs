@@ -5,7 +5,8 @@
 
 	const tabs = [
 		{ href: '/admin/geocode', label: 'Geocode Health' },
-		{ href: '/admin/exclusions', label: 'Exclusions' }
+		{ href: '/admin/exclusions', label: 'Exclusions' },
+		{ href: '/admin/duplicates', label: 'Duplicates' }
 	];
 
 	function isActive(href: string): boolean {
