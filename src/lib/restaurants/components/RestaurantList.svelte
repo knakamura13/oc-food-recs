@@ -698,6 +698,10 @@
 		grid-template-rows: 1fr;
 	}
 
+	.drawer-reveal.open .drawer-inner {
+		overflow: visible;
+	}
+
 	.drawer-reveal.no-motion {
 		transition: none;
 	}
@@ -722,6 +726,8 @@
 	.row.expanded {
 		background: #faf7f2;
 		border-left-color: #ff4500;
+		position: relative;
+		z-index: 1;
 	}
 
 	.row-header {
@@ -874,7 +880,7 @@
 	.info-tooltip {
 		display: none;
 		position: absolute;
-		bottom: calc(100% + 6px);
+		top: calc(100% + 6px);
 		right: -8px;
 		width: 200px;
 		padding: 6px 8px;
@@ -886,7 +892,7 @@
 		line-height: 1.4;
 		border-radius: 6px;
 		white-space: normal;
-		z-index: 100;
+		z-index: 10;
 		pointer-events: none;
 	}
 
