@@ -6,6 +6,8 @@ const row = (overrides: Partial<ReviewRestaurant>): ReviewRestaurant => ({
   name: "Test",
   slug: "test",
   location: null,
+  lat: null,
+  lng: null,
   status: "pending_review",
   exclusionReason: null,
   reviewedAt: null,
@@ -27,5 +29,15 @@ describe("partitionExclusionQueue", () => {
     expect(pendingReview).toHaveLength(2);
     expect(excluded).toHaveLength(1);
     expect(excluded[0].id).toBe(2);
+  });
+
+  it("routes duplicate_candidate rows out of the exclusion pending queue", () => {
+    const rows = [
+      row({ id: 1, exclusionReason: "llm_suspected_chain" }),
+      row({ id: 2, exclusionReason: "duplicate_candidate" }),
+    ];
+    const { pendingReview } = partitionExclusionQueue(rows);
+    expect(pendingReview).toHaveLength(1);
+    expect(pendingReview[0].id).toBe(1);
   });
 });
