@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { ChevronRight, MapPin } from 'lucide-svelte';
 	import { tick, untrack } from 'svelte';
+	import type { Attachment } from 'svelte/attachments';
 	import {
 		Virtualizer,
 		elementScroll,
@@ -135,7 +136,7 @@
 	// Create the virtualizer exactly once per scroll element. `table.rows` is read
 	// untracked here: if this effect depended on it, every sort/filter change would
 	// destroy and recreate the virtualizer, wiping its measured-size cache — mounted
-	// rows never re-measure (their action only re-fires on index change), so rows
+	// rows never re-measure (their attach only re-fires on index change), so rows
 	// would silently fall back to the 72px estimate and overlap (worst on narrow
 	// viewports, where wrapped rows are 2-3x taller than the estimate).
 	$effect(() => {
@@ -185,13 +186,13 @@
 		} as Parameters<Virtualizer<HTMLDivElement, HTMLDivElement>['setOptions']>[0]);
 		// Note: no virtualizer.measure() here — it would clear the per-slug size cache
 		// and mounted rows wouldn't re-measure. Sizes are keyed by slug so they stay
-		// valid across sorts/filters; new rows measure on mount via bindRowElement.
+		// valid across sorts/filters; new rows measure on mount via bindRowElement attach.
 		syncVirtualState(virtualizer);
 	});
 
 	function remeasureList() {
 		if (!virtualizer || !listScrollEl) return;
-		// Re-read each mounted virtual row from the DOM (their action only re-fires on
+		// Re-read each mounted virtual row from the DOM (their attach only re-fires on
 		// index change). Deliberately NOT virtualizer.measure(): that clears the whole
 		// per-slug size cache, and unmounted rows would collapse back to the 72px
 		// estimate — mispositioning everything outside the viewport.
@@ -243,19 +244,24 @@
 		if (e.propertyName === 'grid-template-rows') scheduleRemeasure();
 	}
 
-	function bindRowElement(el: HTMLDivElement, index: number) {
-		el.dataset.index = String(index);
-		virtualizer?.measureElement(el);
-		return {
-			update(newIndex: number) {
-				el.dataset.index = String(newIndex);
-				virtualizer?.measureElement(el);
-			},
-			destroy() {
+	// Attachment equivalent of the former use: action — re-runs when index changes
+	// (same timing as action update) so the virtualizer keeps accurate row heights.
+	function bindRowElement(index: number): Attachment<HTMLDivElement> {
+		return (el) => {
+			el.dataset.index = String(index);
+			virtualizer?.measureElement(el);
+			return () => {
 				virtualizer?.measureElement(null);
-			}
+			};
 		};
 	}
+
+	const bindListScroll: Attachment<HTMLDivElement> = (el) => {
+		listScrollEl = el;
+		return () => {
+			listScrollEl = undefined;
+		};
+	};
 
 	function setHovered(restaurant: Restaurant) {
 		appState.hoveredRestaurantSlug = restaurant.slug;
@@ -342,7 +348,7 @@
 <div class="restaurant-list">
 	<div class="sort-bar" role="toolbar" aria-label="Sort options">
 		<span class="sort-label" id="sort-label">Sort by:</span>
-		{#each sortOptions as opt}
+		{#each sortOptions as opt (opt.key)}
 			<button
 				class="sort-btn"
 				class:active={opt.sort.isActive}
@@ -360,7 +366,7 @@
 		</span>
 	</div>
 
-	<div class="list-scroll" id="main-content" bind:this={listScrollEl} role="region" aria-label="Restaurant results">
+	<div class="list-scroll" id="main-content" {@attach bindListScroll} role="region" aria-label="Restaurant results">
 		{#if table.rows.length === 0}
 			<div class="empty-state">
 				<span class="empty-icon">&#x1F50D;</span>
@@ -378,7 +384,7 @@
 					<div
 						class="virtual-row"
 						style:transform="translateY({virtualRow.start}px)"
-						use:bindRowElement={virtualRow.index}
+						{@attach bindRowElement(virtualRow.index)}
 					>
 						<div
 							class="row"
@@ -487,6 +493,7 @@
 								</div>
 								<p class="comment-body">{primary.body}</p>
 								{#if primary.permalink}
+									<!-- External absolute URLs (Reddit/Maps below): do not wrap in resolve() — that is for in-app routes only. -->
 									<a
 										href={primary.permalink}
 										target="_blank"
