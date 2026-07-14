@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { ChevronRight, MapPin } from 'lucide-svelte';
-	import { tick } from 'svelte';
+	import { tick, untrack } from 'svelte';
 	import {
 		Virtualizer,
 		elementScroll,
@@ -132,33 +132,42 @@
 		totalSize = instance.getTotalSize();
 	}
 
+	// Create the virtualizer exactly once per scroll element. `table.rows` is read
+	// untracked here: if this effect depended on it, every sort/filter change would
+	// destroy and recreate the virtualizer, wiping its measured-size cache — mounted
+	// rows never re-measure (their action only re-fires on index change), so rows
+	// would silently fall back to the 72px estimate and overlap (worst on narrow
+	// viewports, where wrapped rows are 2-3x taller than the estimate).
 	$effect(() => {
 		if (!listScrollEl) return;
 
-		const instance = new Virtualizer<HTMLDivElement, HTMLDivElement>({
-			count: table.rows.length,
-			getScrollElement: () => listScrollEl ?? null,
-			estimateSize: () => 72,
-			overscan: 8,
-			scrollToFn: elementScroll,
-			observeElementRect,
-			observeElementOffset,
-			measureElement: measureVirtualElement,
-			getItemKey: (index) => table.rows[index]?.slug ?? index,
-			onChange: (inst) => {
-				syncVirtualState(inst);
-			}
+		const cleanup = untrack(() => {
+			const instance = new Virtualizer<HTMLDivElement, HTMLDivElement>({
+				count: table.rows.length,
+				getScrollElement: () => listScrollEl ?? null,
+				estimateSize: () => 72,
+				overscan: 8,
+				scrollToFn: elementScroll,
+				observeElementRect,
+				observeElementOffset,
+				measureElement: measureVirtualElement,
+				getItemKey: (index) => table.rows[index]?.slug ?? index,
+				onChange: (inst) => {
+					syncVirtualState(inst);
+				}
+			});
+
+			virtualizer = instance;
+			// virtual-core requires the mount lifecycle to attach its rect/scroll
+			// observers; without these calls getVirtualItems() is always empty.
+			const unmount = instance._didMount();
+			instance._willUpdate();
+			syncVirtualState(instance);
+			return unmount;
 		});
 
-		virtualizer = instance;
-		// virtual-core requires the mount lifecycle to attach its rect/scroll
-		// observers; without these calls getVirtualItems() is always empty.
-		const unmount = instance._didMount();
-		instance._willUpdate();
-		syncVirtualState(instance);
-
 		return () => {
-			unmount();
+			cleanup();
 			virtualizer = null;
 		};
 	});
@@ -174,15 +183,18 @@
 			count: rows.length,
 			getItemKey: (index: number) => rows[index]?.slug ?? index
 		} as Parameters<Virtualizer<HTMLDivElement, HTMLDivElement>['setOptions']>[0]);
-		virtualizer.measure();
+		// Note: no virtualizer.measure() here — it would clear the per-slug size cache
+		// and mounted rows wouldn't re-measure. Sizes are keyed by slug so they stay
+		// valid across sorts/filters; new rows measure on mount via bindRowElement.
 		syncVirtualState(virtualizer);
 	});
 
 	function remeasureList() {
 		if (!virtualizer || !listScrollEl) return;
-		// measure() clears cached sizes; visible row actions only run on mount/index
-		// change, so re-read each mounted virtual row from the DOM.
-		virtualizer.measure();
+		// Re-read each mounted virtual row from the DOM (their action only re-fires on
+		// index change). Deliberately NOT virtualizer.measure(): that clears the whole
+		// per-slug size cache, and unmounted rows would collapse back to the 72px
+		// estimate — mispositioning everything outside the viewport.
 		for (const item of virtualizer.getVirtualItems()) {
 			const el = listScrollEl.querySelector<HTMLDivElement>(
 				`.virtual-row[data-index="${item.index}"]`
