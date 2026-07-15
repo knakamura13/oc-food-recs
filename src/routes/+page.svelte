@@ -17,6 +17,7 @@
 	import { buildPageTitle, buildPageDescription, buildCanonicalShareUrl } from '$lib/restaurants/page-meta';
 	import { applyUrlStateSnapshot } from '$lib/restaurants/apply-url-state';
 	import { buildSearchParams } from '$lib/restaurants/url-state';
+	import { initSavedState, savedState } from '$lib/restaurants/saved-restaurants.svelte';
 	import { setLastVisitNow } from '$lib/restaurants/visit-tracker';
 	import Hero from '$lib/restaurants/components/Hero.svelte';
 	import SearchBar from '$lib/restaurants/components/SearchBar.svelte';
@@ -68,6 +69,7 @@
 	let prevCuisines = $state('');
 	let prevCities = $state('');
 	let prevSubreddits = $state('');
+	let prevSavedOnly = $state(false);
 
 	let mapExpanded = $state(false);
 	let appTrapEl = $state<HTMLDivElement | undefined>(undefined);
@@ -226,8 +228,16 @@
 		freshnessCutoff: appState.freshnessCutoff
 	});
 
+	// "Saved" narrows the population before the shared filters so the histogram,
+	// counts, and map all reflect only the saved set while it's active.
+	const baseRestaurants = $derived.by(() => {
+		if (!appState.showSavedOnly) return allRestaurants;
+		const saved = new Set(savedState.slugs);
+		return allRestaurants.filter((r) => saved.has(r.slug));
+	});
+
 	const pageFilterResult = $derived.by(() =>
-		filterPageRestaurants(allRestaurants, pageFilterState, {
+		filterPageRestaurants(baseRestaurants, pageFilterState, {
 			threadSubreddit,
 			dateExtent,
 			subredditSliceCache,
@@ -243,18 +253,21 @@
 		const cuisineKey = appState.activeCuisines.join(',');
 		const cityKey = appState.activeCities.join(',');
 		const subredditKey = appState.activeSubreddits.join(',');
-		const currentKey = `${cuisineKey}|${cityKey}|${subredditKey}`;
-		const prevKey = `${prevCuisines}|${prevCities}|${prevSubreddits}`;
+		const savedKey = appState.showSavedOnly;
+		const currentKey = `${cuisineKey}|${cityKey}|${subredditKey}|${savedKey}`;
+		const prevKey = `${prevCuisines}|${prevCities}|${prevSubreddits}|${prevSavedOnly}`;
 
 		if (currentKey !== prevKey) {
 			prevCuisines = cuisineKey;
 			prevCities = cityKey;
 			prevSubreddits = subredditKey;
+			prevSavedOnly = savedKey;
 
 			if (
 				appState.activeCuisines.length > 0 ||
 				appState.activeCities.length > 0 ||
-				appState.activeSubreddits.length > 0
+				appState.activeSubreddits.length > 0 ||
+				appState.showSavedOnly
 			) {
 				// Trigger map zoom to filtered restaurants
 				appState.fitBoundsTarget = filteredRestaurants.filter((r) => r.lat != null && r.lng != null).map((r) => ({ lat: r.lat as number, lng: r.lng as number }));
@@ -282,6 +295,7 @@
 				appState.activeCuisines.length > 0 ||
 				appState.activeCities.length > 0 ||
 				appState.activeSubreddits.length > 0 ||
+				appState.showSavedOnly ||
 				appState.freshnessCutoff !== null;
 			appState.fitBoundsTarget = (anyFilter ? filteredRestaurants : allRestaurants).filter((r) => r.lat != null && r.lng != null).map((r) => ({ lat: r.lat as number, lng: r.lng as number }));
 		}, 250);
@@ -289,6 +303,7 @@
 	});
 
 	onMount(() => {
+		initSavedState();
 		viewportWidth = window.innerWidth;
 		const onVisChange = () => {
 			if (document.visibilityState === 'hidden') setLastVisitNow();
