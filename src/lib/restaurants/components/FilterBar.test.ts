@@ -101,17 +101,28 @@ describe("FilterBar", () => {
     expect(appState.showUnmapped).toBe(false);
   });
 
-  it("shows a disabled new-since button when no prior visit exists", () => {
+  it("hides new-since until a prior visit exists", () => {
     render(FilterBar, {
       restaurants,
       threadSubreddit,
       restaurantsForHistogram: restaurants,
       dateExtent,
     });
-    const btn = screen.getByRole("button", {
-      name: /new since last visit — available after your next visit/i,
+    expect(
+      screen.queryByRole("button", { name: /new since last visit/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("hides saved until the user has bookmarked something", () => {
+    render(FilterBar, {
+      restaurants,
+      threadSubreddit,
+      restaurantsForHistogram: restaurants,
+      dateExtent,
     });
-    expect(btn).toBeDisabled();
+    expect(
+      screen.queryByRole("button", { name: /^saved/i }),
+    ).not.toBeInTheDocument();
   });
 
   it("toggles new since last visit when a prior visit exists", async () => {

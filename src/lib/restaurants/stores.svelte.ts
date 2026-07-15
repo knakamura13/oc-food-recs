@@ -21,6 +21,17 @@ export const appState = $state({
   fitBoundsTarget: null as Array<{ lat: number; lng: number }> | null,
 });
 
+/** Reset cuisine/city/subreddit/recency/saved/unmapped filters. Optionally clears search. */
+export function clearExplorerFilters(opts?: { includeSearch?: boolean }) {
+  appState.activeCuisines = [];
+  appState.activeCities = [];
+  appState.activeSubreddits = [];
+  appState.freshnessCutoff = null;
+  appState.showUnmapped = false;
+  appState.showSavedOnly = false;
+  if (opts?.includeSearch) appState.searchQuery = "";
+}
+
 // Cuisine consolidation: map raw values to canonical categories
 const CUISINE_MAP: Record<string, string> = {
   // Case variants

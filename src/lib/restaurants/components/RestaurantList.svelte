@@ -12,7 +12,7 @@
 	} from '@tanstack/virtual-core';
 	import { TableHandler } from '@vincjo/datatables';
 	import type { Mention, Restaurant, SortKey } from '$lib/restaurants/types';
-	import { appState, latestMentionMs, normalizeCuisine } from '$lib/restaurants/stores.svelte';
+	import { appState, clearExplorerFilters, latestMentionMs, normalizeCuisine } from '$lib/restaurants/stores.svelte';
 	import { buildCanonicalShareUrl } from '$lib/restaurants/page-meta';
 	import { isSaved, toggleSaved } from '$lib/restaurants/saved-restaurants.svelte';
 	import { getLastVisitMs, hasNewMentionsSince } from '$lib/restaurants/visit-tracker';
@@ -386,10 +386,24 @@
 					<p class="empty-hint">
 						Tap the bookmark on a restaurant to save it, or adjust your other filters
 					</p>
+					<button
+						type="button"
+						class="empty-action"
+						onclick={() => clearExplorerFilters({ includeSearch: true })}
+					>
+						Show all restaurants
+					</button>
 				{:else}
-					<span class="empty-icon">&#x1F50D;</span>
+					<span class="empty-icon" aria-hidden="true">&#x1F50D;</span>
 					<p class="empty-title">No restaurants found</p>
 					<p class="empty-hint">Try adjusting your filters or search terms</p>
+					<button
+						type="button"
+						class="empty-action"
+						onclick={() => clearExplorerFilters({ includeSearch: true })}
+					>
+						Clear filters
+					</button>
 				{/if}
 			</div>
 		{:else}
@@ -495,11 +509,36 @@
 									{#if isOpen}
 										<div class="drawer" id="drawer-{slug}" role="region" aria-label="{restaurant.name} details">
 						{#if details[slug] === undefined}
-							<p class="drawer-loading">Loading comments…</p>
+							<div
+								class="drawer-skeleton"
+								class:no-motion={reduceMotion()}
+								aria-busy="true"
+								aria-live="polite"
+							>
+								<span class="skeleton-status">Loading comments…</span>
+								<div class="skeleton-primary" aria-hidden="true">
+									<div class="skeleton-meta">
+										<span class="skeleton-line short"></span>
+										<span class="skeleton-line score"></span>
+									</div>
+									<span class="skeleton-line body"></span>
+									<span class="skeleton-line body"></span>
+									<span class="skeleton-line body medium"></span>
+								</div>
+								<div class="skeleton-section" aria-hidden="true">
+									<span class="skeleton-line heading"></span>
+									<div class="skeleton-card">
+										<span class="skeleton-line short"></span>
+										<span class="skeleton-line"></span>
+										<span class="skeleton-line medium"></span>
+									</div>
+								</div>
+							</div>
 						{:else}
 							{@const mentions = details[slug] ?? []}
 							{@const primary = getPrimaryMention(mentions)}
 							{@const groups = groupEndorsements(mentions)}
+							<div class="drawer-content" class:no-motion={reduceMotion()}>
 						{#if primary}
 							<div class="primary-comment">
 								<div class="comment-header">
@@ -615,6 +654,7 @@
 								{/each}
 							</div>
 						{/if}
+							</div>
 						{/if}
 
 										<div class="drawer-actions">
@@ -1020,10 +1060,121 @@
 		border-top: 1px solid #e8e0d6;
 	}
 
-	.drawer-loading {
-		padding: 0.5rem 0;
-		font-size: 0.85rem;
-		color: #7a6e63;
+	.drawer-content {
+		animation: drawer-content-in 0.28s ease;
+	}
+
+	.drawer-content.no-motion {
+		animation: none;
+	}
+
+	@keyframes drawer-content-in {
+		from {
+			opacity: 0;
+			transform: translateY(6px);
+		}
+		to {
+			opacity: 1;
+			transform: translateY(0);
+		}
+	}
+
+	.drawer-skeleton {
+		padding: 0.25rem 0 0.15rem;
+		min-height: 11.5rem;
+	}
+
+	.skeleton-status {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
+	}
+
+	.skeleton-primary {
+		background: #fffcf8;
+		border-left: 3px solid #e8d5cc;
+		border-radius: 0 8px 8px 0;
+		padding: 0.75rem 0.75rem 0.75rem 1rem;
+		margin-bottom: 0.75rem;
+		box-shadow: 0 1px 3px rgba(62, 44, 35, 0.04);
+	}
+
+	.skeleton-meta {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 0.55rem;
+	}
+
+	.skeleton-section {
+		margin-bottom: 0.65rem;
+	}
+
+	.skeleton-card {
+		background: #fffcf8;
+		border: 1px solid #efe8e0;
+		border-radius: 6px;
+		padding: 0.5rem 0.65rem;
+		display: flex;
+		flex-direction: column;
+		gap: 0.35rem;
+	}
+
+	.skeleton-line {
+		display: block;
+		height: 0.7rem;
+		border-radius: 4px;
+		background: linear-gradient(90deg, #efe8e0 0%, #f7f2eb 45%, #efe8e0 90%);
+		background-size: 200% 100%;
+		animation: skeleton-shimmer 1.35s ease-in-out infinite;
+		margin-bottom: 0.4rem;
+		width: 100%;
+	}
+
+	.skeleton-line.short {
+		width: 28%;
+		margin-bottom: 0;
+	}
+
+	.skeleton-line.score {
+		width: 18%;
+		margin-bottom: 0;
+	}
+
+	.skeleton-line.body {
+		height: 0.85rem;
+		margin-bottom: 0.45rem;
+	}
+
+	.skeleton-line.medium {
+		width: 62%;
+		margin-bottom: 0;
+	}
+
+	.skeleton-line.heading {
+		width: 34%;
+		height: 0.55rem;
+		margin-bottom: 0.45rem;
+	}
+
+	.drawer-skeleton.no-motion .skeleton-line {
+		animation: none;
+		background: #efe8e0;
+	}
+
+	@keyframes skeleton-shimmer {
+		0% {
+			background-position: 100% 0;
+		}
+		100% {
+			background-position: -100% 0;
+		}
 	}
 
 	.primary-comment {
@@ -1243,6 +1394,31 @@
 		font-size: 0.85rem;
 		color: #7a6e63;
 		margin: 0;
+	}
+
+	.empty-action {
+		margin-top: 1rem;
+		font-family: 'DM Sans', sans-serif;
+		font-size: 0.85rem;
+		font-weight: 600;
+		padding: 0.45rem 1.1rem;
+		border-radius: 8px;
+		border: 1px solid #ff4500;
+		background: #fffcf8;
+		color: #ff4500;
+		cursor: pointer;
+		transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease,
+			transform 0.12s ease;
+	}
+
+	.empty-action:hover {
+		background: #ff4500;
+		color: #fff;
+		box-shadow: 0 2px 8px rgba(255, 69, 0, 0.16);
+	}
+
+	.empty-action:active {
+		transform: scale(0.97);
 	}
 
 </style>
