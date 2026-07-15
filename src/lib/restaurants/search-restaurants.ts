@@ -1,3 +1,4 @@
+import Fuse from "fuse.js";
 import type { IFuseOptions, FuseResult } from "fuse.js";
 import type { Restaurant } from "./types";
 import { normalizeSearchText } from "./normalize-name";
@@ -65,4 +66,17 @@ export function rankSearchResults(
 
     return b.item.aggregate_score - a.item.aggregate_score;
   });
+}
+
+export function filterRestaurantsByQuery(
+  restaurants: Restaurant[],
+  query: string,
+): Restaurant[] {
+  const q = query.trim();
+  if (!q) return restaurants;
+  const bySlug = new Map(restaurants.map((r) => [r.slug, r]));
+  const fuse = new Fuse(prepareSearchIndex(restaurants), FUSE_SEARCH_OPTIONS);
+  return rankSearchResults(fuse.search(q), q)
+    .map((r) => bySlug.get(r.item.slug))
+    .filter((r): r is Restaurant => r != null);
 }

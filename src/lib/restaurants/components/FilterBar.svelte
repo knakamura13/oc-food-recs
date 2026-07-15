@@ -147,13 +147,14 @@
 	}
 
 	function clearAllFilters() {
-		clearExplorerFilters();
+		clearExplorerFilters({ includeSearch: true });
 	}
 
 	let savedCount = $derived(savedState.slugs.length);
 
 	let hasActiveFilters = $derived(
-		appState.activeCuisines.length > 0 ||
+		appState.searchQuery.trim().length > 0 ||
+			appState.activeCuisines.length > 0 ||
 			appState.activeCities.length > 0 ||
 			appState.activeSubreddits.length > 0 ||
 			appState.freshnessCutoff !== null ||

@@ -75,6 +75,28 @@ describe("page-meta", () => {
     expect(description).toContain("filters applied");
   });
 
+  it("describes zero results when search matches nothing", () => {
+    const description = buildPageDescription(
+      { searchQuery: "zzznomatchxyz" },
+      restaurants,
+      meta,
+      { t1: "orangecounty" },
+    );
+    expect(description).toContain("0 community-recommended");
+    expect(description).toContain('matching "zzznomatchxyz"');
+  });
+
+  it("uses default description for whitespace-only search", () => {
+    const description = buildPageDescription(
+      { searchQuery: "   " },
+      restaurants,
+      meta,
+      { t1: "orangecounty" },
+    );
+    expect(description).toContain("Explore 2 community-recommended");
+    expect(description).not.toContain("matching");
+  });
+
   it("builds canonical share URLs with query params", () => {
     const url = buildCanonicalShareUrl("https://example.com", "/", {
       searchQuery: "tacos",

@@ -3,8 +3,16 @@ import { createSliceCache } from "./filter-restaurants";
 import {
   filterBeforeFreshness,
   applyFreshnessFilter,
+  filterPageRestaurantsWithSearch,
 } from "./filter-page-restaurants";
 import { makeRestaurant } from "./test-utils";
+
+const pageFilterCtx = {
+  threadSubreddit: {} as Record<string, string>,
+  dateExtent: { min: 0, max: Date.now() },
+  subredditSliceCache: createSliceCache(),
+  recencySliceCache: createSliceCache(),
+};
 
 describe("filter-page-restaurants", () => {
   const threadSubreddit = { t1: "orangecounty", t2: "irvine" };
@@ -82,5 +90,72 @@ describe("filter-page-restaurants", () => {
     );
     expect(result).toHaveLength(1);
     expect(result[0].mention_count).toBe(1);
+  });
+
+  it("ANDs search with cuisine filter", () => {
+    const restaurants = [
+      makeRestaurant({ slug: "taco", name: "Taco Palace", cuisine: "Mexican" }),
+      makeRestaurant({
+        slug: "sushi",
+        name: "Sushi Spot",
+        cuisine: "Japanese",
+      }),
+    ];
+    const { filtered } = filterPageRestaurantsWithSearch(
+      restaurants,
+      {
+        activeSubreddits: [],
+        activeCuisines: ["Mexican"],
+        activeCities: [],
+        showUnmapped: true,
+        freshnessCutoff: null,
+        searchQuery: "taco",
+      },
+      pageFilterCtx,
+    );
+    expect(filtered.map((r) => r.slug)).toEqual(["taco"]);
+  });
+
+  it("leaves structured filter results unchanged when search is empty", () => {
+    const restaurants = [
+      makeRestaurant({ slug: "taco", name: "Taco Palace", cuisine: "Mexican" }),
+      makeRestaurant({
+        slug: "sushi",
+        name: "Sushi Spot",
+        cuisine: "Japanese",
+      }),
+    ];
+    const { filtered } = filterPageRestaurantsWithSearch(
+      restaurants,
+      {
+        activeSubreddits: [],
+        activeCuisines: ["Mexican"],
+        activeCities: [],
+        showUnmapped: true,
+        freshnessCutoff: null,
+        searchQuery: "",
+      },
+      pageFilterCtx,
+    );
+    expect(filtered.map((r) => r.slug)).toEqual(["taco"]);
+  });
+
+  it("yields no results when search matches nothing", () => {
+    const restaurants = [
+      makeRestaurant({ slug: "taco", name: "Taco Palace", cuisine: "Mexican" }),
+    ];
+    const { filtered } = filterPageRestaurantsWithSearch(
+      restaurants,
+      {
+        activeSubreddits: [],
+        activeCuisines: [],
+        activeCities: [],
+        showUnmapped: true,
+        freshnessCutoff: null,
+        searchQuery: "zzznomatchxyz",
+      },
+      pageFilterCtx,
+    );
+    expect(filtered).toEqual([]);
   });
 });
