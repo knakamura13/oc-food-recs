@@ -42,4 +42,14 @@ describe("RestaurantList", () => {
       expect(mocks.toastError).toHaveBeenCalledWith("Could not load mentions");
     });
   });
+
+  it("shows a clear-filters action when the list is empty", async () => {
+    const { getByRole } = render(RestaurantList, { restaurants: [] });
+    appState.activeCuisines = ["Mexican"];
+
+    const clearBtn = getByRole("button", { name: /clear filters/i });
+    clearBtn.click();
+
+    expect(appState.activeCuisines).toEqual([]);
+  });
 });

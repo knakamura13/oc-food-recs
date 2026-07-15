@@ -39,6 +39,12 @@
 		return rankSearchResults(fuse.search(q), q).slice(0, 10);
 	});
 
+	let queryTrimmed = $derived(appState.searchQuery.trim());
+	let showNoResults = $derived(
+		Boolean(showDropdown && FuseCtor && queryTrimmed && results.length === 0)
+	);
+	let showResultsDropdown = $derived(showDropdown && results.length > 0);
+
 	function selectResult(restaurant: Restaurant) {
 		appState.searchQuery = restaurant.name;
 		showDropdown = false;
@@ -133,7 +139,7 @@
 			onfocus={() => { ensureFuse(); showDropdown = true; }}
 			onblur={() => setTimeout(() => (showDropdown = false), 200)}
 			role="combobox"
-			aria-expanded={showDropdown && results.length > 0}
+			aria-expanded={showResultsDropdown || showNoResults}
 			aria-controls="search-listbox"
 			aria-activedescendant={highlightIndex >= 0 ? `search-option-${highlightIndex}` : undefined}
 			aria-autocomplete="list"
@@ -154,9 +160,9 @@
 		{/if}
 	</div>
 
-	{#if showDropdown && results.length > 0}
+	{#if showResultsDropdown}
 		<ul class="dropdown" id="search-listbox" role="listbox" aria-label="Search results">
-			{#each results as result, i}
+			{#each results as result, i (result.item.slug)}
 				<li
 					id="search-option-{i}"
 					class:highlighted={i === highlightIndex}
@@ -177,6 +183,10 @@
 				</li>
 			{/each}
 		</ul>
+	{:else if showNoResults}
+		<div class="dropdown no-results" id="search-listbox" role="status" aria-live="polite">
+			No matches for &ldquo;{queryTrimmed}&rdquo;
+		</div>
 	{/if}
 </div>
 
@@ -304,5 +314,13 @@
 		color: #5d4e37;
 		padding: 1px 6px;
 		border-radius: 4px;
+	}
+
+	.no-results {
+		padding: 0.75rem 1rem;
+		font-size: 0.85rem;
+		color: #7a6e63;
+		text-align: center;
+		list-style: none;
 	}
 </style>

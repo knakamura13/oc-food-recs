@@ -109,6 +109,21 @@ describe("SearchBar", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("shows a no-matches message when the query has no fuzzy hits", async () => {
+    const user = userEvent.setup();
+    render(SearchBar, { restaurants, cuisineNames, cityNames });
+    const input = screen.getByRole("combobox", {
+      name: /search restaurants, cuisines, or cities/i,
+    });
+    await user.click(input);
+    await user.type(input, "zzzznotarestaurant");
+    await waitFor(() => {
+      expect(screen.getByRole("status")).toHaveTextContent(
+        /no matches for .*zzzznotarestaurant/i,
+      );
+    });
+  });
+
   it("ranks Mo Ran Gak locations first for collapsed name queries", async () => {
     const user = userEvent.setup();
     const morangakRestaurants = [
