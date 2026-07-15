@@ -4,6 +4,7 @@ import {
   createSliceCache,
   sliceRestaurantMentions,
 } from "./filter-restaurants";
+import { filterRestaurantsByQuery } from "./search-restaurants";
 
 export interface PageFilterState {
   activeSubreddits: string[];
@@ -107,4 +108,20 @@ export function filterPageRestaurants(
     ctx.recencySliceCache,
   );
   return { beforeFreshness, filtered };
+}
+
+export function filterPageRestaurantsWithSearch(
+  allRestaurants: Restaurant[],
+  state: PageFilterState & { searchQuery: string },
+  ctx: PageFilterContext,
+): { beforeFreshness: Restaurant[]; filtered: Restaurant[] } {
+  const { beforeFreshness, filtered } = filterPageRestaurants(
+    allRestaurants,
+    state,
+    ctx,
+  );
+  return {
+    beforeFreshness,
+    filtered: filterRestaurantsByQuery(filtered, state.searchQuery),
+  };
 }

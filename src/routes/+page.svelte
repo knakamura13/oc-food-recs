@@ -13,7 +13,7 @@
 		countEndorsements,
 		createSliceCache
 	} from '$lib/restaurants/filter-restaurants';
-	import { filterPageRestaurants } from '$lib/restaurants/filter-page-restaurants';
+	import { filterPageRestaurantsWithSearch } from '$lib/restaurants/filter-page-restaurants';
 	import { buildPageTitle, buildPageDescription, buildCanonicalShareUrl } from '$lib/restaurants/page-meta';
 	import { applyUrlStateSnapshot } from '$lib/restaurants/apply-url-state';
 	import { buildSearchParams } from '$lib/restaurants/url-state';
@@ -225,7 +225,8 @@
 		activeCuisines: appState.activeCuisines,
 		activeCities: appState.activeCities,
 		showUnmapped: appState.showUnmapped,
-		freshnessCutoff: appState.freshnessCutoff
+		freshnessCutoff: appState.freshnessCutoff,
+		searchQuery: appState.searchQuery
 	});
 
 	// "Saved" narrows the population before the shared filters so the histogram,
@@ -237,7 +238,7 @@
 	});
 
 	const pageFilterResult = $derived.by(() =>
-		filterPageRestaurants(baseRestaurants, pageFilterState, {
+		filterPageRestaurantsWithSearch(baseRestaurants, pageFilterState, {
 			threadSubreddit,
 			dateExtent,
 			subredditSliceCache,
@@ -247,6 +248,24 @@
 
 	const restaurantsBeforeFreshness = $derived(pageFilterResult.beforeFreshness);
 	const filteredRestaurants = $derived(pageFilterResult.filtered);
+
+	function hasAnyExplorerFilter() {
+		return (
+			appState.searchQuery.trim().length > 0 ||
+			appState.activeCuisines.length > 0 ||
+			appState.activeCities.length > 0 ||
+			appState.activeSubreddits.length > 0 ||
+			appState.showSavedOnly ||
+			appState.freshnessCutoff !== null
+		);
+	}
+
+	function fitBoundsForPopulation(filtered: Restaurant[], all: Restaurant[]) {
+		const restaurants = hasAnyExplorerFilter() ? filtered : all;
+		return restaurants
+			.filter((r) => r.lat != null && r.lng != null)
+			.map((r) => ({ lat: r.lat as number, lng: r.lng as number }));
+	}
 
 	// Trigger fitBounds when filters change
 	$effect(() => {
@@ -263,18 +282,7 @@
 			prevSubreddits = subredditKey;
 			prevSavedOnly = savedKey;
 
-			if (
-				appState.activeCuisines.length > 0 ||
-				appState.activeCities.length > 0 ||
-				appState.activeSubreddits.length > 0 ||
-				appState.showSavedOnly
-			) {
-				// Trigger map zoom to filtered restaurants
-				appState.fitBoundsTarget = filteredRestaurants.filter((r) => r.lat != null && r.lng != null).map((r) => ({ lat: r.lat as number, lng: r.lng as number }));
-			} else {
-				// Reset to full OC view
-				appState.fitBoundsTarget = allRestaurants.filter((r) => r.lat != null && r.lng != null).map((r) => ({ lat: r.lat as number, lng: r.lng as number }));
-			}
+			appState.fitBoundsTarget = fitBoundsForPopulation(filteredRestaurants, allRestaurants);
 		}
 	});
 
@@ -291,15 +299,32 @@
 		}
 		clearTimeout(mapFreshnessTimer);
 		mapFreshnessTimer = setTimeout(() => {
-			const anyFilter =
-				appState.activeCuisines.length > 0 ||
-				appState.activeCities.length > 0 ||
-				appState.activeSubreddits.length > 0 ||
-				appState.showSavedOnly ||
-				appState.freshnessCutoff !== null;
-			appState.fitBoundsTarget = (anyFilter ? filteredRestaurants : allRestaurants).filter((r) => r.lat != null && r.lng != null).map((r) => ({ lat: r.lat as number, lng: r.lng as number }));
+			appState.fitBoundsTarget = fitBoundsForPopulation(filteredRestaurants, allRestaurants);
 		}, 250);
 		return () => clearTimeout(mapFreshnessTimer);
+	});
+
+	// Search typing can be rapid; debounce map re-zoom like recency so it settles after pauses.
+	let searchMapInitialized = false;
+	let mapSearchTimer: ReturnType<typeof setTimeout> | undefined;
+	$effect(() => {
+		const searchKey = appState.searchQuery.trim();
+		void searchKey;
+		if (!searchMapInitialized) {
+			searchMapInitialized = true;
+			if (searchKey.length > 0) {
+				clearTimeout(mapSearchTimer);
+				mapSearchTimer = setTimeout(() => {
+					appState.fitBoundsTarget = fitBoundsForPopulation(filteredRestaurants, allRestaurants);
+				}, 250);
+			}
+			return () => clearTimeout(mapSearchTimer);
+		}
+		clearTimeout(mapSearchTimer);
+		mapSearchTimer = setTimeout(() => {
+			appState.fitBoundsTarget = fitBoundsForPopulation(filteredRestaurants, allRestaurants);
+		}, 250);
+		return () => clearTimeout(mapSearchTimer);
 	});
 
 	onMount(() => {

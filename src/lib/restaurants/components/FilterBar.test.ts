@@ -56,6 +56,7 @@ describe("FilterBar", () => {
     appState.activeCuisines = ["Mexican"];
     appState.activeCities = ["Irvine"];
     appState.showUnmapped = true;
+    appState.searchQuery = "tacos";
     render(FilterBar, {
       restaurants,
       threadSubreddit,
@@ -66,6 +67,33 @@ describe("FilterBar", () => {
     expect(appState.activeCuisines).toEqual([]);
     expect(appState.activeCities).toEqual([]);
     expect(appState.showUnmapped).toBe(false);
+    expect(appState.searchQuery).toBe("");
+    expect(
+      screen.queryByRole("button", { name: /clear all/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows Clear all when only search is active", () => {
+    appState.searchQuery = "ramen";
+    render(FilterBar, {
+      restaurants,
+      threadSubreddit,
+      restaurantsForHistogram: restaurants,
+      dateExtent,
+    });
+    expect(
+      screen.getByRole("button", { name: /clear all/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("hides Clear all when search is whitespace-only", () => {
+    appState.searchQuery = "   ";
+    render(FilterBar, {
+      restaurants,
+      threadSubreddit,
+      restaurantsForHistogram: restaurants,
+      dateExtent,
+    });
     expect(
       screen.queryByRole("button", { name: /clear all/i }),
     ).not.toBeInTheDocument();
