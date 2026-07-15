@@ -9,6 +9,9 @@ export const appState = $state({
   // null = "All time" (filter inactive). Mentions with a null comment_date are always kept.
   freshnessCutoff: null as number | null,
   showUnmapped: false,
+  // Device-local "Saved" filter (see saved-restaurants.svelte.ts). Session-only:
+  // deliberately excluded from URL sync since saved lists don't travel with links.
+  showSavedOnly: false,
   sortKey: "score" as SortKey,
   sortDirection: "desc" as "asc" | "desc",
   selectedRestaurantSlug: null as string | null,

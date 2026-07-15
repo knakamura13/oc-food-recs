@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { ChevronRight, MapPin } from 'lucide-svelte';
+	import { Bookmark, ChevronRight, MapPin } from 'lucide-svelte';
 	import { tick, untrack } from 'svelte';
 	import {
 		Virtualizer,
@@ -13,6 +13,7 @@
 	import type { Mention, Restaurant, SortKey } from '$lib/restaurants/types';
 	import { appState, latestMentionMs, normalizeCuisine } from '$lib/restaurants/stores.svelte';
 	import { buildCanonicalShareUrl } from '$lib/restaurants/page-meta';
+	import { isSaved, toggleSaved } from '$lib/restaurants/saved-restaurants.svelte';
 	import { getLastVisitMs, hasNewMentionsSince } from '$lib/restaurants/visit-tracker';
 	import { onMount } from 'svelte';
 	import { toast } from '$lib/toast';
@@ -315,6 +316,16 @@
 		}
 	}
 
+	function onToggleSaved(restaurant: Restaurant, e: MouseEvent) {
+		e.stopPropagation();
+		const saved = toggleSaved(restaurant.slug);
+		if (saved) {
+			toast.success(`Saved ${restaurant.name}`);
+		} else {
+			toast.info(`Removed ${restaurant.name} from saved`);
+		}
+	}
+
 	function getPrimaryMention(mentions: Mention[]): Mention | null {
 		const primaries = mentions.filter((m) => m.role === 'primary');
 		if (primaries.length === 0) return null;
@@ -363,9 +374,17 @@
 	<div class="list-scroll" id="main-content" bind:this={listScrollEl} role="region" aria-label="Restaurant results">
 		{#if table.rows.length === 0}
 			<div class="empty-state">
-				<span class="empty-icon">&#x1F50D;</span>
-				<p class="empty-title">No restaurants found</p>
-				<p class="empty-hint">Try adjusting your filters or search terms</p>
+				{#if appState.showSavedOnly}
+					<span class="empty-icon" aria-hidden="true"><Bookmark size={36} /></span>
+					<p class="empty-title">No saved restaurants here</p>
+					<p class="empty-hint">
+						Tap the bookmark on a restaurant to save it, or adjust your other filters
+					</p>
+				{:else}
+					<span class="empty-icon">&#x1F50D;</span>
+					<p class="empty-title">No restaurants found</p>
+					<p class="empty-hint">Try adjusting your filters or search terms</p>
+				{/if}
 			</div>
 		{:else}
 			<div class="virtual-spacer" style:height="{totalSize}px">
@@ -431,6 +450,22 @@
 										{restaurant.mention_count} <small>mentions</small>
 									</span>
 								</div>
+								<button
+									type="button"
+									class="row-save-btn"
+									class:saved={isSaved(slug)}
+									onclick={(e) => onToggleSaved(restaurant, e)}
+									aria-pressed={isSaved(slug)}
+									aria-label={isSaved(slug)
+										? `Remove ${restaurant.name} from your saved list`
+										: `Save ${restaurant.name} to your list`}
+								>
+									<Bookmark
+										size={16}
+										fill={isSaved(slug) ? 'currentColor' : 'none'}
+										aria-hidden="true"
+									/>
+								</button>
 								<button
 									type="button"
 									class="row-chevron-btn"
@@ -773,6 +808,34 @@
 		flex-shrink: 0;
 		display: inline-flex;
 		align-items: center;
+	}
+
+	.row-save-btn {
+		flex-shrink: 0;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		border: none;
+		background: none;
+		cursor: pointer;
+		/* 16px icon padded to a ~36px hit target without widening the row visually */
+		padding: 10px;
+		margin: -10px -6px;
+		border-radius: 50%;
+		color: #d4c8bb;
+		transition: color 0.15s ease, transform 0.1s ease;
+	}
+
+	.row-save-btn:hover {
+		color: #ff4500;
+	}
+
+	.row-save-btn:active {
+		transform: scale(0.9);
+	}
+
+	.row-save-btn.saved {
+		color: #ff4500;
 	}
 
 	.row:hover {
