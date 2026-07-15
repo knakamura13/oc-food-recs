@@ -1,7 +1,13 @@
 <script lang="ts">
 	import { Bookmark } from 'lucide-svelte';
 	import type { Restaurant } from '$lib/restaurants/types';
-	import { appState, normalizeCuisine, normalizeCity, formatMonthYear } from '$lib/restaurants/stores.svelte';
+	import {
+		appState,
+		clearExplorerFilters,
+		normalizeCuisine,
+		normalizeCity,
+		formatMonthYear
+	} from '$lib/restaurants/stores.svelte';
 	import { savedState } from '$lib/restaurants/saved-restaurants.svelte';
 	import { getPriorVisitMs } from '$lib/restaurants/visit-tracker';
 	import { onMount } from 'svelte';
@@ -141,12 +147,7 @@
 	}
 
 	function clearAllFilters() {
-		appState.activeCuisines = [];
-		appState.activeCities = [];
-		appState.activeSubreddits = [];
-		appState.freshnessCutoff = null;
-		appState.showUnmapped = false;
-		appState.showSavedOnly = false;
+		clearExplorerFilters();
 	}
 
 	let savedCount = $derived(savedState.slugs.length);
@@ -182,7 +183,7 @@
 
 			{#if showCuisineDropdown}
 				<div class="dropdown-panel" id="cuisine-listbox" role="listbox" aria-label="Filter by cuisine">
-					{#each cuisineCounts as { name, count }}
+					{#each cuisineCounts as { name, count } (name)}
 						<button
 							class="dropdown-item"
 							class:active={appState.activeCuisines.includes(name)}
@@ -218,7 +219,7 @@
 
 			{#if showCityDropdown}
 				<div class="dropdown-panel" id="city-listbox" role="listbox" aria-label="Filter by city">
-					{#each cityCounts as { name, count }}
+					{#each cityCounts as { name, count } (name)}
 						<button
 							class="dropdown-item"
 							class:active={appState.activeCities.includes(name)}
@@ -275,7 +276,7 @@
 
 				{#if showSubredditDropdown}
 					<div class="dropdown-panel" id="subreddit-listbox" role="listbox" aria-label="Filter by subreddit">
-						{#each subredditCounts as { name, count }}
+						{#each subredditCounts as { name, count } (name)}
 							<button
 								class="dropdown-item"
 								class:active={appState.activeSubreddits.includes(name)}
@@ -293,7 +294,7 @@
 			</div>
 		{/if}
 
-		<!-- Saved (want-to-try) toggle — bookmark restaurants from the list to enable it -->
+		<!-- Saved — only once the user has bookmarked something (or the filter is on) -->
 		{#if savedCount > 0 || appState.showSavedOnly}
 			<button
 				class="dropdown-trigger mapped-only-toggle saved-toggle"
@@ -307,19 +308,9 @@
 					<span class="badge">{savedCount}</span>
 				{/if}
 			</button>
-		{:else}
-			<button
-				class="dropdown-trigger mapped-only-toggle saved-toggle"
-				disabled
-				title="Bookmark restaurants in the list to build your saved list"
-				aria-label="Saved — bookmark restaurants in the list to build your saved list"
-			>
-				<Bookmark size={13} aria-hidden="true" />
-				Saved
-			</button>
 		{/if}
 
-		<!-- Show-unmapped toggle -->
+		<!-- New-since — only after a prior visit is recorded -->
 		{#if hasPriorVisit}
 			<button
 				class="dropdown-trigger mapped-only-toggle"
@@ -330,15 +321,6 @@
 				{#if isNewSinceVisit}
 					<span aria-hidden="true">✓</span>
 				{/if}
-				New since last visit
-			</button>
-		{:else}
-			<button
-				class="dropdown-trigger mapped-only-toggle"
-				disabled
-				title="Available after your next visit"
-				aria-label="New since last visit — available after your next visit"
-			>
 				New since last visit
 			</button>
 		{/if}
@@ -363,17 +345,17 @@
 	<!-- Active filter pills -->
 	{#if hasActiveFilters}
 		<div class="active-pills">
-			{#each appState.activeCuisines as cuisine}
+			{#each appState.activeCuisines as cuisine (cuisine)}
 				<button class="pill cuisine-pill" onclick={() => toggleCuisine(cuisine)} aria-label="Remove {cuisine} filter">
 					{cuisine} &times;
 				</button>
 			{/each}
-			{#each appState.activeCities as city}
+			{#each appState.activeCities as city (city)}
 				<button class="pill city-pill" onclick={() => toggleCity(city)} aria-label="Remove {city} filter">
 					{city} &times;
 				</button>
 			{/each}
-			{#each appState.activeSubreddits as subreddit}
+			{#each appState.activeSubreddits as subreddit (subreddit)}
 				<button class="pill subreddit-pill" onclick={() => toggleSubreddit(subreddit)} aria-label="Remove r/{subreddit} filter">
 					r/{subreddit} &times;
 				</button>
