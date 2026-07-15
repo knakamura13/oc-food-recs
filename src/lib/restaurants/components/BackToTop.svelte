@@ -69,9 +69,19 @@
 		box-shadow: 0 1px 4px rgba(255, 69, 0, 0.2);
 	}
 
+	/* Flex-center the SVG and scale it to the span, so the icon stays centered even
+	   where the media query shrinks the span below the SVG's fixed 24px size prop. */
 	.back-to-top-icon {
 		width: 24px;
 		height: 24px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.back-to-top-icon :global(svg) {
+		width: 100%;
+		height: 100%;
 	}
 
 	/* Below the map breakpoint (< 1024px) the bottom-right corner belongs to the map FAB
