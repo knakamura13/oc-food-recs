@@ -1,4 +1,4 @@
-import { filterPageRestaurants } from "./filter-page-restaurants";
+import { filterPageRestaurantsWithSearch } from "./filter-page-restaurants";
 import { createSliceCache } from "./filter-restaurants";
 import { dateExtentOf } from "./stores.svelte";
 import type { Restaurant, RestaurantData } from "./types";
@@ -43,7 +43,7 @@ export function buildPageDescription(
   threadSubreddit: Record<string, string>,
 ): string {
   const dateExtent = dateExtentOf(allRestaurants);
-  const { filtered } = filterPageRestaurants(
+  const { filtered } = filterPageRestaurantsWithSearch(
     allRestaurants,
     {
       activeSubreddits: state.activeSubreddits ?? [],
@@ -51,6 +51,7 @@ export function buildPageDescription(
       activeCities: state.activeCities ?? [],
       showUnmapped: state.showUnmapped ?? false,
       freshnessCutoff: state.freshnessCutoff ?? null,
+      searchQuery: state.searchQuery ?? "",
     },
     {
       threadSubreddit,
@@ -62,7 +63,8 @@ export function buildPageDescription(
 
   const count = filtered.length;
   const base = `${count} community-recommended mom and pop restaurants in Orange County`;
-  if (state.searchQuery) return `${base} matching "${state.searchQuery}".`;
+  const trimmedSearch = state.searchQuery?.trim() ?? "";
+  if (trimmedSearch) return `${base} matching "${trimmedSearch}".`;
   if (
     (state.activeCuisines?.length ?? 0) > 0 ||
     (state.activeCities?.length ?? 0) > 0

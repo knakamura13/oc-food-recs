@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { normalizeSearchText } from "./normalize-name";
 import {
   FUSE_SEARCH_OPTIONS,
+  filterRestaurantsByQuery,
   prepareSearchIndex,
   rankSearchResults,
 } from "./search-restaurants";
@@ -93,6 +94,50 @@ describe("normalizeSearchText", () => {
     );
     expect(normalizeSearchText("Louis")).toBe("louis");
     expect(normalizeSearchText("Atlas")).toBe("atlas");
+  });
+});
+
+describe("filterRestaurantsByQuery", () => {
+  const restaurants = [
+    makeRestaurant({
+      name: "Taco Palace",
+      slug: "taco-palace",
+      cuisine: "Mexican",
+      location: "Santa Ana",
+    }),
+    makeRestaurant({
+      name: "Ramen House",
+      slug: "ramen-house",
+      cuisine: "Japanese",
+      location: "Irvine",
+    }),
+    makeRestaurant({
+      name: "Burger Barn",
+      slug: "burger-barn",
+      cuisine: "American",
+      location: "Fullerton",
+    }),
+  ];
+
+  it("returns all restaurants for empty or whitespace query", () => {
+    expect(filterRestaurantsByQuery(restaurants, "")).toEqual(restaurants);
+    expect(filterRestaurantsByQuery(restaurants, "   ")).toEqual(restaurants);
+  });
+
+  it("matches restaurants by fuzzy name", () => {
+    const results = filterRestaurantsByQuery(restaurants, "taco");
+
+    expect(results.map((r) => r.slug)).toEqual(["taco-palace"]);
+  });
+
+  it("returns empty array when nothing matches", () => {
+    expect(filterRestaurantsByQuery(restaurants, "zzzznotfound")).toEqual([]);
+  });
+
+  it("matches restaurants by cuisine", () => {
+    const results = filterRestaurantsByQuery(restaurants, "japanese");
+
+    expect(results.map((r) => r.slug)).toEqual(["ramen-house"]);
   });
 });
 
