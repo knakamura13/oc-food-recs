@@ -1,6 +1,8 @@
 <script lang="ts">
+	import { Bookmark } from 'lucide-svelte';
 	import type { Restaurant } from '$lib/restaurants/types';
 	import { appState, normalizeCuisine, normalizeCity, formatMonthYear } from '$lib/restaurants/stores.svelte';
+	import { savedState } from '$lib/restaurants/saved-restaurants.svelte';
 	import { getPriorVisitMs } from '$lib/restaurants/visit-tracker';
 	import { onMount } from 'svelte';
 	import RecencyHistogram from './RecencyHistogram.svelte';
@@ -144,14 +146,18 @@
 		appState.activeSubreddits = [];
 		appState.freshnessCutoff = null;
 		appState.showUnmapped = false;
+		appState.showSavedOnly = false;
 	}
+
+	let savedCount = $derived(savedState.slugs.length);
 
 	let hasActiveFilters = $derived(
 		appState.activeCuisines.length > 0 ||
 			appState.activeCities.length > 0 ||
 			appState.activeSubreddits.length > 0 ||
 			appState.freshnessCutoff !== null ||
-			appState.showUnmapped
+			appState.showUnmapped ||
+			appState.showSavedOnly
 	);
 </script>
 
@@ -287,6 +293,32 @@
 			</div>
 		{/if}
 
+		<!-- Saved (want-to-try) toggle — bookmark restaurants from the list to enable it -->
+		{#if savedCount > 0 || appState.showSavedOnly}
+			<button
+				class="dropdown-trigger mapped-only-toggle saved-toggle"
+				class:has-active={appState.showSavedOnly}
+				aria-pressed={appState.showSavedOnly}
+				onclick={() => (appState.showSavedOnly = !appState.showSavedOnly)}
+			>
+				<Bookmark size={13} aria-hidden="true" />
+				Saved
+				{#if savedCount > 0}
+					<span class="badge">{savedCount}</span>
+				{/if}
+			</button>
+		{:else}
+			<button
+				class="dropdown-trigger mapped-only-toggle saved-toggle"
+				disabled
+				title="Bookmark restaurants in the list to build your saved list"
+				aria-label="Saved — bookmark restaurants in the list to build your saved list"
+			>
+				<Bookmark size={13} aria-hidden="true" />
+				Saved
+			</button>
+		{/if}
+
 		<!-- Show-unmapped toggle -->
 		{#if hasPriorVisit}
 			<button
@@ -353,6 +385,15 @@
 					aria-label="Remove recency filter"
 				>
 					{recencyLabel} &times;
+				</button>
+			{/if}
+			{#if appState.showSavedOnly}
+				<button
+					class="pill saved-pill"
+					onclick={() => (appState.showSavedOnly = false)}
+					aria-label="Remove saved filter"
+				>
+					Saved &times;
 				</button>
 			{/if}
 		</div>
@@ -557,6 +598,16 @@
 	.recency-pill {
 		background: #fff0eb;
 		color: #ff4500;
+	}
+
+	.saved-pill {
+		background: #f3ecdd;
+		color: #8a6d1f;
+	}
+
+	.saved-toggle:disabled {
+		opacity: 0.55;
+		cursor: not-allowed;
 	}
 
 	.recency-panel {
