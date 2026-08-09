@@ -11,7 +11,8 @@
 		corporate_group: 'Corporate group (registry)',
 		llm_suspected_chain: 'LLM flagged as chain',
 		many_locations: 'Many global locations',
-		multi_city_density: 'Same name across many cities'
+		multi_city_density: 'Same name across many cities',
+		duplicate_candidate: 'Likely duplicate at same location'
 	};
 
 	function reasonLabel(reason: string | null): string {
