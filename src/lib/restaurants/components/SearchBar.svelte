@@ -194,10 +194,9 @@
 	.search-container {
 		position: relative;
 		z-index: 1100;
-		background: #fffcf8;
+		background: transparent;
 		padding: 0.75rem 1rem;
-		border-bottom: 1px solid #e8e0d6;
-		box-shadow: 0 1px 4px rgba(62, 44, 35, 0.04);
+		border-bottom: 1px solid rgba(232, 224, 214, 0.5);
 	}
 
 	.search-wrapper {
