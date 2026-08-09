@@ -455,7 +455,7 @@
 											{/if}
 										</div>
 										{#if restaurant.top_dish_snippet}
-											<p class="dish-teaser">Try: {restaurant.top_dish_snippet}</p>
+											<p class="dish-teaser"><span class="dish-label">Try:</span> {restaurant.top_dish_snippet}</p>
 										{/if}
 									</div>
 								</button>
@@ -849,6 +849,11 @@
 	.row-toggle {
 		flex: 1;
 		min-width: 0;
+	}
+
+	.row-toggle:focus-visible {
+		outline: 2px solid #ff4500;
+		outline-offset: 2px;
 	}
 
 	.row-chevron-btn {
@@ -1419,6 +1424,90 @@
 
 	.empty-action:active {
 		transform: scale(0.97);
+	}
+
+	@media (max-width: 600px) {
+		.row-header {
+			gap: 0.5rem;
+		}
+
+		.row-save-btn,
+		.row-chevron-btn {
+			width: 44px;
+			height: 44px;
+			padding: 0;
+			margin: 0;
+			justify-content: center;
+		}
+
+		.dish-teaser {
+			display: -webkit-box;
+			overflow: hidden;
+			-webkit-box-orient: vertical;
+			-webkit-line-clamp: 2;
+			line-clamp: 2;
+		}
+	}
+
+	@media (max-width: 480px) {
+		.row-header {
+			display: grid;
+			grid-template-columns: minmax(0, 1fr) 44px;
+			grid-template-rows: auto 44px;
+			column-gap: 0.5rem;
+			row-gap: 0.5rem;
+			align-items: start;
+			padding: 0.75rem 0.75rem 0.5625rem;
+		}
+
+		.row-toggle {
+			grid-column: 1 / -1;
+			grid-row: 1;
+			width: 100%;
+		}
+
+		.row-name-line {
+			padding-right: 3.25rem;
+		}
+
+		.row-save-btn {
+			grid-column: 2;
+			grid-row: 1;
+			margin-top: -0.5rem;
+			justify-self: end;
+		}
+
+		.row-stats {
+			grid-column: 1;
+			grid-row: 2;
+			align-self: stretch;
+			align-items: center;
+			gap: 0.75rem;
+			border-top: 1px solid #e8e0d6;
+		}
+
+		.row-chevron-btn {
+			grid-column: 2;
+			grid-row: 2;
+			border-top: 1px solid #e8e0d6;
+		}
+
+		.row-name {
+			font-size: 1.25rem;
+			line-height: 1.2;
+		}
+
+		.dish-teaser {
+			margin-top: 0.5rem;
+			font-size: 0.875rem;
+			font-style: normal;
+			line-height: 1.43;
+		}
+
+		.dish-label {
+			color: #ff4500;
+			font-weight: 600;
+		}
 	}
 
 </style>

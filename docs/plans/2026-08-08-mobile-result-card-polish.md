@@ -4,7 +4,7 @@
 
 **Goal:** Reflow mobile restaurant results into decision-first editorial entries that give identity and the food recommendation readable width while preserving community proof, controls, expansion, virtualization, and the compact desktop layout.
 
-**Architecture:** Keep the existing `RestaurantList` DOM, state, lazy detail loading, and virtualizer. Add one small semantic wrapper around the `Try:` label, then use a mobile-only CSS grid at `max-width: 600px` to place the row toggle across the full first band, the bookmark over its trailing edge, and community proof plus the chevron in a footer band. Prove the change with browser-level geometry assertions because jsdom cannot validate responsive layout, then retain component tests for interaction and accessible state.
+**Architecture:** Keep the existing `RestaurantList` DOM, state, lazy detail loading, and virtualizer. Add one small semantic wrapper around the `Try:` label. At `600px` and below, enlarge the bookmark and chevron targets while retaining the compact horizontal row. At `480px` and below, use a CSS grid to place the row toggle across the full first band, the bookmark over its trailing edge, and community proof plus the chevron in a footer band. Prove the change with browser-level geometry assertions because jsdom cannot validate responsive layout, then retain component tests for interaction and accessible state.
 
 **Tech Stack:** SvelteKit 2, Svelte 5 runes, scoped component CSS, Vitest and Testing Library, Playwright, TanStack Virtual Core.
 
@@ -12,7 +12,8 @@
 
 ## Constraints and success criteria
 
-- Change only the mobile result presentation at `600px` and below; do not alter the desktop row layout.
+- Change only the result presentation at `600px` and below; do not alter the desktop row layout.
+- Apply the full decision-first banded reflow only at `480px` and below. Keep the compact horizontal row between `481px` and `600px`.
 - Keep restaurant name, cuisine, location, points, endorsements, mentions, bookmark, and expansion available in the collapsed result.
 - At a 390px viewport, give the content toggle at least 280px of usable width.
 - Clamp the collapsed recommendation to at most two lines.
@@ -87,7 +88,7 @@ test('390px results prioritize restaurant content and keep full-size controls', 
 
 **Step 3: Write the 600px failing test**
 
-Reuse the helper at 600 × 900. Require the teaser to remain two lines or fewer and both controls to remain 44px targets; allow a maximum 170px row so the layout does not become oversized at the breakpoint.
+Reuse the helper at 600 × 900. Require the teaser to remain two lines or fewer and both controls to remain 44px targets. Assert the content and proof centers stay within 2px and cap the populated row at 110px, proving the breakpoint preserves the compact horizontal presentation.
 
 **Step 4: Write the desktop preservation test**
 
@@ -130,26 +131,57 @@ Replace the teaser body with the smallest semantic change:
 
 Do not move or duplicate restaurant data and do not add a second mobile-specific row component.
 
-**Step 2: Add the mobile grid without changing base desktop styles**
+**Step 2: Upgrade compact mobile targets without changing base desktop styles**
 
-Append one scoped media query after the base row styles. The row toggle spans both columns so its teaser receives the full card width; right padding reserves the bookmark’s overlay space. Community proof and chevron form the second grid row.
+Append a scoped media query after the base row styles. At `600px` and below, preserve the horizontal layout while making the bookmark and chevron 44px targets and clamping the recommendation to two lines.
 
 ```css
 @media (max-width: 600px) {
+	.row-header {
+		gap: 0.5rem;
+	}
+
+	.row-save-btn,
+	.row-chevron-btn {
+		width: 44px;
+		height: 44px;
+		padding: 0;
+		justify-content: center;
+	}
+
+	.dish-teaser {
+		display: -webkit-box;
+		overflow: hidden;
+		-webkit-box-orient: vertical;
+		-webkit-line-clamp: 2;
+		line-clamp: 2;
+	}
+}
+```
+
+**Step 3: Add the narrow-screen decision-first grid**
+
+At `480px` and below, the row toggle spans both columns so its teaser receives the full card width; right padding reserves the bookmark’s overlay space. Community proof and chevron form the second grid row.
+
+```css
+@media (max-width: 480px) {
 	.row-header {
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) 44px;
 		grid-template-rows: auto 44px;
 		column-gap: 0.5rem;
-		row-gap: 0.625rem;
+		row-gap: 0.5rem;
 		align-items: start;
-		padding: 0.75rem 0.75rem 0.625rem;
+		padding: 0.75rem 0.75rem 0.5625rem;
 	}
 
 	.row-toggle {
 		grid-column: 1 / -1;
 		grid-row: 1;
 		width: 100%;
+	}
+
+	.row-name-line {
 		padding-right: 3.25rem;
 	}
 
@@ -187,10 +219,6 @@ Append one scoped media query after the base row styles. The row toggle spans bo
 	}
 
 	.dish-teaser {
-		display: -webkit-box;
-		overflow: hidden;
-		-webkit-box-orient: vertical;
-		-webkit-line-clamp: 2;
 		margin-top: 0.5rem;
 		font-size: 0.875rem;
 		font-style: normal;
@@ -206,15 +234,15 @@ Append one scoped media query after the base row styles. The row toggle spans bo
 
 Tune only the numeric spacing needed to meet the tests. Do not add rounded-card shadows or alter the existing desktop palette.
 
-**Step 3: Add visible keyboard focus around the content toggle**
+**Step 4: Add visible keyboard focus around the content toggle**
 
 Add a `:focus-visible` outline to `.row-toggle` with `2px #ff4500` and `2px` offset. Keep the chevron at `tabindex="-1"` because it duplicates the row toggle’s expansion action; its 44px size is a pointer target, while keyboard users expand from the content toggle.
 
-**Step 4: Preserve reduced-motion behavior**
+**Step 5: Preserve reduced-motion behavior**
 
 Do not add entrance animation to virtual rows. Retain the existing drawer transition and ensure the current `.no-motion` path still removes it. The selected rail and surface changes should remain non-positional color transitions.
 
-**Step 5: Run the geometry tests and adjust only until they pass**
+**Step 6: Run the geometry tests and adjust only until they pass**
 
 Run:
 
@@ -224,7 +252,7 @@ npm run test:e2e -- tests/mobile-result-card.spec.ts
 
 Expected: both mobile geometry tests and the desktop preservation test pass.
 
-**Step 6: Run component and type validation**
+**Step 7: Run component and type validation**
 
 Run:
 
@@ -235,7 +263,7 @@ npm run check
 
 Expected: all focused tests pass; Svelte reports 0 errors and 0 warnings.
 
-**Step 7: Commit the responsive implementation**
+**Step 8: Commit the responsive implementation**
 
 ```bash
 git add src/lib/restaurants/components/RestaurantList.svelte
