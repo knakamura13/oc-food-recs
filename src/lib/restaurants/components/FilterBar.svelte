@@ -416,8 +416,8 @@
 <style>
 	.filter-bar {
 		padding: 0.5rem 1rem;
-		border-bottom: 1px solid #e8e0d6;
-		background: #faf7f2;
+		border-bottom: 1px solid rgba(232, 224, 214, 0.5);
+		background: transparent;
 	}
 
 	.filter-controls {
@@ -482,10 +482,12 @@
 		min-width: min(220px, calc(100vw - 2rem));
 		max-height: 320px;
 		overflow-y: auto;
-		background: #fffcf8;
+		background: rgba(255, 252, 248, 0.95);
+		backdrop-filter: blur(12px);
+		-webkit-backdrop-filter: blur(12px);
 		border: 1px solid #e0d6cc;
 		border-radius: 8px;
-		box-shadow: 0 4px 16px rgba(62, 44, 35, 0.1);
+		box-shadow: 0 8px 24px rgba(62, 44, 35, 0.12);
 		z-index: 1100;
 		padding: 4px 0;
 	}
@@ -598,10 +600,13 @@
 	}
 
 	.pill:hover {
-		opacity: 0.8;
+		opacity: 0.85;
+		transform: translateY(-1px);
+		box-shadow: 0 2px 6px rgba(62, 44, 35, 0.1);
 	}
 
 	.pill:active {
-		transform: scale(0.95);
+		transform: scale(0.95) translateY(0);
+		box-shadow: none;
 	}
 </style>

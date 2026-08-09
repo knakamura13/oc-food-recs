@@ -721,6 +721,36 @@
 		transform: scale(1);
 	}
 
+	:global(.rec-marker::after) {
+		content: '';
+		position: absolute;
+		left: 15px;
+		top: 40px;
+		width: 12px;
+		height: 12px;
+		background: rgba(255, 69, 0, 0.5);
+		border-radius: 50%;
+		transform: translate(-50%, -50%) scale(0);
+		opacity: 0;
+		pointer-events: none;
+		z-index: -1;
+	}
+
+	:global(.rec-marker.is-active::after) {
+		animation: pin-pulse 2s cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
+	}
+
+	@keyframes pin-pulse {
+		0% {
+			transform: translate(-50%, -50%) scale(0.8);
+			opacity: 1;
+		}
+		100% {
+			transform: translate(-50%, -50%) scale(3.5);
+			opacity: 0;
+		}
+	}
+
 	/* Tooltip box above the pin / cluster (matches the app's cream palette) */
 	:global(.rec-tooltip.leaflet-tooltip) {
 		background: #fffcf8;
