@@ -584,8 +584,11 @@ class WriteToDbTest(unittest.TestCase):
 
     def test_write_to_db_raises_when_database_url_missing(self):
         factory, _conn, _cursor, _exec = self._build_fake_connection([1])
-        # Strip DATABASE_URL out of the env for this assertion.
-        with mock.patch.dict(os.environ, {}, clear=True):
+        # Strip DATABASE_URL from env and from _url() (which also reads .env).
+        with (
+            mock.patch.dict(os.environ, {}, clear=True),
+            mock.patch.object(self.pipeline, "_url", return_value=None),
+        ):
             with self.assertRaises(RuntimeError) as ctx:
                 self.pipeline.write_to_db(
                     {

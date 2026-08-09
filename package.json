@@ -30,6 +30,9 @@
 		"pipeline:build:thread-02": "python3 scripts/reddit_pipeline.py build-thread --thread orangecounty-1slszch",
 		"pipeline:seed-exclusions": "python3 scripts/seed_exclusions.py",
 		"pipeline:apply-exclusions": "python3 scripts/apply_exclusions.py",
+		"pipeline:dedupe-restaurants": "python3 scripts/dedupe_restaurants.py",
+		"pipeline:dedupe-restaurants:apply": "python3 scripts/dedupe_restaurants.py --apply",
+		"pipeline:find-duplicate-candidates": "python3 scripts/find_duplicate_candidates.py",
 		"pipeline:ingest-batch": "python3 scripts/reddit_pipeline.py ingest",
 		"test": "vitest run",
 		"test:watch": "vitest"

@@ -8,6 +8,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 # pyrefly: ignore [missing-import]
 import reddit_pipeline as rp
+
 # pyrefly: ignore [missing-import]
 import dedupe_restaurants as dr
 
@@ -15,8 +16,18 @@ import dedupe_restaurants as dr
 class TestDedupeLogic(unittest.TestCase):
 
     def test_is_match_exact_name_same_location(self):
-        r1 = {"name": "Mo Ran Gak", "location": "Garden Grove", "lat": 33.77, "lng": -117.94}
-        r2 = {"name": "Mo Ran Gak", "location": "Garden Grove", "lat": 33.77, "lng": -117.94}
+        r1 = {
+            "name": "Mo Ran Gak",
+            "location": "Garden Grove",
+            "lat": 33.77,
+            "lng": -117.94,
+        }
+        r2 = {
+            "name": "Mo Ran Gak",
+            "location": "Garden Grove",
+            "lat": 33.77,
+            "lng": -117.94,
+        }
         self.assertTrue(rp.is_match(r1, r2))
 
     def test_is_match_normalization_variations(self):
@@ -36,38 +47,47 @@ class TestDedupeLogic(unittest.TestCase):
 
     def test_is_match_substring_word_boundary_edge_cases(self):
         # Good boundaries
-        self.assertTrue(rp.is_match(
-            {"name": "Mo Ran Gak", "location": "Garden Grove"},
-            {"name": "Mo Ran Gak Restaurant", "location": "Garden Grove"}
-        ))
+        self.assertTrue(
+            rp.is_match(
+                {"name": "Mo Ran Gak", "location": "Garden Grove"},
+                {"name": "Mo Ran Gak Restaurant", "location": "Garden Grove"},
+            )
+        )
 
         # Bad boundaries: "Mo" is a substring of "Mod Pizza", but not a word
-        self.assertFalse(rp.is_match(
-            {"name": "Mo", "location": "Irvine"},
-            {"name": "Mod Pizza", "location": "Irvine"}
-        ))
-        
+        self.assertFalse(
+            rp.is_match(
+                {"name": "Mo", "location": "Irvine"},
+                {"name": "Mod Pizza", "location": "Irvine"},
+            )
+        )
+
         # Test Fix 2: Very short names (<3 chars) should NOT match via substring
         # "Bo" is a word boundary prefix of "Bob's Burgers", but too short to be safe.
-        self.assertFalse(rp.is_match(
-            {"name": "Bo", "location": "HB"},
-            {"name": "Bob's Burgers", "location": "HB"}
-        ))
-        
+        self.assertFalse(
+            rp.is_match(
+                {"name": "Bo", "location": "HB"},
+                {"name": "Bob's Burgers", "location": "HB"},
+            )
+        )
+
         # Exact match of short name still works
-        self.assertTrue(rp.is_match(
-            {"name": "Bo", "location": "HB"},
-            {"name": "Bo", "location": "HB"}
-        ))
+        self.assertTrue(
+            rp.is_match(
+                {"name": "Bo", "location": "HB"}, {"name": "Bo", "location": "HB"}
+            )
+        )
 
     def test_is_match_no_location_or_coords(self):
         # Without any location signal, even an exact name match shouldn't merge
         # because they could be different branches.
-        self.assertFalse(rp.is_match(
-            {"name": "Brodard", "location": None, "lat": None, "lng": None},
-            {"name": "Brodard", "location": None, "lat": None, "lng": None}
-        ))
-        
+        self.assertFalse(
+            rp.is_match(
+                {"name": "Brodard", "location": None, "lat": None, "lng": None},
+                {"name": "Brodard", "location": None, "lat": None, "lng": None},
+            )
+        )
+
     def test_locations_match_case_insensitive_fallback(self):
         # Test Fix 6: Case-insensitive fallback for unrecognized locations
         self.assertTrue(rp._locations_match("katella & tustin", "Katella & Tustin"))
@@ -80,7 +100,12 @@ class TestDedupeLogic(unittest.TestCase):
         self.assertTrue(rp.is_match(r1, r2))
 
     def test_is_match_not_matching_different_location(self):
-        r1 = {"name": "Mo Ran Gak", "location": "Garden Grove", "lat": 33.77, "lng": -117.94}
+        r1 = {
+            "name": "Mo Ran Gak",
+            "location": "Garden Grove",
+            "lat": 33.77,
+            "lng": -117.94,
+        }
         r2 = {"name": "Mo Ran Gak", "location": "Irvine", "lat": 33.68, "lng": -117.82}
         self.assertFalse(rp.is_match(r1, r2))
 
@@ -102,9 +127,15 @@ class TestDedupeLogic(unittest.TestCase):
         self.assertEqual(rp.normalize_name("A&B"), rp.normalize_name("A and B"))
 
     def test_normalize_name_possessive_and_plural_variants(self):
-        self.assertEqual(rp.normalize_name("McDonald's"), rp.normalize_name("McDonalds"))
-        self.assertEqual(rp.normalize_name("Gen Korean BBQ"), rp.normalize_name("Gens Korean BBQ"))
-        self.assertEqual(rp.normalize_name("Chris's Tacos"), rp.normalize_name("Chris Tacos"))
+        self.assertEqual(
+            rp.normalize_name("McDonald's"), rp.normalize_name("McDonalds")
+        )
+        self.assertEqual(
+            rp.normalize_name("Gen Korean BBQ"), rp.normalize_name("Gens Korean BBQ")
+        )
+        self.assertEqual(
+            rp.normalize_name("Chris's Tacos"), rp.normalize_name("Chris Tacos")
+        )
 
     def test_normalize_name_preserves_terminal_s_after_vowel(self):
         # Do not truncate real names ending in 's' (Louis, Atlas, James, ...).
@@ -139,24 +170,33 @@ class TestDedupeLogic(unittest.TestCase):
         self.assertFalse(rp.is_match(r1, r2))
 
     def test_is_match_partial_coords(self):
-        r1 = {"name": "Mo Ran Gak", "location": "Garden Grove", "lat": 33.77, "lng": -117.94}
+        r1 = {
+            "name": "Mo Ran Gak",
+            "location": "Garden Grove",
+            "lat": 33.77,
+            "lng": -117.94,
+        }
         r2 = {"name": "Morangak", "location": "Garden Grove", "lat": None, "lng": None}
         self.assertTrue(rp.is_match(r1, r2))
 
     def test_assign_slugs_reuses_existing_db_slug(self):
-        existing = [{
-            "name": "Mo Ran Gak",
-            "slug": "mo-ran-gak",
-            "location": "Garden Grove",
-            "lat": 33.77,
-            "lng": -117.94,
-        }]
-        incoming = [{
-            "name": "Morangak",
-            "location": "Garden Grove",
-            "lat": 33.77,
-            "lng": -117.94,
-        }]
+        existing = [
+            {
+                "name": "Mo Ran Gak",
+                "slug": "mo-ran-gak",
+                "location": "Garden Grove",
+                "lat": 33.77,
+                "lng": -117.94,
+            }
+        ]
+        incoming = [
+            {
+                "name": "Morangak",
+                "location": "Garden Grove",
+                "lat": 33.77,
+                "lng": -117.94,
+            }
+        ]
         assigned = rp.assign_slugs(incoming, existing=existing)
         self.assertEqual(assigned[0][1], "mo-ran-gak")
 
@@ -179,11 +219,24 @@ class TestDedupeLogic(unittest.TestCase):
         self.assertEqual(assigned[0][1], assigned[1][1])
 
     def test_assign_slugs_third_suffix_for_non_matches(self):
-        assigned = rp.assign_slugs([
-            {"name": "Alpha Cafe", "location": "Irvine", "lat": None, "lng": None},
-            {"name": "Alpha Cafe!", "location": "Costa Mesa", "lat": None, "lng": None},
-            {"name": "Alpha Cafe!!", "location": "Fullerton", "lat": None, "lng": None},
-        ], existing=[])
+        assigned = rp.assign_slugs(
+            [
+                {"name": "Alpha Cafe", "location": "Irvine", "lat": None, "lng": None},
+                {
+                    "name": "Alpha Cafe!",
+                    "location": "Costa Mesa",
+                    "lat": None,
+                    "lng": None,
+                },
+                {
+                    "name": "Alpha Cafe!!",
+                    "location": "Fullerton",
+                    "lat": None,
+                    "lng": None,
+                },
+            ],
+            existing=[],
+        )
         slugs = [slug for _, slug in assigned]
         self.assertEqual(slugs, ["alpha-cafe", "alpha-cafe-2", "alpha-cafe-3"])
 
@@ -227,13 +280,7 @@ class TestDedupeLogic(unittest.TestCase):
 
     def test_connected_components(self):
         nodes = [1, 2, 3, 4, 5]
-        adjacency = {
-            1: [2],
-            2: [1, 3],
-            3: [2],
-            4: [5],
-            5: [4]
-        }
+        adjacency = {1: [2], 2: [1, 3], 3: [2], 4: [5], 5: [4]}
         components = dr.get_connected_components(nodes, adjacency)
         self.assertEqual(len(components), 2)
         self.assertIn([1, 2, 3], components)
@@ -246,12 +293,12 @@ class TestDedupeLogic(unittest.TestCase):
         id_to_restaurant = {
             1: {"name": "Short"},
             2: {"name": "Medium Name"},
-            3: {"name": "The Longest Name Ever"}
+            3: {"name": "The Longest Name Ever"},
         }
 
         def winner_key(rid):
             r = id_to_restaurant[rid]
-            return (mention_counts.get(rid, 0), len(r['name']), -rid)
+            return (mention_counts.get(rid, 0), len(r["name"]), -rid)
 
         sorted_group = sorted(group, key=winner_key, reverse=True)
         self.assertEqual(sorted_group[0], 2)
@@ -262,7 +309,13 @@ class TestDedupeLogic(unittest.TestCase):
         self.assertEqual(sorted_group[0], 3)
 
     def test_merge_winner_fields(self):
-        winner = {"name": "Mo Ran Gak", "location": None, "cuisine": None, "lat": None, "lng": None}
+        winner = {
+            "name": "Mo Ran Gak",
+            "location": None,
+            "cuisine": None,
+            "lat": None,
+            "lng": None,
+        }
         loser = {
             "name": "Mo Ran Gak Restaurant",
             "location": "Garden Grove",
@@ -276,20 +329,142 @@ class TestDedupeLogic(unittest.TestCase):
         self.assertEqual(merged["cuisine"], "Korean")
         self.assertEqual(merged["lat"], 33.77)
 
+    def test_is_match_fuoco_fucco_same_city(self):
+        r1 = {
+            "name": "Fuoco Pizza",
+            "location": "Fullerton",
+            "lat": 33.87,
+            "lng": -117.92,
+        }
+        r2 = {
+            "name": "Fucco Pizza",
+            "location": "Fullerton",
+            "lat": 33.871,
+            "lng": -117.921,
+        }
+        self.assertTrue(rp.is_match(r1, r2))
+
+    def test_is_match_fuoco_geocoded_fucco_ungeocoded_unique(self):
+        existing = [
+            {
+                "name": "Fuoco Pizza",
+                "location": "Fullerton",
+                "lat": 33.87,
+                "lng": -117.92,
+            }
+        ]
+        r1 = existing[0]
+        r2 = {"name": "Fucco Pizza", "location": None, "lat": None, "lng": None}
+        self.assertTrue(rp.is_match(r1, r2, all_restaurants=existing))
+
+    def test_is_match_mod_mo_ambiguous_neighbors(self):
+        mod = {
+            "name": "Mod Pizza",
+            "location": "Fullerton",
+            "lat": 33.87,
+            "lng": -117.92,
+        }
+        mo = {"name": "Mo Pizza", "location": "Fullerton", "lat": 33.87, "lng": -117.92}
+        moo = {
+            "name": "Moo Pizza",
+            "location": "Fullerton",
+            "lat": 33.8701,
+            "lng": -117.9201,
+        }
+        all_restaurants = [mod, mo, moo]
+        self.assertFalse(rp.is_match(mod, mo, all_restaurants=all_restaurants))
+
+    def test_names_match_pair_fuoco_fucco(self):
+        e1 = {"name": "Fuoco Pizza"}
+        e2 = {"name": "Fucco Pizza"}
+        self.assertTrue(rp._names_match_pair(e1, e2))
+
+    def test_maybe_adopt_geocoder_name(self):
+        restaurant = {"name": "Fucco Pizza", "lat": 33.87, "lng": -117.92}
+        detail = "Fuoco Pizza, 123 Main St, Fullerton, CA"
+        rp._maybe_adopt_geocoder_name(restaurant, detail)
+        self.assertEqual(restaurant["name"], "Fuoco Pizza")
+
+    def test_apply_geocode_result_adopts_canonical_name(self):
+        restaurant = {"name": "Fucco Pizza"}
+        rp._apply_geocode_result(
+            restaurant,
+            33.87,
+            -117.92,
+            "Fullerton",
+            "Fullerton",
+            geocode_detail="Fuoco Pizza, 123 Main St, Fullerton, CA",
+        )
+        self.assertEqual(restaurant["name"], "Fuoco Pizza")
+        self.assertEqual(restaurant["location"], "Fullerton")
+
+    def test_is_high_confidence_match_fuoco_fucco(self):
+        r1 = {
+            "name": "Fuoco Pizza",
+            "location": "Fullerton",
+            "lat": 33.87,
+            "lng": -117.92,
+        }
+        r2 = {
+            "name": "Fucco Pizza",
+            "location": "Fullerton",
+            "lat": 33.8701,
+            "lng": -117.9201,
+        }
+        self.assertTrue(rp.is_high_confidence_match(r1, r2, all_restaurants=[r1, r2]))
+
     def test_dedupe_apply_sequence(self):
         restaurants = [
-            {"id": 1, "name": "Mo Ran Gak", "slug": "mo-ran-gak", "location": "Garden Grove", "cuisine": None, "lat": None, "lng": None},
-            {"id": 2, "name": "Morangak", "slug": "morangak", "location": "Garden Grove", "cuisine": None, "lat": 33.77, "lng": -117.94},
+            {
+                "id": 1,
+                "name": "Mo Ran Gak",
+                "slug": "mo-ran-gak",
+                "location": "Garden Grove",
+                "cuisine": None,
+                "lat": None,
+                "lng": None,
+            },
+            {
+                "id": 2,
+                "name": "Morangak",
+                "slug": "morangak",
+                "location": "Garden Grove",
+                "cuisine": None,
+                "lat": 33.77,
+                "lng": -117.94,
+            },
         ]
         executions = []
 
         cursor = mock.MagicMock()
-        cursor.description = [("id",), ("name",), ("slug",), ("location",), ("cuisine",), ("lat",), ("lng",)]
+        cursor.description = [
+            ("id",),
+            ("name",),
+            ("slug",),
+            ("location",),
+            ("cuisine",),
+            ("lat",),
+            ("lng",),
+        ]
 
         def fetchall_side_effect():
             sql = executions[-1][0] if executions else ""
             if "FROM restaurants" in sql and "SELECT id" in sql:
-                return [tuple(r[c] for c in ("id", "name", "slug", "location", "cuisine", "lat", "lng")) for r in restaurants]
+                return [
+                    tuple(
+                        r[c]
+                        for c in (
+                            "id",
+                            "name",
+                            "slug",
+                            "location",
+                            "cuisine",
+                            "lat",
+                            "lng",
+                        )
+                    )
+                    for r in restaurants
+                ]
             if "FROM mentions GROUP BY" in sql:
                 return [(1, 5), (2, 2)]
             return []
@@ -303,8 +478,14 @@ class TestDedupeLogic(unittest.TestCase):
         conn = mock.MagicMock()
         conn.cursor.return_value = cursor
 
-        with mock.patch("dedupe_restaurants.b._connect", return_value=conn), \
-             mock.patch.object(sys, "argv", ["dedupe_restaurants.py", "--apply"]):
+        with (
+            mock.patch("dedupe_restaurants.b._connect", return_value=conn),
+            mock.patch.object(
+                sys,
+                "argv",
+                ["dedupe_restaurants.py", "--apply", "--min-confidence", "all"],
+            ),
+        ):
             code = dr.main()
 
         self.assertEqual(code, 0)
@@ -312,7 +493,12 @@ class TestDedupeLogic(unittest.TestCase):
         self.assertTrue(any("DELETE FROM mentions" in sql for sql in sqls))
         self.assertTrue(any("UPDATE mentions SET restaurant_id" in sql for sql in sqls))
         self.assertTrue(any("DELETE FROM restaurants" in sql for sql in sqls))
-        self.assertTrue(any("UPDATE restaurants" in sql and "COALESCE(location" in sql for sql in sqls))
+        self.assertTrue(
+            any(
+                "UPDATE restaurants" in sql and "COALESCE(location" in sql
+                for sql in sqls
+            )
+        )
 
 
 if __name__ == "__main__":
