@@ -82,6 +82,7 @@ async function seed() {
       body: "Best al pastor in OC",
       score: 15,
       role: "primary",
+      classification: "dish_rec",
       commentDate: new Date("2024-06-01T12:00:00Z"),
     },
     {
