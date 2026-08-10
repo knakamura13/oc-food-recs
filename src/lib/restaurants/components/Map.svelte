@@ -17,10 +17,19 @@
 	let mapContainer: HTMLDivElement | undefined = $state();
 	let leafletMap: any = $state();
 	let markers = new Map<string, any>();
+	let mapInitializationStarted = $state(false);
 	let mapInitialized = $state(false);
+	let mapLoadError = $state(false);
+	let postInitInvalidateTimer: ReturnType<typeof setTimeout> | null = null;
+	let mobileViewportQuery: MediaQueryList | null = null;
+	let mapInitializationGeneration = 0;
+	let destroyed = false;
 
 	let unmappedRestaurants = $derived(restaurants.filter((r) => r.lat === null || r.lng === null));
 	let mappedRestaurants = $derived(restaurants.filter((r) => r.lat !== null && r.lng !== null));
+	let showMapLoading = $derived(
+		(mapExpanded || mapInitializationStarted) && !mapInitialized && !mapLoadError
+	);
 
 	$effect(() => {
 		const target = appState.mapTarget;
@@ -97,72 +106,121 @@
 	let locationMarker: any = null;
 	let locationErrorTimer: ReturnType<typeof setTimeout> | null = null;
 
+	function syncScrollWheelZoom() {
+		if (!leafletMap) return;
+		const isMobileViewport = mobileViewportQuery?.matches ?? window.innerWidth <= 1023;
+		if (isMobileViewport) leafletMap.scrollWheelZoom.disable();
+		else leafletMap.scrollWheelZoom.enable();
+	}
+
+	function disposeMap() {
+		if (locationMarker && leafletMap) leafletMap.removeLayer(locationMarker);
+		locationMarker = null;
+		leafletMap?.remove();
+		leafletMap = undefined;
+		clusterGroupRef = null;
+		L = null;
+		dotIcon = null;
+		markers.clear();
+	}
+
 	async function initMap() {
-		if (mapInitialized || !mapContainer) return;
-		mapInitialized = true;
+		if (mapInitializationStarted || mapInitialized || !mapContainer) return;
+		const generation = ++mapInitializationGeneration;
+		mapInitializationStarted = true;
+		mapLoadError = false;
 
-		const leafletModule = await import('leaflet');
-		L = leafletModule.default || leafletModule;
-		await import('leaflet/dist/leaflet.css');
-		await import('leaflet.markercluster');
-		await import('leaflet.markercluster/dist/MarkerCluster.css');
-		await import('leaflet.markercluster/dist/MarkerCluster.Default.css');
+		try {
+			const leafletModule = await import('leaflet');
+			L = leafletModule.default || leafletModule;
+			await import('leaflet/dist/leaflet.css');
+			await import('leaflet.markercluster');
+			await import('leaflet.markercluster/dist/MarkerCluster.css');
+			await import('leaflet.markercluster/dist/MarkerCluster.Default.css');
+			if (destroyed || generation !== mapInitializationGeneration) return;
 
-		// One combined marker carrying both a resting dot and an (initially hidden)
-		// red pin. The highlight toggles an `is-active` class on the element rather
-		// than swapping icons, so the dot->pin CSS transition fires cleanly.
-		dotIcon = L.divIcon({
-			className: 'rec-marker',
-			html:
-				'<span class="rec-dot"></span>' +
-				'<svg class="rec-pin" viewBox="0 0 30 42" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
-				'<path d="M15 1C7.8 1 2 6.8 2 14c0 9.4 13 26 13 26s13-16.6 13-26C28 6.8 22.2 1 15 1z" fill="#ff4500" stroke="#fffcf8" stroke-width="2"/>' +
-				'<circle cx="15" cy="14" r="5" fill="#fffcf8"/></svg>',
-			iconSize: [30, 42],
-			iconAnchor: [15, 40],
-			tooltipAnchor: [0, -42]
-		});
+			// One combined marker carrying both a resting dot and an (initially hidden)
+			// red pin. The highlight toggles an `is-active` class on the element rather
+			// than swapping icons, so the dot->pin CSS transition fires cleanly.
+			dotIcon = L.divIcon({
+				className: 'rec-marker',
+				html:
+					'<span class="rec-dot"></span>' +
+					'<svg class="rec-pin" viewBox="0 0 30 42" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+					'<path d="M15 1C7.8 1 2 6.8 2 14c0 9.4 13 26 13 26s13-16.6 13-26C28 6.8 22.2 1 15 1z" fill="#ff4500" stroke="#fffcf8" stroke-width="2"/>' +
+					'<circle cx="15" cy="14" r="5" fill="#fffcf8"/></svg>',
+				iconSize: [30, 42],
+				iconAnchor: [15, 40],
+				tooltipAnchor: [0, -42]
+			});
 
-		leafletMap = L.map(mapContainer).setView([33.7, -117.8], 10);
+			leafletMap = L.map(mapContainer).setView([33.7, -117.8], 10);
+			syncScrollWheelZoom();
 
-		// Disable scroll-wheel zoom on mobile to prevent scroll trapping
-		if (window.innerWidth <= 1023) {
-			leafletMap.scrollWheelZoom.disable();
+			L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+				attribution: '&copy; OpenStreetMap contributors',
+				maxZoom: 19
+			}).addTo(leafletMap);
+
+			leafletMap.on('click', () => {
+				appState.selectedRestaurantSlug = null;
+			});
+
+			updateMarkers();
+			mapInitialized = true;
+
+			postInitInvalidateTimer = setTimeout(() => {
+				postInitInvalidateTimer = null;
+				if (!destroyed) leafletMap?.invalidateSize();
+			}, 100);
+		} catch {
+			if (destroyed || generation !== mapInitializationGeneration) return;
+			disposeMap();
+			mapInitializationStarted = false;
+			mapLoadError = true;
 		}
-
-		L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-			attribution: '&copy; OpenStreetMap contributors',
-			maxZoom: 19
-		}).addTo(leafletMap);
-
-		leafletMap.on('click', () => {
-			appState.selectedRestaurantSlug = null;
-		});
-
-		updateMarkers();
-
-		setTimeout(() => leafletMap?.invalidateSize(), 100);
 	}
 
 	onMount(() => {
 		if (!mapContainer) return;
+		mobileViewportQuery = window.matchMedia('(max-width: 1023px)');
+		const handleViewportChange = () => syncScrollWheelZoom();
+		mobileViewportQuery.addEventListener('change', handleViewportChange);
+		let observer: IntersectionObserver | null = null;
 
 		// On mobile, defer map init until visible; on desktop, init immediately
-		if (window.innerWidth <= 1023) {
-			const observer = new IntersectionObserver(
+		if (mobileViewportQuery.matches) {
+			observer = new IntersectionObserver(
 				(entries) => {
 					if (entries[0].isIntersecting) {
-						initMap();
-						observer.disconnect();
+						void initMap();
+						observer?.disconnect();
 					}
 				},
 				{ rootMargin: '100px' }
 			);
 			observer.observe(mapContainer);
-			return () => observer.disconnect();
 		} else {
-			initMap();
+			void initMap();
 		}
+
+		return () => {
+			destroyed = true;
+			mapInitializationGeneration += 1;
+			observer?.disconnect();
+			mobileViewportQuery?.removeEventListener('change', handleViewportChange);
+			mobileViewportQuery = null;
+			if (hoverTimer) clearTimeout(hoverTimer);
+			if (clusterHoverTimer) clearTimeout(clusterHoverTimer);
+			if (locationErrorTimer) clearTimeout(locationErrorTimer);
+			if (postInitInvalidateTimer) clearTimeout(postInitInvalidateTimer);
+			hoverTimer = null;
+			clusterHoverTimer = null;
+			locationErrorTimer = null;
+			postInitInvalidateTimer = null;
+			focusToken += 1;
+			disposeMap();
+		};
 	});
 
 	function ensureClusterGroup() {
@@ -352,18 +410,6 @@
 		};
 	});
 
-	// Teardown: clear pending timers and dispose the Leaflet map (which drops all
-	// markers, tooltips, and their DOM listeners) when the component unmounts.
-	$effect(() => {
-		return () => {
-			if (hoverTimer) clearTimeout(hoverTimer);
-			if (clusterHoverTimer) clearTimeout(clusterHoverTimer);
-			if (locationErrorTimer) clearTimeout(locationErrorTimer);
-			if (locationMarker && leafletMap) leafletMap.removeLayer(locationMarker);
-			leafletMap?.remove();
-		};
-	});
-
 	function jumpToCurrentLocation() {
 		if (!leafletMap || !L || locating) return;
 		if (!navigator.geolocation) {
@@ -374,6 +420,7 @@
 		locationError = null;
 		navigator.geolocation.getCurrentPosition(
 			(position) => {
+				if (destroyed || !leafletMap || !L) return;
 				locating = false;
 				const { latitude, longitude } = position.coords;
 				if (locationMarker) {
@@ -390,6 +437,7 @@
 				leafletMap.setView([latitude, longitude], 14, { animate: true });
 			},
 			(error) => {
+				if (destroyed) return;
 				locating = false;
 				locationError =
 					error.code === error.PERMISSION_DENIED
@@ -481,10 +529,22 @@
 	}
 </script>
 
-<div class="map-panel" class:map-leaflet-chrome-hidden-mobile={!mapExpanded}>
-	<div class="map-container" bind:this={mapContainer} role="application" aria-label="Map of restaurants in Orange County"></div>
-	{#if !mapExpanded}
-		<div class="map-click-blocker" aria-hidden="true"></div>
+<div class="map-panel">
+	<div
+		class="map-container"
+		bind:this={mapContainer}
+		role="application"
+		aria-label="Map of restaurants in Orange County"
+		aria-hidden={!mapInitialized}
+		aria-busy={showMapLoading ? 'true' : undefined}
+	></div>
+	{#if mapLoadError}
+		<div class="map-load-error" role="alert">
+			<span>Map couldn’t load.</span>
+			<button class="map-load-retry" type="button" onclick={() => window.location.reload()}>Reload page</button>
+		</div>
+	{:else if showMapLoading}
+		<div class="map-loading" role="status">Loading map…</div>
 	{/if}
 
 	{#if mapInitialized}
@@ -552,19 +612,45 @@
 		overflow: hidden;
 	}
 
-	/* Transparent overlay that sits above Leaflet panes to intercept
-	   the expand tap before Leaflet's own click handlers fire */
-	.map-click-blocker {
+	.map-loading,
+	.map-load-error {
 		position: absolute;
 		inset: 0;
-		z-index: 500; /* above Leaflet panes (~400) */
-		cursor: pointer;
+		z-index: 450;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		border-radius: 8px;
+		background: #f0ebe3;
+		color: #5d4e37;
+		font-size: 0.9rem;
+		font-weight: 500;
+		pointer-events: none;
 	}
 
-	@media (min-width: 1024px) {
-		.map-click-blocker {
-			display: none;
-		}
+	.map-load-error {
+		flex-direction: column;
+		gap: 0.75rem;
+	}
+
+	.map-load-retry {
+		padding: 0.5rem 0.75rem;
+		border: 1px solid #d6c8ba;
+		border-radius: 6px;
+		background: #fffcf8;
+		color: #5d4e37;
+		font: inherit;
+		cursor: pointer;
+		pointer-events: auto;
+	}
+
+	.map-load-retry:hover {
+		background: #fff0eb;
+	}
+
+	.map-load-retry:focus-visible {
+		outline: 2px solid #ff4500;
+		outline-offset: 2px;
 	}
 
 	.unmapped-toggle {
@@ -636,14 +722,6 @@
 	}
 
 	@media (max-width: 1023px) {
-		/* Minimized mobile FAB: hide Leaflet zoom + attribution; expanded removes this class */
-		.map-panel.map-leaflet-chrome-hidden-mobile :global(.leaflet-control-container),
-		.map-panel.map-leaflet-chrome-hidden-mobile :global(.leaflet-control-attribution),
-		.map-panel.map-leaflet-chrome-hidden-mobile .locate-me-btn,
-		.map-panel.map-leaflet-chrome-hidden-mobile .location-error {
-			display: none !important;
-		}
-
 		.map-panel {
 			min-height: 0;
 			overflow: visible;
@@ -889,6 +967,20 @@
 		white-space: nowrap;
 		box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
 		pointer-events: none;
+	}
+
+	@media (max-width: 1023px) {
+		.locate-me-btn {
+			right: 68px;
+		}
+
+		.location-error {
+			right: 68px;
+			box-sizing: border-box;
+			max-width: calc(100% - 80px);
+			white-space: normal;
+			text-align: center;
+		}
 	}
 
 	@media (prefers-reduced-motion: reduce) {

@@ -21,7 +21,7 @@
 
 	interface Props {
 		restaurants: Restaurant[];
-		onShowOnMap?: () => void;
+		onShowOnMap?: (opener: HTMLButtonElement) => void;
 	}
 
 	let { restaurants, onShowOnMap }: Props = $props();
@@ -268,12 +268,15 @@
 		appState.hoveredRestaurantSlug = restaurant.slug;
 	}
 
-	function showOnMap(restaurant: Restaurant, e: MouseEvent) {
+	function showOnMap(
+		restaurant: Restaurant,
+		e: MouseEvent & { currentTarget: HTMLButtonElement }
+	) {
 		e.stopPropagation();
 		if (restaurant.lat == null || restaurant.lng == null) return;
 		appState.mapTarget = { slug: restaurant.slug, lat: restaurant.lat, lng: restaurant.lng };
 		appState.selectedRestaurantSlug = restaurant.slug;
-		onShowOnMap?.();
+		onShowOnMap?.(e.currentTarget);
 		const mapEl = document.querySelector('.map-container');
 		if (mapEl) {
 			mapEl.scrollIntoView({ behavior: reduceMotion() ? 'auto' : 'smooth', block: 'center' });
