@@ -1,9 +1,21 @@
 import { render, screen } from "@testing-library/svelte";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import FilterBar from "./FilterBar.svelte";
 import { appState } from "$lib/restaurants/stores.svelte";
 import { makeRestaurant, resetAppState } from "$lib/restaurants/test-utils";
+
+const mocks = vi.hoisted(() => ({
+  toastSuccess: vi.fn(),
+  toastError: vi.fn(),
+}));
+
+vi.mock("$lib/toast", () => ({
+  toast: {
+    success: mocks.toastSuccess,
+    error: mocks.toastError,
+  },
+}));
 
 const restaurants = [
   makeRestaurant({ cuisine: "Mexican", location: "Santa Ana" }),
@@ -30,6 +42,8 @@ describe("FilterBar", () => {
   beforeEach(() => {
     resetAppState();
     localStorage.clear();
+    mocks.toastSuccess.mockReset();
+    mocks.toastError.mockReset();
   });
 
   it("toggles a cuisine filter from the dropdown", async () => {
@@ -127,6 +141,26 @@ describe("FilterBar", () => {
     expect(appState.showUnmapped).toBe(true);
     await user.click(toggle);
     expect(appState.showUnmapped).toBe(false);
+  });
+
+  it("copies the current view URL and confirms it", async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal("navigator", { clipboard: { writeText } });
+    render(FilterBar, {
+      restaurants,
+      threadSubreddit,
+      restaurantsForHistogram: restaurants,
+      dateExtent,
+    });
+
+    await user.click(screen.getByRole("button", { name: /share view/i }));
+
+    expect(writeText).toHaveBeenCalledWith(window.location.href);
+    expect(mocks.toastSuccess).toHaveBeenCalledWith(
+      "Share link copied to clipboard!",
+    );
+    vi.unstubAllGlobals();
   });
 
   it("hides new-since until a prior visit exists", () => {
