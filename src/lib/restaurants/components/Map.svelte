@@ -17,7 +17,9 @@
 	let mapContainer: HTMLDivElement | undefined = $state();
 	let leafletMap: any = $state();
 	let markers = new Map<string, any>();
+	let mapInitializationStarted = false;
 	let mapInitialized = $state(false);
+	let mapLoadError = $state(false);
 
 	let unmappedRestaurants = $derived(restaurants.filter((r) => r.lat === null || r.lng === null));
 	let mappedRestaurants = $derived(restaurants.filter((r) => r.lat !== null && r.lng !== null));
@@ -98,50 +100,63 @@
 	let locationErrorTimer: ReturnType<typeof setTimeout> | null = null;
 
 	async function initMap() {
-		if (mapInitialized || !mapContainer) return;
-		mapInitialized = true;
+		if (mapInitializationStarted || mapInitialized || !mapContainer) return;
+		mapInitializationStarted = true;
+		mapLoadError = false;
 
-		const leafletModule = await import('leaflet');
-		L = leafletModule.default || leafletModule;
-		await import('leaflet/dist/leaflet.css');
-		await import('leaflet.markercluster');
-		await import('leaflet.markercluster/dist/MarkerCluster.css');
-		await import('leaflet.markercluster/dist/MarkerCluster.Default.css');
+		try {
+			const leafletModule = await import('leaflet');
+			L = leafletModule.default || leafletModule;
+			await import('leaflet/dist/leaflet.css');
+			await import('leaflet.markercluster');
+			await import('leaflet.markercluster/dist/MarkerCluster.css');
+			await import('leaflet.markercluster/dist/MarkerCluster.Default.css');
 
-		// One combined marker carrying both a resting dot and an (initially hidden)
-		// red pin. The highlight toggles an `is-active` class on the element rather
-		// than swapping icons, so the dot->pin CSS transition fires cleanly.
-		dotIcon = L.divIcon({
-			className: 'rec-marker',
-			html:
-				'<span class="rec-dot"></span>' +
-				'<svg class="rec-pin" viewBox="0 0 30 42" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
-				'<path d="M15 1C7.8 1 2 6.8 2 14c0 9.4 13 26 13 26s13-16.6 13-26C28 6.8 22.2 1 15 1z" fill="#ff4500" stroke="#fffcf8" stroke-width="2"/>' +
-				'<circle cx="15" cy="14" r="5" fill="#fffcf8"/></svg>',
-			iconSize: [30, 42],
-			iconAnchor: [15, 40],
-			tooltipAnchor: [0, -42]
-		});
+			// One combined marker carrying both a resting dot and an (initially hidden)
+			// red pin. The highlight toggles an `is-active` class on the element rather
+			// than swapping icons, so the dot->pin CSS transition fires cleanly.
+			dotIcon = L.divIcon({
+				className: 'rec-marker',
+				html:
+					'<span class="rec-dot"></span>' +
+					'<svg class="rec-pin" viewBox="0 0 30 42" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+					'<path d="M15 1C7.8 1 2 6.8 2 14c0 9.4 13 26 13 26s13-16.6 13-26C28 6.8 22.2 1 15 1z" fill="#ff4500" stroke="#fffcf8" stroke-width="2"/>' +
+					'<circle cx="15" cy="14" r="5" fill="#fffcf8"/></svg>',
+				iconSize: [30, 42],
+				iconAnchor: [15, 40],
+				tooltipAnchor: [0, -42]
+			});
 
-		leafletMap = L.map(mapContainer).setView([33.7, -117.8], 10);
+			leafletMap = L.map(mapContainer).setView([33.7, -117.8], 10);
 
-		// Disable scroll-wheel zoom on mobile to prevent scroll trapping
-		if (window.innerWidth <= 1023) {
-			leafletMap.scrollWheelZoom.disable();
+			// Disable scroll-wheel zoom on mobile to prevent scroll trapping
+			if (window.innerWidth <= 1023) {
+				leafletMap.scrollWheelZoom.disable();
+			}
+
+			L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+				attribution: '&copy; OpenStreetMap contributors',
+				maxZoom: 19
+			}).addTo(leafletMap);
+
+			leafletMap.on('click', () => {
+				appState.selectedRestaurantSlug = null;
+			});
+
+			updateMarkers();
+			mapInitialized = true;
+
+			setTimeout(() => leafletMap?.invalidateSize(), 100);
+		} catch {
+			leafletMap?.remove();
+			leafletMap = undefined;
+			clusterGroupRef = null;
+			L = null;
+			dotIcon = null;
+			markers.clear();
+			mapInitializationStarted = false;
+			mapLoadError = true;
 		}
-
-		L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-			attribution: '&copy; OpenStreetMap contributors',
-			maxZoom: 19
-		}).addTo(leafletMap);
-
-		leafletMap.on('click', () => {
-			appState.selectedRestaurantSlug = null;
-		});
-
-		updateMarkers();
-
-		setTimeout(() => leafletMap?.invalidateSize(), 100);
 	}
 
 	onMount(() => {
@@ -481,8 +496,26 @@
 	}
 </script>
 
-<div class="map-panel" class:map-leaflet-chrome-hidden-mobile={!mapExpanded}>
-	<div class="map-container" bind:this={mapContainer} role="application" aria-label="Map of restaurants in Orange County"></div>
+<div
+	class="map-panel"
+	class:map-leaflet-chrome-hidden-mobile={!mapExpanded}
+	aria-busy={!mapInitialized && !mapLoadError}
+>
+	<div
+		class="map-container"
+		bind:this={mapContainer}
+		role="application"
+		aria-label="Map of restaurants in Orange County"
+		aria-hidden={!mapInitialized}
+	></div>
+	{#if mapLoadError}
+		<div class="map-load-error" role="alert">
+			<span>Map couldn’t load.</span>
+			<button class="map-load-retry" type="button" onclick={() => window.location.reload()}>Reload page</button>
+		</div>
+	{:else if !mapInitialized}
+		<div class="map-loading" role="status">Loading map…</div>
+	{/if}
 	{#if !mapExpanded}
 		<div class="map-click-blocker" aria-hidden="true"></div>
 	{/if}
@@ -550,6 +583,47 @@
 		min-height: 0;
 		border-radius: 8px;
 		overflow: hidden;
+	}
+
+	.map-loading,
+	.map-load-error {
+		position: absolute;
+		inset: 0;
+		z-index: 450;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		border-radius: 8px;
+		background: #f0ebe3;
+		color: #5d4e37;
+		font-size: 0.9rem;
+		font-weight: 500;
+		pointer-events: none;
+	}
+
+	.map-load-error {
+		flex-direction: column;
+		gap: 0.75rem;
+	}
+
+	.map-load-retry {
+		padding: 0.5rem 0.75rem;
+		border: 1px solid #d6c8ba;
+		border-radius: 6px;
+		background: #fffcf8;
+		color: #5d4e37;
+		font: inherit;
+		cursor: pointer;
+		pointer-events: auto;
+	}
+
+	.map-load-retry:hover {
+		background: #fff0eb;
+	}
+
+	.map-load-retry:focus-visible {
+		outline: 2px solid #ff4500;
+		outline-offset: 2px;
 	}
 
 	/* Transparent overlay that sits above Leaflet panes to intercept
