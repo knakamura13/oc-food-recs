@@ -970,9 +970,16 @@
 	}
 
 	@media (max-width: 1023px) {
-		.locate-me-btn,
+		.locate-me-btn {
+			right: 68px;
+		}
+
 		.location-error {
 			right: 68px;
+			box-sizing: border-box;
+			max-width: calc(100% - 80px);
+			white-space: normal;
+			text-align: center;
 		}
 	}
 
