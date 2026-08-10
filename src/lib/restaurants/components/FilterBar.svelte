@@ -172,9 +172,10 @@
 	}
 
 	let savedCount = $derived(savedState.slugs.length);
+	let searchPillLabel = $derived(appState.searchQuery.trim());
 
 	let hasActiveFilters = $derived(
-		appState.searchQuery.trim().length > 0 ||
+		searchPillLabel.length > 0 ||
 			appState.activeCuisines.length > 0 ||
 			appState.activeCities.length > 0 ||
 			appState.activeSubreddits.length > 0 ||
@@ -182,6 +183,10 @@
 			appState.showUnmapped ||
 			appState.showSavedOnly
 	);
+
+	function clearSearchFilter() {
+		appState.searchQuery = '';
+	}
 </script>
 
 <nav class="filter-bar" aria-label="Restaurant filters">
@@ -389,9 +394,18 @@
 		{/if}
 	</div>
 
-	<!-- Active filter pills -->
+	<!-- Active filter pills — one dismissible chip per active constraint -->
 	{#if hasActiveFilters}
-		<div class="active-pills">
+		<div class="active-pills" aria-label="Active filters">
+			{#if searchPillLabel}
+				<button
+					class="pill search-pill"
+					onclick={clearSearchFilter}
+					aria-label="Remove search filter for {searchPillLabel}"
+				>
+					&ldquo;{searchPillLabel}&rdquo; &times;
+				</button>
+			{/if}
 			{#each appState.activeCuisines as cuisine (cuisine)}
 				<button class="pill cuisine-pill" onclick={() => toggleCuisine(cuisine)} aria-label="Remove {cuisine} filter">
 					{cuisine} &times;
@@ -423,6 +437,15 @@
 					aria-label="Remove saved filter"
 				>
 					Saved &times;
+				</button>
+			{/if}
+			{#if appState.showUnmapped}
+				<button
+					class="pill unmapped-pill"
+					onclick={() => (appState.showUnmapped = false)}
+					aria-label="Remove show unmapped filter"
+				>
+					Unmapped &times;
 				</button>
 			{/if}
 		</div>
@@ -634,6 +657,20 @@
 	.saved-pill {
 		background: #f3ecdd;
 		color: #8a6d1f;
+	}
+
+	.search-pill {
+		background: #ebe6df;
+		color: #3e2c23;
+		max-width: 16rem;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.unmapped-pill {
+		background: #e8ece8;
+		color: #3d5a45;
 	}
 
 	.saved-toggle:disabled {

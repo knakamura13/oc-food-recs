@@ -46,27 +46,52 @@
 	// Full mentions are lazy-loaded per restaurant on first expand (kept out of the
 	// prerendered page payload). Cached by slug; `undefined` = not yet loaded.
 	let details = $state<Record<string, Mention[] | undefined>>({});
+	let detailErrors = $state<Record<string, boolean>>({});
 	let openScoreTipSlug = $state<string | null>(null);
-	async function loadDetail(slug: string) {
-		if (details[slug] !== undefined) return;
+	async function loadDetail(slug: string, { force = false } = {}) {
+		if (!force && details[slug] !== undefined) return;
+		if (force) {
+			const next = { ...details };
+			delete next[slug];
+			details = next;
+			const nextErrors = { ...detailErrors };
+			delete nextErrors[slug];
+			detailErrors = nextErrors;
+		}
 		try {
 			const res = await fetch(`/api/r/${slug}.json`);
 			if (!res.ok) {
 				details[slug] = [];
+				detailErrors[slug] = true;
 				toast.error('Could not load mentions');
 				return;
 			}
 			details[slug] = await res.json();
+			if (detailErrors[slug]) {
+				const nextErrors = { ...detailErrors };
+				delete nextErrors[slug];
+				detailErrors = nextErrors;
+			}
 		} catch {
 			details[slug] = [];
+			detailErrors[slug] = true;
 			toast.error('Could not load mentions');
 		}
 	}
 
+	function retryDetail(slug: string) {
+		void loadDetail(slug, { force: true });
+	}
+
 	// Load detail whenever a restaurant becomes selected (row tap, search, map, or URL).
+	// untrack: loadDetail reads `details[slug]`, and we must not re-fire this effect when
+	// the cache updates (or a Retry would double-fetch after clearing the failed entry).
 	$effect(() => {
 		const slug = appState.selectedRestaurantSlug;
-		if (slug) loadDetail(slug);
+		if (!slug) return;
+		untrack(() => {
+			void loadDetail(slug);
+		});
 	});
 
 	// Drawer height changes when mentions finish loading; virtualizer must catch up.
@@ -358,6 +383,18 @@
 		return groups;
 	}
 
+	function hasDrawerCommentContent(
+		primary: Mention | null,
+		groups: ReturnType<typeof groupEndorsements>
+	) {
+		return Boolean(
+			primary ||
+				groups.dish_rec.length > 0 ||
+				groups.personal_story.length > 0 ||
+				groups.endorsement.length > 0
+		);
+	}
+
 	function relativeDate(isoDate: string | null): string {
 		if (!isoDate) return '';
 		const d = new Date(isoDate);
@@ -555,10 +592,19 @@
 									</div>
 								</div>
 							</div>
+						{:else if detailErrors[slug]}
+							<div class="drawer-status" role="alert">
+								<p class="drawer-status-title">Could not load comments</p>
+								<p class="drawer-status-hint">Check your connection, then try again.</p>
+								<button type="button" class="drawer-retry" onclick={() => retryDetail(slug)}>
+									Retry
+								</button>
+							</div>
 						{:else}
 							{@const mentions = details[slug] ?? []}
 							{@const primary = getPrimaryMention(mentions)}
 							{@const groups = groupEndorsements(mentions)}
+							{@const hasComments = hasDrawerCommentContent(primary, groups)}
 								<div class="drawer-content" class:no-motion={reduceMotion()}>
 									{#if primary}
 										<div class="primary-comment">
@@ -586,7 +632,7 @@
 												class:open={openScoreTipSlug === slug}
 												role="tooltip"
 											>
-												Total Reddit upvotes across all comments that recommended this restaurant.
+												Reddit upvotes on this recommendation comment.
 											</span>
 										</button>
 												</span>
@@ -684,6 +730,15 @@
 										{/if}
 									</div>
 								{/each}
+							</div>
+						{/if}
+
+						{#if !hasComments}
+							<div class="drawer-status" role="status">
+								<p class="drawer-status-title">No comments to show</p>
+								<p class="drawer-status-hint">
+									This place is on the list, but full comment text is not available yet.
+								</p>
 							</div>
 						{/if}
 							</div>
@@ -1139,6 +1194,47 @@
 
 	.drawer-content.no-motion {
 		animation: none;
+	}
+
+	.drawer-status {
+		padding: 0.85rem 0.15rem 0.35rem;
+		text-align: left;
+	}
+
+	.drawer-status-title {
+		margin: 0;
+		font-size: 0.92rem;
+		font-weight: 600;
+		color: #3e2c23;
+	}
+
+	.drawer-status-hint {
+		margin: 0.35rem 0 0;
+		font-size: 0.82rem;
+		line-height: 1.4;
+		color: #7a6e63;
+	}
+
+	.drawer-retry {
+		margin-top: 0.65rem;
+		padding: 6px 12px;
+		border: 1px solid #e4d9ce;
+		border-radius: 8px;
+		background: #fffcf8;
+		color: #ff4500;
+		font-size: 0.82rem;
+		font-weight: 600;
+		cursor: pointer;
+	}
+
+	.drawer-retry:hover {
+		border-color: #ff4500;
+		background: #fff5f0;
+	}
+
+	.drawer-retry:focus-visible {
+		outline: 2px solid #ff4500;
+		outline-offset: 2px;
 	}
 
 	@keyframes drawer-content-in {

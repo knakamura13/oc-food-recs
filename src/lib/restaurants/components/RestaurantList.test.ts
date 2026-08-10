@@ -1,4 +1,5 @@
-import { render, waitFor } from "@testing-library/svelte";
+import { render, screen, waitFor } from "@testing-library/svelte";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import RestaurantList from "./RestaurantList.svelte";
 import { appState } from "$lib/restaurants/stores.svelte";
@@ -24,10 +25,72 @@ const restaurants = [
   }),
 ];
 
+function stubListViewport() {
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    writable: true,
+    value: (query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener() {},
+      removeListener() {},
+      addEventListener() {},
+      removeEventListener() {},
+      dispatchEvent() {
+        return false;
+      },
+    }),
+  });
+  Object.defineProperty(HTMLElement.prototype, "clientHeight", {
+    configurable: true,
+    get() {
+      return 600;
+    },
+  });
+  Object.defineProperty(HTMLElement.prototype, "clientWidth", {
+    configurable: true,
+    get() {
+      return 400;
+    },
+  });
+  Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
+    configurable: true,
+    get() {
+      return 72;
+    },
+  });
+  Object.defineProperty(HTMLElement.prototype, "offsetWidth", {
+    configurable: true,
+    get() {
+      return 400;
+    },
+  });
+  vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(
+    function (this: HTMLElement) {
+      const height = this.id === "main-content" ? 600 : 72;
+      return {
+        x: 0,
+        y: 0,
+        top: 0,
+        left: 0,
+        right: 400,
+        bottom: height,
+        width: 400,
+        height,
+        toJSON() {
+          return {};
+        },
+      };
+    },
+  );
+}
+
 describe("RestaurantList", () => {
   beforeEach(() => {
     resetAppState();
     mocks.toastError.mockReset();
+    stubListViewport();
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({ ok: false, json: async () => [] }),
@@ -40,6 +103,69 @@ describe("RestaurantList", () => {
 
     await waitFor(() => {
       expect(mocks.toastError).toHaveBeenCalledWith("Could not load mentions");
+    });
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        /could not load comments/i,
+      );
+    });
+    expect(
+      screen.getByRole("button", { name: /^retry$/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("retries a failed mention load from the drawer", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false, json: async () => [] })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => [
+          {
+            comment_id: "c1",
+            thread_id: "t1",
+            role: "primary",
+            author: "foodie",
+            body: "Best tacos in town",
+            score: 12,
+            comment_date: "2024-06-01",
+            permalink: "https://reddit.com/r/x/comments/1",
+            classification: null,
+          },
+        ],
+      });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(RestaurantList, { restaurants });
+    appState.selectedRestaurantSlug = "la-taco-spot";
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: /^retry$/i }),
+      ).toBeInTheDocument();
+    });
+    await user.click(screen.getByRole("button", { name: /^retry$/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Best tacos in town")).toBeInTheDocument();
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(
+      screen.queryByRole("button", { name: /^retry$/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows an empty-comments message when details load with no content", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: true, json: async () => [] }),
+    );
+    render(RestaurantList, { restaurants });
+    appState.selectedRestaurantSlug = "la-taco-spot";
+
+    await waitFor(() => {
+      expect(screen.getByText(/no comments to show/i)).toBeInTheDocument();
     });
   });
 

@@ -46,6 +46,15 @@
 	let showResultsDropdown = $derived(showDropdown && results.length > 0);
 
 	let isFocused = $state(false);
+	let shortcutLabel = $state(
+		typeof navigator !== 'undefined' &&
+			/Mac|iPhone|iPad|iPod/i.test(
+				(navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData
+					?.platform ?? navigator.platform
+			)
+			? '⌘K'
+			: 'Ctrl+K'
+	);
 
 	function handleGlobalKeydown(e: KeyboardEvent) {
 		const target = e.target as HTMLElement | null;
@@ -180,7 +189,7 @@
 				<X size={18} aria-hidden="true" />
 			</button>
 		{:else if !isFocused}
-			<kbd class="search-shortcut" aria-label="Keyboard shortcut ⌘K or /">⌘K</kbd>
+			<kbd class="search-shortcut" aria-label="Keyboard shortcut {shortcutLabel} or /">{shortcutLabel}</kbd>
 		{/if}
 	</div>
 
