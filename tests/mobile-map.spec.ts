@@ -187,19 +187,37 @@ test.describe('Mobile map interaction', () => {
 		try {
 			await page.goto('/');
 			await firstRenderedRow(page);
+			await page.evaluate(
+				() =>
+					new Promise<void>((resolve) => {
+						requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+					})
+			);
+
+			const mapContainer = page.locator('.map-container');
+			expect(leafletRequestHeld).toBe(false);
+			await expect(page.locator('.map-loading')).toHaveCount(0);
+			await expect(page.getByRole('status')).toHaveCount(0);
+			expect(await mapContainer.getAttribute('aria-busy')).toBeNull();
+
 			await page.locator('.mobile-map-trigger').click();
 
 			await expect.poll(() => leafletRequestHeld).toBe(true);
-			const mapPanel = page.locator('.map-panel');
-			await expect(mapPanel).toHaveAttribute('aria-busy', 'true');
-			await expect(page.getByRole('status')).toHaveText('Loading map…');
+			await expect(mapContainer).toHaveAttribute('aria-busy', 'true');
+			const loadingStatus = page.getByRole('status');
+			await expect(loadingStatus).toHaveText('Loading map…');
+			expect(
+				await loadingStatus.evaluate(
+					(element) => element.closest('[aria-busy="true"]') === null
+				)
+			).toBe(true);
 			await expect(page.getByRole('application')).toHaveCount(0);
 
 			releaseLeaflet();
 
 			await expect(page.locator('.leaflet-container')).toBeVisible({ timeout: 30_000 });
 			await expect(page.getByRole('status')).toHaveCount(0);
-			await expect(mapPanel).toHaveAttribute('aria-busy', 'false');
+			expect(await mapContainer.getAttribute('aria-busy')).toBeNull();
 		} finally {
 			releaseLeaflet();
 			if (leafletRequestHeld) await leafletHandlerDone;
@@ -230,10 +248,10 @@ test.describe('Mobile map interaction', () => {
 			await firstRenderedRow(page);
 			await page.locator('.mobile-map-trigger').click();
 
-			const mapPanel = page.locator('.map-panel');
+			const mapContainer = page.locator('.map-container');
 			const loadError = page.getByRole('alert');
 			await expect(loadError).toContainText('Map couldn’t load.');
-			await expect(mapPanel).toHaveAttribute('aria-busy', 'false');
+			expect(await mapContainer.getAttribute('aria-busy')).toBeNull();
 			await expect(page.getByRole('status')).toHaveCount(0);
 			await expect(page.getByRole('application')).toHaveCount(0);
 
@@ -244,7 +262,7 @@ test.describe('Mobile map interaction', () => {
 			await expect.poll(() => leafletAttempts).toBe(2);
 			await expect(page.locator('.leaflet-container')).toBeVisible({ timeout: 30_000 });
 			await expect(loadError).toHaveCount(0);
-			await expect(mapPanel).toHaveAttribute('aria-busy', 'false');
+			expect(await mapContainer.getAttribute('aria-busy')).toBeNull();
 		} finally {
 			await page.unroute(leafletPattern, failLeafletOnce);
 		}

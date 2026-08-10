@@ -17,7 +17,7 @@
 	let mapContainer: HTMLDivElement | undefined = $state();
 	let leafletMap: any = $state();
 	let markers = new Map<string, any>();
-	let mapInitializationStarted = false;
+	let mapInitializationStarted = $state(false);
 	let mapInitialized = $state(false);
 	let mapLoadError = $state(false);
 
@@ -499,7 +499,6 @@
 <div
 	class="map-panel"
 	class:map-leaflet-chrome-hidden-mobile={!mapExpanded}
-	aria-busy={!mapInitialized && !mapLoadError}
 >
 	<div
 		class="map-container"
@@ -507,13 +506,14 @@
 		role="application"
 		aria-label="Map of restaurants in Orange County"
 		aria-hidden={!mapInitialized}
+		aria-busy={mapInitializationStarted && !mapInitialized ? 'true' : undefined}
 	></div>
 	{#if mapLoadError}
 		<div class="map-load-error" role="alert">
 			<span>Map couldn’t load.</span>
 			<button class="map-load-retry" type="button" onclick={() => window.location.reload()}>Reload page</button>
 		</div>
-	{:else if !mapInitialized}
+	{:else if mapInitializationStarted && !mapInitialized}
 		<div class="map-loading" role="status">Loading map…</div>
 	{/if}
 	{#if !mapExpanded}
