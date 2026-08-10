@@ -782,4 +782,57 @@ test.describe('Mobile map interaction', () => {
 		}
 	});
 
+	test('desktop map pane expands without hover via pin control and focus-within', async ({
+		page
+	}, testInfo) => {
+		test.skip(testInfo.project.name !== 'Desktop Chrome', 'Desktop viewport only');
+		await page.setViewportSize({ width: 1280, height: 800 });
+		await page.goto('/');
+		await firstRenderedRow(page);
+		await expect(page.locator('.leaflet-container')).toBeVisible({ timeout: 30_000 });
+
+		const mapPane = page.locator('#restaurant-map-panel');
+		const expandToggle = page.locator('.map-expand-toggle');
+		await expect(expandToggle).toBeVisible();
+		await expect(expandToggle).toHaveAccessibleName('Expand map pane');
+		await expect(expandToggle).toHaveAttribute('aria-pressed', 'false');
+
+		const collapsedWidth = await mapPane.evaluate((pane) => pane.getBoundingClientRect().width);
+
+		// Keyboard/focus path: focusing map chrome expands via :focus-within
+		await page.getByRole('button', { name: 'Zoom in' }).focus();
+		await expect
+			.poll(async () => mapPane.evaluate((pane) => pane.getBoundingClientRect().width))
+			.toBeGreaterThan(collapsedWidth + 20);
+
+		await page.locator('.list-pane').click({ position: { x: 40, y: 40 } });
+		await expect
+			.poll(async () => mapPane.evaluate((pane) => pane.getBoundingClientRect().width))
+			.toBeLessThanOrEqual(collapsedWidth + 8);
+
+		await expandToggle.click();
+		await expect(expandToggle).toHaveAccessibleName('Collapse map pane');
+		await expect(expandToggle).toHaveAttribute('aria-pressed', 'true');
+		await expect(mapPane).toHaveClass(/desktop-expanded/);
+		await expect
+			.poll(async () => mapPane.evaluate((pane) => pane.getBoundingClientRect().width))
+			.toBeGreaterThan(collapsedWidth + 20);
+
+		await page.locator('.list-pane').click({ position: { x: 40, y: 40 } });
+		await expect
+			.poll(async () => mapPane.evaluate((pane) => pane.getBoundingClientRect().width))
+			.toBeGreaterThan(collapsedWidth + 20);
+
+		await expandToggle.click();
+		await expect(expandToggle).toHaveAccessibleName('Expand map pane');
+		await expect(expandToggle).toHaveAttribute('aria-pressed', 'false');
+		await expect(mapPane).not.toHaveClass(/desktop-expanded/);
+		await expect
+			.poll(async () => mapPane.evaluate((pane) => pane.getBoundingClientRect().width))
+			.toBeLessThanOrEqual(collapsedWidth + 8);
+
+		await page.setViewportSize({ width: 390, height: 844 });
+		await expect(expandToggle).toHaveCount(0);
+		await expect(page.locator('.mobile-map-trigger')).toBeVisible();
+	});
 });
