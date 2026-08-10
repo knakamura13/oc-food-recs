@@ -608,6 +608,58 @@ test.describe('Mobile map interaction', () => {
 		await expect(locateButton).toBeEnabled();
 	});
 
+	test('unsupported geolocation message stays inside the 320px map sheet', async ({
+		page
+	}, testInfo) => {
+		test.skip(testInfo.project.name !== 'Mobile Chrome', 'Mobile viewport only');
+		await page.addInitScript(() => {
+			Object.defineProperty(navigator, 'geolocation', {
+				configurable: true,
+				value: undefined
+			});
+		});
+		await page.setViewportSize({ width: 320, height: 700 });
+		await page.goto('/');
+		await firstRenderedRow(page);
+		await page.locator('.mobile-map-trigger').click();
+		await expect(page.locator('.leaflet-container')).toBeVisible({ timeout: 30_000 });
+
+		await page.getByRole('button', { name: 'Jump to my current location' }).click();
+		const locationError = page.getByRole('alert');
+		await expect(locationError).toHaveText('Geolocation is not supported by your browser');
+
+		const bounds = await locationError.evaluate((error) => {
+			const panel = document.querySelector('#restaurant-map-panel');
+			if (!panel) throw new Error('Missing restaurant map panel');
+			const errorRect = error.getBoundingClientRect();
+			const panelRect = panel.getBoundingClientRect();
+			return {
+				error: {
+					left: errorRect.left,
+					top: errorRect.top,
+					right: errorRect.right,
+					bottom: errorRect.bottom
+				},
+				panel: {
+					left: panelRect.left,
+					top: panelRect.top,
+					right: panelRect.right,
+					bottom: panelRect.bottom
+				},
+				viewport: { width: window.innerWidth, height: window.innerHeight }
+			};
+		});
+
+		expect(bounds.error.left).toBeGreaterThanOrEqual(bounds.panel.left);
+		expect(bounds.error.top).toBeGreaterThanOrEqual(bounds.panel.top);
+		expect(bounds.error.right).toBeLessThanOrEqual(bounds.panel.right);
+		expect(bounds.error.bottom).toBeLessThanOrEqual(bounds.panel.bottom);
+		expect(bounds.error.left).toBeGreaterThanOrEqual(0);
+		expect(bounds.error.top).toBeGreaterThanOrEqual(0);
+		expect(bounds.error.right).toBeLessThanOrEqual(bounds.viewport.width);
+		expect(bounds.error.bottom).toBeLessThanOrEqual(bounds.viewport.height);
+	});
+
 	test('desktop breakpoint closes the mobile disclosure and focuses the inline map', async ({
 		page
 	}, testInfo) => {
