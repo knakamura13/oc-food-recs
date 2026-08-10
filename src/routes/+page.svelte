@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { X } from 'lucide-svelte';
+	import { Maximize2, Minimize2, X } from 'lucide-svelte';
 	import { onMount, tick } from 'svelte';
 	import { afterNavigate, replaceState } from '$app/navigation';
 	import type { Restaurant } from '$lib/restaurants/types';
@@ -89,6 +89,7 @@
 	let prevSavedOnly = $state(false);
 
 	let mapExpanded = $state(false);
+	let mapDesktopExpanded = $state(false);
 	let mapOpener = $state<HTMLButtonElement | null>(null);
 	let mapCloseButton = $state<HTMLButtonElement | undefined>(undefined);
 	let mapPaneEl = $state<HTMLDivElement | undefined>(undefined);
@@ -238,6 +239,10 @@
 		}
 	}
 
+	function toggleDesktopMapExpanded() {
+		if (isMobileViewport()) return;
+		mapDesktopExpanded = !mapDesktopExpanded;
+	}
 
 	function handleMobileMapKeydown(event: KeyboardEvent) {
 		if (!mapExpanded || !isMobileViewport()) return;
@@ -445,6 +450,9 @@
 			if (crossedToDesktop && mapExpanded) {
 				closeMobileMap({ focusDesktopMap: true });
 			}
+			if (nextIsMobile) {
+				mapDesktopExpanded = false;
+			}
 			// Kill the map-pane transition for the duration of the resize so crossing the
 			// 1024px breakpoint switches layouts instantly; re-enable once the drag settles.
 			suppressMapTransition = true;
@@ -535,6 +543,7 @@
 		<div
 			class="map-pane"
 			class:portal-expanded={mapExpanded}
+			class:desktop-expanded={mapDesktopExpanded}
 			class:no-map-transition={suppressMapTransition}
 			id="restaurant-map-panel"
 			bind:this={mapPaneEl}
@@ -568,6 +577,20 @@
 				</button>
 			{/if}
 		</div>
+		{#if !isMobileViewport()}
+			<button
+				type="button"
+				class="map-expand-toggle"
+				aria-pressed={mapDesktopExpanded}
+				aria-label={mapDesktopExpanded ? 'Collapse map pane' : 'Expand map pane'}
+				title={mapDesktopExpanded ? 'Collapse map pane' : 'Expand map pane'}
+				onclick={toggleDesktopMapExpanded}
+			>
+				{#if mapDesktopExpanded}
+					<Minimize2 size={16} aria-hidden="true" />
+				{:else}
+					<Maximize2 size={16} aria-hidden="true" />
+				{/if}
 			</button>
 		{/if}
 		<div class="list-pane" inert={mapExpanded && isMobileViewport() ? true : undefined}>
@@ -683,7 +706,7 @@
 		transition: none !important;
 	}
 
-	/* ── Desktop: CSS :has() hover morph (≥ 1024px) ─────────────────────── */
+	/* ── Desktop: expand via hover, focus-within, or pin (≥ 1024px) ─────── */
 	@media (min-width: 1024px) {
 		:global(html) {
 			height: 100%;
@@ -750,12 +773,16 @@
 			transition: flex-basis 0.4s ease, margin-left 0.4s ease;
 		}
 
-		/* Hover: map expands to 1/3, list retreats, layered depth collapses to flat */
-		.content-area:has(.map-pane:hover) .map-pane {
+		/* Hover / focus-within / pinned expand: map grows, list retreats, layered depth collapses */
+		.content-area:has(.map-pane:hover) .map-pane,
+		.content-area:has(.map-pane:focus-within) .map-pane,
+		.content-area:has(.map-pane.desktop-expanded) .map-pane {
 			flex-basis: 33.33%;
 		}
 
-		.content-area:has(.map-pane:hover) .list-pane {
+		.content-area:has(.map-pane:hover) .list-pane,
+		.content-area:has(.map-pane:focus-within) .list-pane,
+		.content-area:has(.map-pane.desktop-expanded) .list-pane {
 			flex-basis: 66.67%;
 			margin-left: 0;
 			box-shadow: none;
@@ -770,6 +797,32 @@
 			z-index: 0;
 		}
 
+		.map-expand-toggle {
+			position: absolute;
+			bottom: 12px;
+			left: 12px;
+			z-index: 3;
+			width: 36px;
+			height: 36px;
+			padding: 0;
+			border: 2px solid rgba(0, 0, 0, 0.2);
+			border-radius: 6px;
+			background: #fffcf8;
+			color: #3e2c23;
+			cursor: pointer;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			box-shadow: 0 1px 5px rgba(0, 0, 0, 0.15);
+			transition: background 0.15s, color 0.15s, border-color 0.15s;
+		}
+
+		.map-expand-toggle:hover,
+		.map-expand-toggle[aria-pressed='true'] {
+			background: #fff0eb;
+			color: #ff4500;
+			border-color: rgba(0, 0, 0, 0.3);
+		}
 	}
 
 	/* ── Mobile: explicit control opens the map sheet (< 1024px) ───────── */
@@ -882,4 +935,9 @@
 		}
 	}
 
+	@media (max-width: 1023px) {
+		.map-expand-toggle {
+			display: none;
+		}
+	}
 </style>
