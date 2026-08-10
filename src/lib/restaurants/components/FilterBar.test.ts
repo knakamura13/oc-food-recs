@@ -207,4 +207,43 @@ describe("FilterBar", () => {
     await user.click(btn);
     expect(appState.freshnessCutoff).toBeNull();
   });
+
+	it('exposes the collapsed mobile map control and reports its opener', async () => {
+		const user = userEvent.setup();
+		const onMapToggle = vi.fn();
+		const { container } = render(FilterBar, {
+			restaurants,
+			threadSubreddit,
+			restaurantsForHistogram: restaurants,
+			dateExtent,
+			mapExpanded: false,
+			onMapToggle
+		});
+		const mapButton = container.querySelector<HTMLButtonElement>('.mobile-map-trigger');
+
+		expect(mapButton).toBeInTheDocument();
+		expect(mapButton).toHaveTextContent(/^Map$/);
+		expect(mapButton).toHaveAccessibleName('Open map');
+		expect(mapButton).toHaveAttribute('aria-controls', 'restaurant-map-panel');
+		expect(mapButton).toHaveAttribute('aria-expanded', 'false');
+
+		await user.click(mapButton!);
+
+		expect(onMapToggle).toHaveBeenCalledWith(mapButton);
+	});
+
+	it('exposes the expanded mobile map state', () => {
+		const { container } = render(FilterBar, {
+			restaurants,
+			threadSubreddit,
+			restaurantsForHistogram: restaurants,
+			dateExtent,
+			mapExpanded: true
+		});
+		const mapButton = container.querySelector<HTMLButtonElement>('.mobile-map-trigger');
+
+		expect(mapButton).toBeInTheDocument();
+		expect(mapButton).toHaveAccessibleName('Close map');
+		expect(mapButton).toHaveAttribute('aria-expanded', 'true');
+	});
 });
