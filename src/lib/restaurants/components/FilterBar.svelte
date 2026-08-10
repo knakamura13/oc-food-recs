@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Bookmark, Share2 } from 'lucide-svelte';
+	import { Bookmark, Map as MapIcon, Share2 } from 'lucide-svelte';
 	import type { Restaurant } from '$lib/restaurants/types';
 	import {
 		appState,
@@ -22,9 +22,18 @@
 		restaurantsForHistogram: Restaurant[];
 		/** Full-dataset comment-date range (epoch ms) — the fixed slider/axis extent. */
 		dateExtent: { min: number; max: number };
+		mapExpanded?: boolean;
+		onMapToggle?: (opener: HTMLButtonElement) => void;
 	}
 
-	let { restaurants, threadSubreddit, restaurantsForHistogram, dateExtent }: Props = $props();
+	let {
+		restaurants,
+		threadSubreddit,
+		restaurantsForHistogram,
+		dateExtent,
+		mapExpanded = false,
+		onMapToggle
+	}: Props = $props();
 
 	let showCuisineDropdown = $state(false);
 	let showCityDropdown = $state(false);
@@ -351,6 +360,19 @@
 		</button>
 
 		<button
+			type="button"
+			class="dropdown-trigger mobile-map-trigger"
+			class:has-active={mapExpanded}
+			aria-label={mapExpanded ? 'Close map' : 'Open map'}
+			aria-expanded={mapExpanded}
+			aria-controls="restaurant-map-panel"
+			onclick={(event) => onMapToggle?.(event.currentTarget)}
+		>
+			<MapIcon size={13} aria-hidden="true" />
+			Map
+		</button>
+
+		<button
 			class="dropdown-trigger share-btn"
 			title="Share view"
 			aria-label="Share view"
@@ -617,6 +639,10 @@
 		cursor: not-allowed;
 	}
 
+	.mobile-map-trigger {
+		display: none;
+	}
+
 	.recency-panel {
 		min-width: 300px;
 	}
@@ -630,5 +656,11 @@
 	.pill:active {
 		transform: scale(0.95) translateY(0);
 		box-shadow: none;
+	}
+
+	@media (max-width: 1023px) {
+		.mobile-map-trigger {
+			display: inline-flex;
+		}
 	}
 </style>
