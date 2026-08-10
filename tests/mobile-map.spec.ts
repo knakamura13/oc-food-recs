@@ -1,4 +1,38 @@
-import { expect, test, type Locator, type Page, type Route } from '@playwright/test';
+import {
+	expect,
+	test,
+	type APIResponse,
+	type Locator,
+	type Page,
+	type Route
+} from '@playwright/test';
+
+const leafletSourceMarker = 'A JavaScript library for interactive maps';
+const javaScriptPattern = '**/*.js*';
+
+type LeafletJavaScriptHandler = (
+	route: Route,
+	response: APIResponse,
+	body: Buffer
+) => Promise<void>;
+
+async function interceptLeafletJavaScript(
+	page: Page,
+	handleLeaflet: LeafletJavaScriptHandler
+): Promise<() => Promise<void>> {
+	const handleJavaScript = async (route: Route) => {
+		const response = await route.fetch();
+		const body = await response.body();
+		if (!body.includes(leafletSourceMarker)) {
+			await route.fulfill({ response, body });
+			return;
+		}
+		await handleLeaflet(route, response, body);
+	};
+
+	await page.route(javaScriptPattern, handleJavaScript);
+	return () => page.unroute(javaScriptPattern, handleJavaScript);
+}
 
 const mobileViewports = [
 	{ width: 320, height: 700 },
@@ -94,6 +128,36 @@ async function expectVisibleRowActionsToBeHitTestable(page: Page) {
 	expect(blockedActions).toEqual([]);
 }
 
+async function highestRenderedTileZoom(page: Page): Promise<number> {
+	await expect(page.locator('.leaflet-tile').first()).toBeAttached({ timeout: 30_000 });
+	const zooms = await page.locator('.leaflet-tile').evaluateAll((tiles) =>
+		tiles.flatMap((tile) => {
+			if (!(tile instanceof HTMLImageElement)) return [];
+			const match = new URL(tile.src).pathname.match(/\/(\d+)\/\d+\/\d+\.png$/);
+			return match ? [Number(match[1])] : [];
+		})
+	);
+	if (zooms.length === 0) throw new Error('Leaflet rendered no identifiable map tiles');
+	return Math.max(...zooms);
+}
+
+async function wheelMapAndReadZoom(page: Page): Promise<{ before: number; after: number }> {
+	const map = page.locator('.map-container');
+	const box = await map.boundingBox();
+	if (!box) throw new Error('Map must be visible before using the wheel');
+	const before = await highestRenderedTileZoom(page);
+	await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+	await page.mouse.wheel(0, -720);
+	await page.evaluate(
+		() =>
+			new Promise<void>((resolve) => {
+				// Leaflet debounces the wheel for 40ms, then runs its zoom animation.
+				setTimeout(resolve, 450);
+			})
+	);
+	return { before, after: await highestRenderedTileZoom(page) };
+}
+
 test.describe('Mobile map interaction', () => {
 	test('disclosure opens an accessible sheet and Escape restores the opener', async ({
 		page
@@ -163,7 +227,6 @@ test.describe('Mobile map interaction', () => {
 		test.skip(testInfo.project.name !== 'Mobile Chrome', 'Mobile viewport only');
 		await page.setViewportSize({ width: 390, height: 844 });
 
-		const leafletPattern = '**/node_modules/.vite/deps/leaflet.js*';
 		let releaseLeaflet: () => void = () => {};
 		let finishLeafletHandler: () => void = () => {};
 		let leafletRequestHeld = false;
@@ -173,17 +236,17 @@ test.describe('Mobile map interaction', () => {
 		const leafletHandlerDone = new Promise<void>((resolve) => {
 			finishLeafletHandler = resolve;
 		});
-		const holdLeaflet = async (route: Route) => {
+		const holdLeaflet: LeafletJavaScriptHandler = async (route, response, body) => {
 			leafletRequestHeld = true;
 			try {
 				await leafletGate;
-				await route.continue();
+				await route.fulfill({ response, body });
 			} finally {
 				finishLeafletHandler();
 			}
 		};
 
-		await page.route(leafletPattern, holdLeaflet);
+		const removeLeafletInterception = await interceptLeafletJavaScript(page, holdLeaflet);
 		try {
 			await page.goto('/');
 			await firstRenderedRow(page);
@@ -202,26 +265,30 @@ test.describe('Mobile map interaction', () => {
 
 			await page.locator('.mobile-map-trigger').click();
 
-			await expect.poll(() => leafletRequestHeld).toBe(true);
 			await expect(mapContainer).toHaveAttribute('aria-busy', 'true');
 			const loadingStatus = page.getByRole('status');
 			await expect(loadingStatus).toHaveText('Loading map…');
+			await expect.poll(() => leafletRequestHeld).toBe(true);
 			expect(
 				await loadingStatus.evaluate(
 					(element) => element.closest('[aria-busy="true"]') === null
 				)
 			).toBe(true);
 			await expect(page.getByRole('application')).toHaveCount(0);
+			await page.setViewportSize({ width: 1024, height: 768 });
+			await expect(page.locator('.mobile-map-trigger')).toBeHidden();
 
 			releaseLeaflet();
 
 			await expect(page.locator('.leaflet-container')).toBeVisible({ timeout: 30_000 });
 			await expect(page.getByRole('status')).toHaveCount(0);
 			expect(await mapContainer.getAttribute('aria-busy')).toBeNull();
+			const zoom = await wheelMapAndReadZoom(page);
+			expect(zoom.after).toBeGreaterThan(zoom.before);
 		} finally {
 			releaseLeaflet();
 			if (leafletRequestHeld) await leafletHandlerDone;
-			await page.unroute(leafletPattern, holdLeaflet);
+			await removeLeafletInterception();
 		}
 	});
 
@@ -231,18 +298,17 @@ test.describe('Mobile map interaction', () => {
 		test.skip(testInfo.project.name !== 'Mobile Chrome', 'Mobile viewport only');
 		await page.setViewportSize({ width: 390, height: 844 });
 
-		const leafletPattern = '**/node_modules/.vite/deps/leaflet.js*';
 		let leafletAttempts = 0;
-		const failLeafletOnce = async (route: Route) => {
+		const failLeafletOnce: LeafletJavaScriptHandler = async (route, response, body) => {
 			leafletAttempts += 1;
 			if (leafletAttempts === 1) {
 				await route.abort('failed');
 				return;
 			}
-			await route.continue();
+			await route.fulfill({ response, body });
 		};
 
-		await page.route(leafletPattern, failLeafletOnce);
+		const removeLeafletInterception = await interceptLeafletJavaScript(page, failLeafletOnce);
 		try {
 			await page.goto('/');
 			await firstRenderedRow(page);
@@ -264,7 +330,7 @@ test.describe('Mobile map interaction', () => {
 			await expect(loadError).toHaveCount(0);
 			expect(await mapContainer.getAttribute('aria-busy')).toBeNull();
 		} finally {
-			await page.unroute(leafletPattern, failLeafletOnce);
+			await removeLeafletInterception();
 		}
 	});
 
@@ -420,6 +486,126 @@ test.describe('Mobile map interaction', () => {
 		await expect(page.locator('#restaurant-map-panel')).toBeHidden();
 		await expect(backToTop).toBeVisible();
 		await expect.poll(() => listScroll.evaluate((element) => element.scrollTop)).toBeGreaterThan(300);
+	});
+
+	test('mobile-initialized map enables wheel zoom after crossing to desktop', async ({
+		page
+	}, testInfo) => {
+		test.skip(testInfo.project.name !== 'Mobile Chrome', 'Mobile initialization only');
+		await page.setViewportSize({ width: 390, height: 844 });
+		await page.goto('/');
+		await firstRenderedRow(page);
+
+		await page.locator('.mobile-map-trigger').click();
+		await expect(page.locator('.leaflet-container')).toBeVisible({ timeout: 30_000 });
+		await page.setViewportSize({ width: 1024, height: 768 });
+		await expect(page.locator('.mobile-map-trigger')).toBeHidden();
+		await expect(page.locator('.map-container')).toBeVisible();
+
+		const zoom = await wheelMapAndReadZoom(page);
+		expect(zoom.after).toBeGreaterThan(zoom.before);
+	});
+
+	test('desktop-initialized map disables wheel zoom after crossing to mobile', async ({
+		page
+	}, testInfo) => {
+		test.skip(testInfo.project.name !== 'Desktop Chrome', 'Desktop initialization only');
+		await page.setViewportSize({ width: 1024, height: 768 });
+		await page.goto('/');
+		await firstRenderedRow(page);
+		await expect(page.locator('.leaflet-container')).toBeVisible({ timeout: 30_000 });
+
+		await page.setViewportSize({ width: 390, height: 844 });
+		await page.locator('.mobile-map-trigger').click();
+		await expect(page.locator('#restaurant-map-panel')).toBeVisible();
+
+		const zoom = await wheelMapAndReadZoom(page);
+		expect(zoom.after).toBe(zoom.before);
+	});
+
+	test('reduced-motion map open and close completes without runtime errors', async ({
+		page
+	}, testInfo) => {
+		test.skip(testInfo.project.name !== 'Mobile Chrome', 'Mobile viewport only');
+		const runtimeErrors: string[] = [];
+		page.on('console', (message) => {
+			if (message.type() === 'error') runtimeErrors.push(`console: ${message.text()}`);
+		});
+		page.on('pageerror', (error) => runtimeErrors.push(`page: ${error.message}`));
+		await page.emulateMedia({ reducedMotion: 'reduce' });
+		await page.setViewportSize({ width: 390, height: 844 });
+		await page.goto('/');
+		await firstRenderedRow(page);
+
+		const mapTrigger = page.locator('.mobile-map-trigger');
+		await mapTrigger.click();
+		await expect(page.locator('.leaflet-container')).toBeVisible({ timeout: 30_000 });
+		await page.locator('.map-close-btn').click();
+
+		await expect(page.locator('#restaurant-map-panel')).toBeHidden();
+		await expect(mapTrigger).toBeFocused();
+		await page.evaluate(
+			() =>
+				new Promise<void>((resolve) => {
+					requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+				})
+		);
+		expect(runtimeErrors).toEqual([]);
+	});
+
+	test('geolocation reports its controlled permission error after loading', async ({
+		page
+	}, testInfo) => {
+		test.skip(testInfo.project.name !== 'Mobile Chrome', 'Mobile viewport only');
+		await page.addInitScript(() => {
+			let rejectPermission: (() => void) | undefined;
+			Object.defineProperty(navigator, 'geolocation', {
+				configurable: true,
+				value: {
+					getCurrentPosition(
+						_success: PositionCallback,
+						error?: PositionErrorCallback
+					) {
+						rejectPermission = () =>
+							error?.({
+								code: 1,
+								message: 'Permission denied by test',
+								PERMISSION_DENIED: 1,
+								POSITION_UNAVAILABLE: 2,
+								TIMEOUT: 3
+							} as GeolocationPositionError);
+					}
+				}
+			});
+			(window as Window & { __rejectGeolocation?: () => void }).__rejectGeolocation = () =>
+				rejectPermission?.();
+		});
+		await page.setViewportSize({ width: 390, height: 844 });
+		await page.goto('/');
+		await firstRenderedRow(page);
+		await page.locator('.mobile-map-trigger').click();
+		await expect(page.locator('.leaflet-container')).toBeVisible({ timeout: 30_000 });
+
+		const locateButton = page.getByRole('button', { name: 'Jump to my current location' });
+		expect(
+			await locateButton.evaluate((button) => {
+				const rect = button.getBoundingClientRect();
+				const hit = document.elementFromPoint(
+					rect.left + rect.width / 2,
+					rect.top + rect.height / 2
+				);
+				return hit === button || button.contains(hit);
+			})
+		).toBe(true);
+		await locateButton.click();
+		await expect(locateButton).toBeDisabled();
+		await expect(locateButton.locator('.spinner')).toBeVisible();
+
+		await page.evaluate(() =>
+			(window as Window & { __rejectGeolocation?: () => void }).__rejectGeolocation?.()
+		);
+		await expect(page.getByRole('alert')).toHaveText('Location access denied');
+		await expect(locateButton).toBeEnabled();
 	});
 
 	test('desktop breakpoint closes the mobile disclosure and focuses the inline map', async ({

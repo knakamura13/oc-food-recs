@@ -36,7 +36,7 @@ test.describe("Shareable URL state", () => {
       "Desktop viewport only",
     );
     await page.goto("/");
-    const initialRow = page.locator(".row[id^='restaurant-']").first();
+		const initialRow = page.locator('.row[id^="restaurant-"]').first();
     await expect(initialRow).toBeVisible();
     const slug = await initialRow.getAttribute("id");
     expect(slug).toMatch(/^restaurant-.+/);

@@ -359,18 +359,20 @@
 			Show unmapped
 		</button>
 
-		<button
-			type="button"
-			class="dropdown-trigger mobile-map-trigger"
-			class:has-active={mapExpanded}
-			aria-label={mapExpanded ? 'Close map' : 'Open map'}
-			aria-expanded={mapExpanded}
-			aria-controls="restaurant-map-panel"
-			onclick={(event) => onMapToggle?.(event.currentTarget)}
-		>
-			<MapIcon size={13} aria-hidden="true" />
-			Map
-		</button>
+		{#if onMapToggle}
+			<button
+				type="button"
+				class="dropdown-trigger mobile-map-trigger"
+				class:has-active={mapExpanded}
+				aria-label={mapExpanded ? 'Close map' : 'Open map'}
+				aria-expanded={mapExpanded}
+				aria-controls="restaurant-map-panel"
+				onclick={(event) => onMapToggle?.(event.currentTarget)}
+			>
+				<MapIcon size={13} aria-hidden="true" />
+				Map
+			</button>
+		{/if}
 
 		<button
 			class="dropdown-trigger share-btn"
