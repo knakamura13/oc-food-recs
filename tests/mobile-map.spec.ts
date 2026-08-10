@@ -193,7 +193,8 @@ test.describe('Mobile map interaction', () => {
 		await expect(mapTrigger).toHaveAttribute('aria-expanded', 'true');
 		await expect(mapPane).toBeVisible();
 		await expect(mapPane).toHaveClass(/portal-expanded/);
-		await expect(mapPane).toHaveAttribute('role', 'region');
+		await expect(mapPane).toHaveAttribute('role', 'dialog');
+		await expect(mapPane).toHaveAttribute('aria-modal', 'true');
 		await expect(mapPane).toHaveAccessibleName('Restaurant map');
 		await expect(page.locator('.leaflet-container')).toBeVisible({ timeout: 30_000 });
 		await expect(page.getByRole('application')).toBeVisible();
@@ -202,6 +203,28 @@ test.describe('Mobile map interaction', () => {
 		await expect(closeButton).toBeFocused();
 		await expect(listPane).toHaveAttribute('inert', '');
 		await expect(page.locator('html')).toHaveClass(/mobile-map-expanded-lock/);
+
+		// Focus trap: Tab / Shift+Tab stay inside the dialog
+		for (let i = 0; i < 12; i += 1) {
+			await page.keyboard.press('Tab');
+			expect(
+				await page.evaluate(() => {
+					const pane = document.getElementById('restaurant-map-panel');
+					const active = document.activeElement;
+					return Boolean(pane && active && pane.contains(active));
+				})
+			).toBe(true);
+		}
+		await closeButton.focus();
+		await page.keyboard.press('Shift+Tab');
+		expect(
+			await page.evaluate(() => {
+				const pane = document.getElementById('restaurant-map-panel');
+				const active = document.activeElement;
+				return Boolean(pane && active && pane.contains(active) && active !== pane.querySelector('.map-close-btn'));
+			})
+		).toBe(true);
+		await closeButton.focus();
 
 		const searchInput = page.getByRole('combobox', { name: /search restaurants/i });
 		await expect(searchInput).toBeVisible();
@@ -742,6 +765,8 @@ test.describe('Mobile map interaction', () => {
 				await expect(page.locator('.mobile-map-trigger')).toBeHidden();
 				await expect(mapPane).toBeVisible();
 				await expect(mapPane).not.toHaveAttribute('role', 'button');
+				await expect(mapPane).not.toHaveAttribute('role', 'dialog');
+				await expect(mapPane).not.toHaveAttribute('aria-modal', 'true');
 				await expect(mapPane).not.toHaveAttribute('tabindex', '0');
 				await expect(page.locator('.leaflet-container')).toBeVisible({ timeout: 30_000 });
 				await expect(page.getByRole('application')).toBeVisible();
@@ -755,5 +780,59 @@ test.describe('Mobile map interaction', () => {
 				await expect(page.locator('html')).not.toHaveClass(/mobile-map-expanded-lock/);
 			});
 		}
+	});
+
+	test('desktop map pane expands without hover via pin control and focus-within', async ({
+		page
+	}, testInfo) => {
+		test.skip(testInfo.project.name !== 'Desktop Chrome', 'Desktop viewport only');
+		await page.setViewportSize({ width: 1280, height: 800 });
+		await page.goto('/');
+		await firstRenderedRow(page);
+		await expect(page.locator('.leaflet-container')).toBeVisible({ timeout: 30_000 });
+
+		const mapPane = page.locator('#restaurant-map-panel');
+		const expandToggle = page.locator('.map-expand-toggle');
+		await expect(expandToggle).toBeVisible();
+		await expect(expandToggle).toHaveAccessibleName('Expand map pane');
+		await expect(expandToggle).toHaveAttribute('aria-pressed', 'false');
+
+		const collapsedWidth = await mapPane.evaluate((pane) => pane.getBoundingClientRect().width);
+
+		// Keyboard/focus path: focusing map chrome expands via :focus-within
+		await page.getByRole('button', { name: 'Zoom in' }).focus();
+		await expect
+			.poll(async () => mapPane.evaluate((pane) => pane.getBoundingClientRect().width))
+			.toBeGreaterThan(collapsedWidth + 20);
+
+		await page.locator('.list-pane').click({ position: { x: 40, y: 40 } });
+		await expect
+			.poll(async () => mapPane.evaluate((pane) => pane.getBoundingClientRect().width))
+			.toBeLessThanOrEqual(collapsedWidth + 8);
+
+		await expandToggle.click();
+		await expect(expandToggle).toHaveAccessibleName('Collapse map pane');
+		await expect(expandToggle).toHaveAttribute('aria-pressed', 'true');
+		await expect(mapPane).toHaveClass(/desktop-expanded/);
+		await expect
+			.poll(async () => mapPane.evaluate((pane) => pane.getBoundingClientRect().width))
+			.toBeGreaterThan(collapsedWidth + 20);
+
+		await page.locator('.list-pane').click({ position: { x: 40, y: 40 } });
+		await expect
+			.poll(async () => mapPane.evaluate((pane) => pane.getBoundingClientRect().width))
+			.toBeGreaterThan(collapsedWidth + 20);
+
+		await expandToggle.click();
+		await expect(expandToggle).toHaveAccessibleName('Expand map pane');
+		await expect(expandToggle).toHaveAttribute('aria-pressed', 'false');
+		await expect(mapPane).not.toHaveClass(/desktop-expanded/);
+		await expect
+			.poll(async () => mapPane.evaluate((pane) => pane.getBoundingClientRect().width))
+			.toBeLessThanOrEqual(collapsedWidth + 8);
+
+		await page.setViewportSize({ width: 390, height: 844 });
+		await expect(expandToggle).toHaveCount(0);
+		await expect(page.locator('.mobile-map-trigger')).toBeVisible();
 	});
 });

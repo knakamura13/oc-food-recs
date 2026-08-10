@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { X } from 'lucide-svelte';
+	import { Maximize2, Minimize2, X } from 'lucide-svelte';
 	import { onMount, tick } from 'svelte';
 	import { afterNavigate, replaceState } from '$app/navigation';
 	import type { Restaurant } from '$lib/restaurants/types';
@@ -28,6 +28,23 @@
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
+
+	const FOCUSABLE_SELECTOR = [
+		'a[href]',
+		'button:not([disabled])',
+		'input:not([disabled])',
+		'select:not([disabled])',
+		'textarea:not([disabled])',
+		'[tabindex]:not([tabindex="-1"])'
+	].join(', ');
+
+	function getFocusableElements(container: HTMLElement): HTMLElement[] {
+		return [...container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)].filter((el) => {
+			if (el.closest('[inert]')) return false;
+			if (el.closest('[aria-hidden="true"]')) return false;
+			return el.getClientRects().length > 0;
+		});
+	}
 
 	const allRestaurants: Restaurant[] = $derived.by(() =>
 		(data.dataset.restaurants as Restaurant[]).map((r) => ({
@@ -72,8 +89,10 @@
 	let prevSavedOnly = $state(false);
 
 	let mapExpanded = $state(false);
+	let mapDesktopExpanded = $state(false);
 	let mapOpener = $state<HTMLButtonElement | null>(null);
 	let mapCloseButton = $state<HTMLButtonElement | undefined>(undefined);
+	let mapPaneEl = $state<HTMLDivElement | undefined>(undefined);
 	let appTrapEl = $state<HTMLDivElement | undefined>(undefined);
 	let controlsBarEl = $state<HTMLDivElement | undefined>(undefined);
 	/** Subscribed by mobile-map $effect so resize clears scroll lock when crossing the breakpoint */
@@ -220,10 +239,48 @@
 		}
 	}
 
-	function handleMobileMapEscape(event: KeyboardEvent) {
-		if (event.key !== 'Escape' || !mapExpanded || !isMobileViewport()) return;
-		event.preventDefault();
-		closeMobileMap();
+	function toggleDesktopMapExpanded() {
+		if (isMobileViewport()) return;
+		mapDesktopExpanded = !mapDesktopExpanded;
+	}
+
+	function handleMobileMapKeydown(event: KeyboardEvent) {
+		if (!mapExpanded || !isMobileViewport()) return;
+
+		if (event.key === 'Escape') {
+			event.preventDefault();
+			closeMobileMap();
+			return;
+		}
+
+		if (event.key !== 'Tab') return;
+
+		const pane = mapPaneEl ?? document.getElementById('restaurant-map-panel');
+		if (!(pane instanceof HTMLElement)) return;
+
+		const focusables = getFocusableElements(pane);
+		if (focusables.length === 0) {
+			event.preventDefault();
+			return;
+		}
+
+		const first = focusables[0];
+		const last = focusables[focusables.length - 1];
+		const active = document.activeElement;
+		const activeInside = active instanceof HTMLElement && pane.contains(active);
+
+		if (event.shiftKey) {
+			if (!activeInside || active === first) {
+				event.preventDefault();
+				last.focus();
+			}
+			return;
+		}
+
+		if (!activeInside || active === last) {
+			event.preventDefault();
+			first.focus();
+		}
 	}
 
 	// Mobile expanded map: snap shell to top, lock page scroll, measure controls for map placement
@@ -393,6 +450,9 @@
 			if (crossedToDesktop && mapExpanded) {
 				closeMobileMap({ focusDesktopMap: true });
 			}
+			if (nextIsMobile) {
+				mapDesktopExpanded = false;
+			}
 			// Kill the map-pane transition for the duration of the resize so crossing the
 			// 1024px breakpoint switches layouts instantly; re-enable once the drag settles.
 			suppressMapTransition = true;
@@ -461,7 +521,7 @@
 	<link rel="dns-prefetch" href="https://c.tile.openstreetmap.org" />
 </svelte:head>
 
-<svelte:window onkeydown={handleMobileMapEscape} />
+<svelte:window onkeydown={handleMobileMapKeydown} />
 
 <section class="hero-section">
 	<Hero meta={data.dataset.meta} />
@@ -483,9 +543,12 @@
 		<div
 			class="map-pane"
 			class:portal-expanded={mapExpanded}
+			class:desktop-expanded={mapDesktopExpanded}
 			class:no-map-transition={suppressMapTransition}
 			id="restaurant-map-panel"
-			role={mapExpanded && isMobileViewport() ? 'region' : undefined}
+			bind:this={mapPaneEl}
+			role={mapExpanded && isMobileViewport() ? 'dialog' : undefined}
+			aria-modal={mapExpanded && isMobileViewport() ? 'true' : undefined}
 			aria-label={mapExpanded && isMobileViewport() ? 'Restaurant map' : undefined}
 			aria-hidden={isMobileViewport() && !mapExpanded ? 'true' : undefined}
 			inert={isMobileViewport() && !mapExpanded ? true : undefined}
@@ -514,6 +577,22 @@
 				</button>
 			{/if}
 		</div>
+		{#if !isMobileViewport()}
+			<button
+				type="button"
+				class="map-expand-toggle"
+				aria-pressed={mapDesktopExpanded}
+				aria-label={mapDesktopExpanded ? 'Collapse map pane' : 'Expand map pane'}
+				title={mapDesktopExpanded ? 'Collapse map pane' : 'Expand map pane'}
+				onclick={toggleDesktopMapExpanded}
+			>
+				{#if mapDesktopExpanded}
+					<Minimize2 size={16} aria-hidden="true" />
+				{:else}
+					<Maximize2 size={16} aria-hidden="true" />
+				{/if}
+			</button>
+		{/if}
 		<div class="list-pane" inert={mapExpanded && isMobileViewport() ? true : undefined}>
 			<RestaurantList
 				restaurants={filteredRestaurants}
@@ -627,7 +706,7 @@
 		transition: none !important;
 	}
 
-	/* ── Desktop: CSS :has() hover morph (≥ 1024px) ─────────────────────── */
+	/* ── Desktop: expand via hover, focus-within, or pin (≥ 1024px) ─────── */
 	@media (min-width: 1024px) {
 		:global(html) {
 			height: 100%;
@@ -694,12 +773,16 @@
 			transition: flex-basis 0.4s ease, margin-left 0.4s ease;
 		}
 
-		/* Hover: map expands to 1/3, list retreats, layered depth collapses to flat */
-		.content-area:has(.map-pane:hover) .map-pane {
+		/* Hover / focus-within / pinned expand: map grows, list retreats, layered depth collapses */
+		.content-area:has(.map-pane:hover) .map-pane,
+		.content-area:has(.map-pane:focus-within) .map-pane,
+		.content-area:has(.map-pane.desktop-expanded) .map-pane {
 			flex-basis: 33.33%;
 		}
 
-		.content-area:has(.map-pane:hover) .list-pane {
+		.content-area:has(.map-pane:hover) .list-pane,
+		.content-area:has(.map-pane:focus-within) .list-pane,
+		.content-area:has(.map-pane.desktop-expanded) .list-pane {
 			flex-basis: 66.67%;
 			margin-left: 0;
 			box-shadow: none;
@@ -712,6 +795,33 @@
 			flex-direction: column;
 			position: relative;
 			z-index: 0;
+		}
+
+		.map-expand-toggle {
+			position: absolute;
+			bottom: 12px;
+			left: 12px;
+			z-index: 3;
+			width: 36px;
+			height: 36px;
+			padding: 0;
+			border: 2px solid rgba(0, 0, 0, 0.2);
+			border-radius: 6px;
+			background: #fffcf8;
+			color: #3e2c23;
+			cursor: pointer;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			box-shadow: 0 1px 5px rgba(0, 0, 0, 0.15);
+			transition: background 0.15s, color 0.15s, border-color 0.15s;
+		}
+
+		.map-expand-toggle:hover,
+		.map-expand-toggle[aria-pressed='true'] {
+			background: #fff0eb;
+			color: #ff4500;
+			border-color: rgba(0, 0, 0, 0.3);
 		}
 	}
 
@@ -821,6 +931,12 @@
 		}
 
 		.portal-backdrop {
+			display: none;
+		}
+	}
+
+	@media (max-width: 1023px) {
+		.map-expand-toggle {
 			display: none;
 		}
 	}
