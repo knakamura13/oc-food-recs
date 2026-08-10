@@ -108,7 +108,7 @@ export const load: PageServerLoad = async ({ url }) => {
 				) AS mentions,
 				COUNT(*) FILTER (WHERE rm.classification = 'dish_rec')::int AS dish_rec_count,
 				(
-					SELECT LEFT(TRIM(sub.body), 80)
+					SELECT TRIM(sub.body)
 					FROM ranked_mentions sub
 					WHERE sub.restaurant_id = r.id
 						AND sub.classification = 'dish_rec'
