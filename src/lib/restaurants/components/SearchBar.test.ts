@@ -139,6 +139,17 @@ describe("SearchBar", () => {
     expect(event.defaultPrevented).toBe(true);
   });
 
+  it("shows a platform-aware keyboard shortcut hint", () => {
+    Object.defineProperty(navigator, "platform", {
+      configurable: true,
+      value: "Win32",
+    });
+    render(SearchBar, { restaurants, cuisineNames, cityNames });
+    expect(
+      screen.getByLabelText(/keyboard shortcut ctrl\+k or \//i),
+    ).toHaveTextContent("Ctrl+K");
+  });
+
   it("shows a no-matches message when the query has no fuzzy hits", async () => {
     const user = userEvent.setup();
     render(SearchBar, { restaurants, cuisineNames, cityNames });
