@@ -98,6 +98,9 @@ describe("FilterBar", () => {
     expect(
       screen.getByRole("button", { name: /clear all/i }),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /remove search filter for ramen/i }),
+    ).toBeInTheDocument();
   });
 
   it("hides Clear all when search is whitespace-only", () => {
@@ -110,6 +113,9 @@ describe("FilterBar", () => {
     });
     expect(
       screen.queryByRole("button", { name: /clear all/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /remove search filter/i }),
     ).not.toBeInTheDocument();
   });
 
@@ -128,6 +134,21 @@ describe("FilterBar", () => {
     expect(appState.activeCities).toEqual([]);
   });
 
+  it("shows and clears a search pill", async () => {
+    const user = userEvent.setup();
+    appState.searchQuery = "tacos";
+    render(FilterBar, {
+      restaurants,
+      threadSubreddit,
+      restaurantsForHistogram: restaurants,
+      dateExtent,
+    });
+    await user.click(
+      screen.getByRole("button", { name: /remove search filter for tacos/i }),
+    );
+    expect(appState.searchQuery).toBe("");
+  });
+
   it("toggles show unmapped via filter bar", async () => {
     const user = userEvent.setup();
     render(FilterBar, {
@@ -139,7 +160,12 @@ describe("FilterBar", () => {
     const toggle = screen.getByRole("button", { name: /show unmapped/i });
     await user.click(toggle);
     expect(appState.showUnmapped).toBe(true);
-    await user.click(toggle);
+    expect(
+      screen.getByRole("button", { name: /remove show unmapped filter/i }),
+    ).toBeInTheDocument();
+    await user.click(
+      screen.getByRole("button", { name: /remove show unmapped filter/i }),
+    );
     expect(appState.showUnmapped).toBe(false);
   });
 
@@ -208,54 +234,60 @@ describe("FilterBar", () => {
     expect(appState.freshnessCutoff).toBeNull();
   });
 
-	it('exposes the collapsed mobile map control and reports its opener', async () => {
-		const user = userEvent.setup();
-		const onMapToggle = vi.fn();
-		const { container } = render(FilterBar, {
-			restaurants,
-			threadSubreddit,
-			restaurantsForHistogram: restaurants,
-			dateExtent,
-			mapExpanded: false,
-			onMapToggle
-		});
-		const mapButton = container.querySelector<HTMLButtonElement>('.mobile-map-trigger');
+  it("exposes the collapsed mobile map control and reports its opener", async () => {
+    const user = userEvent.setup();
+    const onMapToggle = vi.fn();
+    const { container } = render(FilterBar, {
+      restaurants,
+      threadSubreddit,
+      restaurantsForHistogram: restaurants,
+      dateExtent,
+      mapExpanded: false,
+      onMapToggle,
+    });
+    const mapButton = container.querySelector<HTMLButtonElement>(
+      ".mobile-map-trigger",
+    );
 
-		expect(mapButton).toBeInTheDocument();
-		expect(mapButton).toHaveTextContent(/^Map$/);
-		expect(mapButton).toHaveAccessibleName('Open map');
-		expect(mapButton).toHaveAttribute('aria-controls', 'restaurant-map-panel');
-		expect(mapButton).toHaveAttribute('aria-expanded', 'false');
+    expect(mapButton).toBeInTheDocument();
+    expect(mapButton).toHaveTextContent(/^Map$/);
+    expect(mapButton).toHaveAccessibleName("Open map");
+    expect(mapButton).toHaveAttribute("aria-controls", "restaurant-map-panel");
+    expect(mapButton).toHaveAttribute("aria-expanded", "false");
 
-		await user.click(mapButton!);
+    await user.click(mapButton!);
 
-		expect(onMapToggle).toHaveBeenCalledWith(mapButton);
-	});
+    expect(onMapToggle).toHaveBeenCalledWith(mapButton);
+  });
 
-	it('omits the mobile map control when no toggle handler is available', () => {
-		const { container } = render(FilterBar, {
-			restaurants,
-			threadSubreddit,
-			restaurantsForHistogram: restaurants,
-			dateExtent
-		});
+  it("omits the mobile map control when no toggle handler is available", () => {
+    const { container } = render(FilterBar, {
+      restaurants,
+      threadSubreddit,
+      restaurantsForHistogram: restaurants,
+      dateExtent,
+    });
 
-		expect(container.querySelector('.mobile-map-trigger')).not.toBeInTheDocument();
-	});
+    expect(
+      container.querySelector(".mobile-map-trigger"),
+    ).not.toBeInTheDocument();
+  });
 
-	it('exposes the expanded mobile map state', () => {
-		const { container } = render(FilterBar, {
-			restaurants,
-			threadSubreddit,
-			restaurantsForHistogram: restaurants,
-			dateExtent,
-			mapExpanded: true,
-			onMapToggle: vi.fn()
-		});
-		const mapButton = container.querySelector<HTMLButtonElement>('.mobile-map-trigger');
+  it("exposes the expanded mobile map state", () => {
+    const { container } = render(FilterBar, {
+      restaurants,
+      threadSubreddit,
+      restaurantsForHistogram: restaurants,
+      dateExtent,
+      mapExpanded: true,
+      onMapToggle: vi.fn(),
+    });
+    const mapButton = container.querySelector<HTMLButtonElement>(
+      ".mobile-map-trigger",
+    );
 
-		expect(mapButton).toBeInTheDocument();
-		expect(mapButton).toHaveAccessibleName('Close map');
-		expect(mapButton).toHaveAttribute('aria-expanded', 'true');
-	});
+    expect(mapButton).toBeInTheDocument();
+    expect(mapButton).toHaveAccessibleName("Close map");
+    expect(mapButton).toHaveAttribute("aria-expanded", "true");
+  });
 });
