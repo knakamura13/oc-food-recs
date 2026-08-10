@@ -459,6 +459,16 @@ test.describe('Mobile map interaction', () => {
 		await firstRenderedRow(page);
 
 		const listScroll = page.locator('.list-scroll');
+		// CI seeds only two rows, so this lifecycle test owns a data-independent
+		// scroll precondition instead of coupling it to fixture cardinality.
+		await listScroll.evaluate((element) => {
+			const spacer = element.querySelector<HTMLElement>('.virtual-spacer');
+			if (!spacer) throw new Error('Missing virtual spacer');
+			spacer.style.minHeight = `${element.clientHeight + 500}px`;
+		});
+		await expect
+			.poll(() => listScroll.evaluate((element) => element.scrollHeight - element.clientHeight))
+			.toBeGreaterThan(300);
 		await listScroll.evaluate((element) => element.scrollTo({ top: 500, behavior: 'auto' }));
 		await expect.poll(() => listScroll.evaluate((element) => element.scrollTop)).toBeGreaterThan(300);
 
