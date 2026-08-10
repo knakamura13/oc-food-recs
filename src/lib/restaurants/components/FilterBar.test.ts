@@ -232,13 +232,25 @@ describe("FilterBar", () => {
 		expect(onMapToggle).toHaveBeenCalledWith(mapButton);
 	});
 
+	it('omits the mobile map control when no toggle handler is available', () => {
+		const { container } = render(FilterBar, {
+			restaurants,
+			threadSubreddit,
+			restaurantsForHistogram: restaurants,
+			dateExtent
+		});
+
+		expect(container.querySelector('.mobile-map-trigger')).not.toBeInTheDocument();
+	});
+
 	it('exposes the expanded mobile map state', () => {
 		const { container } = render(FilterBar, {
 			restaurants,
 			threadSubreddit,
 			restaurantsForHistogram: restaurants,
 			dateExtent,
-			mapExpanded: true
+			mapExpanded: true,
+			onMapToggle: vi.fn()
 		});
 		const mapButton = container.querySelector<HTMLButtonElement>('.mobile-map-trigger');
 
