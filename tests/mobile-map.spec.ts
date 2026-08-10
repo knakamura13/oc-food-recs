@@ -193,7 +193,8 @@ test.describe('Mobile map interaction', () => {
 		await expect(mapTrigger).toHaveAttribute('aria-expanded', 'true');
 		await expect(mapPane).toBeVisible();
 		await expect(mapPane).toHaveClass(/portal-expanded/);
-		await expect(mapPane).toHaveAttribute('role', 'region');
+		await expect(mapPane).toHaveAttribute('role', 'dialog');
+		await expect(mapPane).toHaveAttribute('aria-modal', 'true');
 		await expect(mapPane).toHaveAccessibleName('Restaurant map');
 		await expect(page.locator('.leaflet-container')).toBeVisible({ timeout: 30_000 });
 		await expect(page.getByRole('application')).toBeVisible();
@@ -202,6 +203,28 @@ test.describe('Mobile map interaction', () => {
 		await expect(closeButton).toBeFocused();
 		await expect(listPane).toHaveAttribute('inert', '');
 		await expect(page.locator('html')).toHaveClass(/mobile-map-expanded-lock/);
+
+		// Focus trap: Tab / Shift+Tab stay inside the dialog
+		for (let i = 0; i < 12; i += 1) {
+			await page.keyboard.press('Tab');
+			expect(
+				await page.evaluate(() => {
+					const pane = document.getElementById('restaurant-map-panel');
+					const active = document.activeElement;
+					return Boolean(pane && active && pane.contains(active));
+				})
+			).toBe(true);
+		}
+		await closeButton.focus();
+		await page.keyboard.press('Shift+Tab');
+		expect(
+			await page.evaluate(() => {
+				const pane = document.getElementById('restaurant-map-panel');
+				const active = document.activeElement;
+				return Boolean(pane && active && pane.contains(active) && active !== pane.querySelector('.map-close-btn'));
+			})
+		).toBe(true);
+		await closeButton.focus();
 
 		const searchInput = page.getByRole('combobox', { name: /search restaurants/i });
 		await expect(searchInput).toBeVisible();
@@ -742,6 +765,8 @@ test.describe('Mobile map interaction', () => {
 				await expect(page.locator('.mobile-map-trigger')).toBeHidden();
 				await expect(mapPane).toBeVisible();
 				await expect(mapPane).not.toHaveAttribute('role', 'button');
+				await expect(mapPane).not.toHaveAttribute('role', 'dialog');
+				await expect(mapPane).not.toHaveAttribute('aria-modal', 'true');
 				await expect(mapPane).not.toHaveAttribute('tabindex', '0');
 				await expect(page.locator('.leaflet-container')).toBeVisible({ timeout: 30_000 });
 				await expect(page.getByRole('application')).toBeVisible();
@@ -756,4 +781,5 @@ test.describe('Mobile map interaction', () => {
 			});
 		}
 	});
+
 });

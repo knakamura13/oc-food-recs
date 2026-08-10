@@ -29,6 +29,23 @@
 
 	let { data }: { data: PageData } = $props();
 
+	const FOCUSABLE_SELECTOR = [
+		'a[href]',
+		'button:not([disabled])',
+		'input:not([disabled])',
+		'select:not([disabled])',
+		'textarea:not([disabled])',
+		'[tabindex]:not([tabindex="-1"])'
+	].join(', ');
+
+	function getFocusableElements(container: HTMLElement): HTMLElement[] {
+		return [...container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)].filter((el) => {
+			if (el.closest('[inert]')) return false;
+			if (el.closest('[aria-hidden="true"]')) return false;
+			return el.getClientRects().length > 0;
+		});
+	}
+
 	const allRestaurants: Restaurant[] = $derived.by(() =>
 		(data.dataset.restaurants as Restaurant[]).map((r) => ({
 			...r,
@@ -74,6 +91,7 @@
 	let mapExpanded = $state(false);
 	let mapOpener = $state<HTMLButtonElement | null>(null);
 	let mapCloseButton = $state<HTMLButtonElement | undefined>(undefined);
+	let mapPaneEl = $state<HTMLDivElement | undefined>(undefined);
 	let appTrapEl = $state<HTMLDivElement | undefined>(undefined);
 	let controlsBarEl = $state<HTMLDivElement | undefined>(undefined);
 	/** Subscribed by mobile-map $effect so resize clears scroll lock when crossing the breakpoint */
@@ -220,10 +238,44 @@
 		}
 	}
 
-	function handleMobileMapEscape(event: KeyboardEvent) {
-		if (event.key !== 'Escape' || !mapExpanded || !isMobileViewport()) return;
-		event.preventDefault();
-		closeMobileMap();
+
+	function handleMobileMapKeydown(event: KeyboardEvent) {
+		if (!mapExpanded || !isMobileViewport()) return;
+
+		if (event.key === 'Escape') {
+			event.preventDefault();
+			closeMobileMap();
+			return;
+		}
+
+		if (event.key !== 'Tab') return;
+
+		const pane = mapPaneEl ?? document.getElementById('restaurant-map-panel');
+		if (!(pane instanceof HTMLElement)) return;
+
+		const focusables = getFocusableElements(pane);
+		if (focusables.length === 0) {
+			event.preventDefault();
+			return;
+		}
+
+		const first = focusables[0];
+		const last = focusables[focusables.length - 1];
+		const active = document.activeElement;
+		const activeInside = active instanceof HTMLElement && pane.contains(active);
+
+		if (event.shiftKey) {
+			if (!activeInside || active === first) {
+				event.preventDefault();
+				last.focus();
+			}
+			return;
+		}
+
+		if (!activeInside || active === last) {
+			event.preventDefault();
+			first.focus();
+		}
 	}
 
 	// Mobile expanded map: snap shell to top, lock page scroll, measure controls for map placement
@@ -461,7 +513,7 @@
 	<link rel="dns-prefetch" href="https://c.tile.openstreetmap.org" />
 </svelte:head>
 
-<svelte:window onkeydown={handleMobileMapEscape} />
+<svelte:window onkeydown={handleMobileMapKeydown} />
 
 <section class="hero-section">
 	<Hero meta={data.dataset.meta} />
@@ -485,7 +537,9 @@
 			class:portal-expanded={mapExpanded}
 			class:no-map-transition={suppressMapTransition}
 			id="restaurant-map-panel"
-			role={mapExpanded && isMobileViewport() ? 'region' : undefined}
+			bind:this={mapPaneEl}
+			role={mapExpanded && isMobileViewport() ? 'dialog' : undefined}
+			aria-modal={mapExpanded && isMobileViewport() ? 'true' : undefined}
 			aria-label={mapExpanded && isMobileViewport() ? 'Restaurant map' : undefined}
 			aria-hidden={isMobileViewport() && !mapExpanded ? 'true' : undefined}
 			inert={isMobileViewport() && !mapExpanded ? true : undefined}
@@ -514,6 +568,8 @@
 				</button>
 			{/if}
 		</div>
+			</button>
+		{/if}
 		<div class="list-pane" inert={mapExpanded && isMobileViewport() ? true : undefined}>
 			<RestaurantList
 				restaurants={filteredRestaurants}
@@ -713,6 +769,7 @@
 			position: relative;
 			z-index: 0;
 		}
+
 	}
 
 	/* ── Mobile: explicit control opens the map sheet (< 1024px) ───────── */
@@ -824,4 +881,5 @@
 			display: none;
 		}
 	}
+
 </style>
