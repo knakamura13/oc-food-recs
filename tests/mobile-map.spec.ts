@@ -18,22 +18,32 @@ async function firstRenderedRow(page: Page): Promise<Locator> {
 	return row;
 }
 
-async function openRenderedRowWithMapAction(page: Page): Promise<Locator> {
+async function openRenderedRowWithMapAction(page: Page): Promise<string> {
 	const rows = page.locator('.row');
 	await firstRenderedRow(page);
 	const rowCount = await rows.count();
 
 	for (let index = 0; index < rowCount; index += 1) {
-		const row = rows.nth(index);
-		if (!(await row.isVisible())) continue;
+		const positionalRow = rows.nth(index);
+		if (!(await positionalRow.isVisible())) continue;
+		const rowId = await positionalRow.getAttribute('id');
+		if (!rowId) throw new Error('Rendered restaurant row is missing its stable ID');
 
-		const rowToggle = row.locator('.row-toggle');
+		const stableRow = page.locator(`#${rowId}`);
+		const rowToggle = stableRow.locator('.row-toggle');
 		await rowToggle.click();
-		const showOnMap = row.getByRole('button', { name: 'Show on map' });
-		const hasMapAction = await showOnMap
-			.waitFor({ state: 'visible', timeout: 500 })
-			.then(() => true, () => false);
-		if (hasMapAction) return showOnMap;
+		await expect(rowToggle).toHaveAttribute('aria-expanded', 'true');
+		const showOnMap = stableRow.getByRole('button', { name: 'Show on map' });
+		if ((await showOnMap.count()) > 0) {
+			await expect(stableRow.locator('.drawer-skeleton')).toHaveCount(0, {
+				timeout: 30_000
+			});
+			await expect(page.locator(`#${rowId}`)).toBeVisible();
+			await expect(
+				page.locator(`#${rowId}`).getByRole('button', { name: 'Show on map' })
+			).toBeVisible();
+			return rowId;
+		}
 
 		await rowToggle.click();
 		await expect(rowToggle).toHaveAttribute('aria-expanded', 'false');
@@ -154,9 +164,10 @@ test.describe('Mobile map interaction', () => {
 		await page.setViewportSize({ width: 390, height: 844 });
 		await page.goto('/');
 
-		const showOnMap = await openRenderedRowWithMapAction(page);
+		const rowId = await openRenderedRowWithMapAction(page);
+		const stableRow = page.locator(`#${rowId}`);
+		const showOnMap = stableRow.getByRole('button', { name: 'Show on map' });
 
-		await showOnMap.focus();
 		await showOnMap.click();
 
 		const mapPane = page.locator('#restaurant-map-panel');
@@ -167,7 +178,9 @@ test.describe('Mobile map interaction', () => {
 		await closeButton.click();
 
 		await expect(mapPane).toBeHidden();
-		await expect(showOnMap).toBeFocused();
+		await expect(
+			page.locator(`#${rowId}`).getByRole('button', { name: 'Show on map' })
+		).toBeFocused();
 		await expect(page.locator('.list-pane')).not.toHaveAttribute('inert', '');
 		await expect(page.locator('html')).not.toHaveClass(/mobile-map-expanded-lock/);
 	});
