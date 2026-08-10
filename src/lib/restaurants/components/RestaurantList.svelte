@@ -354,6 +354,21 @@
 		}
 		return groups;
 	}
+
+	function relativeDate(isoDate: string | null): string {
+		if (!isoDate) return '';
+		const d = new Date(isoDate);
+		const now = Date.now();
+		const diffMs = now - d.getTime();
+		const days = Math.floor(diffMs / 86_400_000);
+		if (days < 1) return 'today';
+		if (days === 1) return 'yesterday';
+		if (days < 30) return `${days}d ago`;
+		const months = Math.floor(days / 30);
+		if (months < 12) return `${months}mo ago`;
+		const years = Math.floor(months / 12);
+		return `${years}y ago`;
+	}
 </script>
 
 <div class="restaurant-list">
@@ -447,6 +462,9 @@
 											{/if}
 										</div>
 										<div class="row-tags">
+											{#if restaurant.endorsement_count >= 15}
+												<span class="tag popular-tag" aria-label="Highly endorsed community favorite">🔥 Popular</span>
+											{/if}
 											{#if restaurant.cuisine}
 												<span class="tag cuisine-tag">{normalizeCuisine(restaurant.cuisine)}</span>
 											{/if}
@@ -538,13 +556,18 @@
 							{@const mentions = details[slug] ?? []}
 							{@const primary = getPrimaryMention(mentions)}
 							{@const groups = groupEndorsements(mentions)}
-							<div class="drawer-content" class:no-motion={reduceMotion()}>
-						{#if primary}
-							<div class="primary-comment">
-								<div class="comment-header">
-									<span class="comment-author">u/{primary.author}</span>
-									<span class="comment-score">
-										{primary.score} points
+								<div class="drawer-content" class:no-motion={reduceMotion()}>
+									{#if primary}
+										<div class="primary-comment">
+											<div class="comment-header">
+												<span class="comment-author">
+													u/{primary.author}
+													{#if primary.comment_date}
+														<span class="comment-date"> · {relativeDate(primary.comment_date)}</span>
+													{/if}
+												</span>
+												<span class="comment-score">
+													{primary.score} points
 										<button
 											type="button"
 											class="info-tip"
@@ -563,10 +586,10 @@
 												Total Reddit upvotes across all comments that recommended this restaurant.
 											</span>
 										</button>
-									</span>
-								</div>
-								<p class="comment-body">{primary.body}</p>
-								{#if primary.permalink}
+												</span>
+											</div>
+											<p class="comment-body">{primary.body}</p>
+											{#if primary.permalink}
 									<!-- External absolute URLs (Reddit/Maps below): do not wrap in resolve() — that is for in-app routes only. -->
 									<a
 										href={primary.permalink}
@@ -576,9 +599,9 @@
 									>
 										View on Reddit &rarr;
 									</a>
-								{/if}
-							</div>
-						{/if}
+											{/if}
+										</div>
+									{/if}
 
 						{#if groups.dish_rec.length > 0}
 							<div class="endorsement-section">
@@ -586,7 +609,9 @@
 								{#each groups.dish_rec as e (e.comment_id)}
 									<div class="endorsement-card">
 										<div class="endorsement-meta">
-											<span class="endorsement-author">u/{e.author}</span>
+											<span class="endorsement-author">
+												u/{e.author}{#if e.comment_date}<span class="comment-date"> · {relativeDate(e.comment_date)}</span>{/if}
+											</span>
 											<span class="endorsement-score">{e.score} pts</span>
 										</div>
 										<p>{e.body}</p>
@@ -611,7 +636,9 @@
 								{#each groups.personal_story as e (e.comment_id)}
 									<div class="endorsement-card">
 										<div class="endorsement-meta">
-											<span class="endorsement-author">u/{e.author}</span>
+											<span class="endorsement-author">
+												u/{e.author}{#if e.comment_date}<span class="comment-date"> · {relativeDate(e.comment_date)}</span>{/if}
+											</span>
 											<span class="endorsement-score">{e.score} pts</span>
 										</div>
 										<p>{e.body}</p>
@@ -636,7 +663,9 @@
 								{#each groups.endorsement as e (e.comment_id)}
 									<div class="endorsement-card">
 										<div class="endorsement-meta">
-											<span class="endorsement-author">u/{e.author}</span>
+											<span class="endorsement-author">
+												u/{e.author}{#if e.comment_date}<span class="comment-date"> · {relativeDate(e.comment_date)}</span>{/if}
+											</span>
 											<span class="endorsement-score">{e.score} pts</span>
 										</div>
 										<p>{e.body}</p>
@@ -881,11 +910,12 @@
 		margin: -10px -6px;
 		border-radius: 50%;
 		color: #d4c8bb;
-		transition: color 0.15s ease, transform 0.1s ease;
+		transition: color 0.2s ease, transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
 	}
 
 	.row-save-btn:hover {
 		color: #ff4500;
+		transform: scale(1.15);
 	}
 
 	.row-save-btn:active {
@@ -894,6 +924,13 @@
 
 	.row-save-btn.saved {
 		color: #ff4500;
+		animation: save-pop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+	}
+
+	@keyframes save-pop {
+		0% { transform: scale(1); }
+		50% { transform: scale(1.35); }
+		100% { transform: scale(1); }
 	}
 
 	.row:hover {
@@ -966,6 +1003,14 @@
 	.location-tag {
 		background: #fce8e0;
 		color: #b5543a;
+	}
+
+	.popular-tag {
+		background: #fff0eb;
+		color: #ff4500;
+		border: 1px solid #ffcca8;
+		font-weight: 600;
+		font-size: 0.68rem;
 	}
 
 	.row-stats {
@@ -1225,6 +1270,13 @@
 		color: #7a6e63;
 		text-transform: uppercase;
 		letter-spacing: 0.08em;
+	}
+
+	.comment-date {
+		text-transform: none;
+		letter-spacing: normal;
+		font-weight: 400;
+		color: #b5a99a;
 	}
 
 	.comment-score {

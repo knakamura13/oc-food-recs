@@ -109,6 +109,36 @@ describe("SearchBar", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("keeps a slash typed into the focused search input", async () => {
+    const user = userEvent.setup();
+    render(SearchBar, { restaurants, cuisineNames, cityNames });
+    const input = screen.getByRole("combobox", {
+      name: /search restaurants, cuisines, or cities/i,
+    });
+
+    await user.click(input);
+    await user.type(input, "/");
+
+    expect(input).toHaveValue("/");
+  });
+
+  it("focuses search with the global slash shortcut", () => {
+    render(SearchBar, { restaurants, cuisineNames, cityNames });
+    const input = screen.getByRole("combobox", {
+      name: /search restaurants, cuisines, or cities/i,
+    });
+    const event = new KeyboardEvent("keydown", {
+      key: "/",
+      bubbles: true,
+      cancelable: true,
+    });
+
+    window.dispatchEvent(event);
+
+    expect(document.activeElement).toBe(input);
+    expect(event.defaultPrevented).toBe(true);
+  });
+
   it("shows a no-matches message when the query has no fuzzy hits", async () => {
     const user = userEvent.setup();
     render(SearchBar, { restaurants, cuisineNames, cityNames });

@@ -45,6 +45,26 @@
 	);
 	let showResultsDropdown = $derived(showDropdown && results.length > 0);
 
+	let isFocused = $state(false);
+
+	function handleGlobalKeydown(e: KeyboardEvent) {
+		const target = e.target as HTMLElement | null;
+		const isEditable = target && (
+			target.tagName === 'INPUT' ||
+			target.tagName === 'TEXTAREA' ||
+			target.isContentEditable
+		);
+
+		if (isEditable) return;
+
+		if (e.key === '/' || ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K'))) {
+			e.preventDefault();
+			inputEl?.focus();
+			ensureFuse();
+			showDropdown = true;
+		}
+	}
+
 	function selectResult(restaurant: Restaurant) {
 		appState.searchQuery = restaurant.name;
 		showDropdown = false;
@@ -120,6 +140,8 @@
 	}
 </script>
 
+<svelte:window onkeydown={handleGlobalKeydown} />
+
 <div class="search-container">
 	<div class="search-wrapper">
 		<span class="search-icon" aria-hidden="true"><Search size={18} /></span>
@@ -136,8 +158,8 @@
 			bind:value={appState.searchQuery}
 			oninput={handleInput}
 			onkeydown={handleKeydown}
-			onfocus={() => { ensureFuse(); showDropdown = true; }}
-			onblur={() => setTimeout(() => (showDropdown = false), 200)}
+			onfocus={() => { ensureFuse(); showDropdown = true; isFocused = true; }}
+			onblur={() => { isFocused = false; setTimeout(() => (showDropdown = false), 200); }}
 			role="combobox"
 			aria-expanded={showResultsDropdown || showNoResults}
 			aria-controls="search-listbox"
@@ -157,6 +179,8 @@
 			>
 				<X size={18} aria-hidden="true" />
 			</button>
+		{:else if !isFocused}
+			<kbd class="search-shortcut" aria-label="Keyboard shortcut ⌘K or /">⌘K</kbd>
 		{/if}
 	</div>
 
@@ -262,6 +286,23 @@
 		cursor: pointer;
 		padding: 6px;
 		line-height: 1;
+	}
+
+	.search-shortcut {
+		position: absolute;
+		right: 12px;
+		top: 50%;
+		transform: translateY(-50%);
+		font-family: 'DM Sans', system-ui, sans-serif;
+		font-size: 0.72rem;
+		font-weight: 500;
+		color: #9a8c7e;
+		background: #f4ede4;
+		border: 1px solid #e0d6cc;
+		border-radius: 4px;
+		padding: 1px 6px;
+		pointer-events: none;
+		line-height: 1.4;
 	}
 
 	.dropdown {

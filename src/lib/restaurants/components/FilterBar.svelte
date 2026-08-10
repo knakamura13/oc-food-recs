@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Bookmark } from 'lucide-svelte';
+	import { Bookmark, Share2 } from 'lucide-svelte';
 	import type { Restaurant } from '$lib/restaurants/types';
 	import {
 		appState,
@@ -11,6 +11,7 @@
 	import { savedState } from '$lib/restaurants/saved-restaurants.svelte';
 	import { getPriorVisitMs } from '$lib/restaurants/visit-tracker';
 	import { onMount } from 'svelte';
+	import { toast } from '$lib/toast';
 	import RecencyHistogram from './RecencyHistogram.svelte';
 
 	interface Props {
@@ -148,6 +149,17 @@
 
 	function clearAllFilters() {
 		clearExplorerFilters({ includeSearch: true });
+	}
+
+	function copyShareUrl() {
+		if (typeof window === 'undefined' || !navigator.clipboard?.writeText) {
+			toast.error('Could not copy share link');
+			return;
+		}
+		navigator.clipboard.writeText(window.location.href).then(
+			() => toast.success('Share link copied to clipboard!'),
+			() => toast.error('Could not copy share link')
+		);
 	}
 
 	let savedCount = $derived(savedState.slugs.length);
@@ -336,6 +348,16 @@
 				<span aria-hidden="true">✓</span>
 			{/if}
 			Show unmapped
+		</button>
+
+		<button
+			class="dropdown-trigger share-btn"
+			title="Share view"
+			aria-label="Share view"
+			onclick={copyShareUrl}
+		>
+			<Share2 size={13} aria-hidden="true" />
+			Share
 		</button>
 
 		{#if hasActiveFilters}
