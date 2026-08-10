@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { Bookmark, ChevronRight, MapPin } from 'lucide-svelte';
+	import { getTrimmedSnippet } from '$lib/restaurants/snippet';
 	import { tick, untrack } from 'svelte';
 	import type { Attachment } from 'svelte/attachments';
 	import {
@@ -513,7 +514,17 @@
 											{/if}
 										</div>
 										{#if restaurant.top_dish_snippet}
-											<p class="dish-teaser"><span class="dish-label">Try:</span> {restaurant.top_dish_snippet}</p>
+											{@const snippet = getTrimmedSnippet(restaurant.top_dish_snippet, restaurant.name, 150)}
+											<p class="dish-teaser">
+												<span class="dish-label">Try:</span>
+												{#each snippet.segments as segment}
+													{#if segment.isMatch}
+														<strong>{segment.text}</strong>
+													{:else}
+														{segment.text}
+													{/if}
+												{/each}
+											</p>
 										{/if}
 									</div>
 								</button>
