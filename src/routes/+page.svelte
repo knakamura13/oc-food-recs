@@ -187,13 +187,28 @@
 		void tick().then(() => mapCloseButton?.focus());
 	}
 
-	function closeMobileMap() {
+	function closeMobileMap({ focusDesktopMap = false }: { focusDesktopMap?: boolean } = {}) {
 		if (!mapExpanded) return;
 		const opener = mapOpener;
 		mapExpanded = false;
 		mapOpener = null;
 		void tick().then(() => {
-			if (opener?.isConnected) opener.focus();
+			const canRestoreOpener =
+				opener?.isConnected &&
+				opener.getClientRects().length > 0 &&
+				(!focusDesktopMap || opener.classList.contains('map-link'));
+			if (canRestoreOpener) {
+				opener.focus();
+				return;
+			}
+			if (!focusDesktopMap) return;
+			requestAnimationFrame(() => {
+				const desktopMap = document.querySelector<HTMLElement>('.map-container');
+				if (desktopMap?.isConnected && desktopMap.getClientRects().length > 0) {
+					if (desktopMap.tabIndex < 0) desktopMap.tabIndex = 0;
+					desktopMap.focus({ preventScroll: true });
+				}
+			});
 		});
 	}
 
@@ -363,13 +378,21 @@
 	onMount(() => {
 		initSavedState();
 		viewportWidth = window.innerWidth;
+		let wasMobileViewport = window.innerWidth <= MOBILE_MAX_PX;
 		const onVisChange = () => {
 			if (document.visibilityState === 'hidden') setLastVisitNow();
 		};
 		window.addEventListener('beforeunload', setLastVisitNow);
 		document.addEventListener('visibilitychange', onVisChange);
 		const onResize = () => {
-			viewportWidth = window.innerWidth;
+			const nextWidth = window.innerWidth;
+			const nextIsMobile = nextWidth <= MOBILE_MAX_PX;
+			const crossedToDesktop = wasMobileViewport && !nextIsMobile;
+			wasMobileViewport = nextIsMobile;
+			viewportWidth = nextWidth;
+			if (crossedToDesktop && mapExpanded) {
+				closeMobileMap({ focusDesktopMap: true });
+			}
 			// Kill the map-pane transition for the duration of the resize so crossing the
 			// 1024px breakpoint switches layouts instantly; re-enable once the drag settles.
 			suppressMapTransition = true;
@@ -470,7 +493,7 @@
 			{#if mapExpanded}
 				<div
 					class="portal-backdrop"
-					onclick={closeMobileMap}
+					onclick={() => closeMobileMap()}
 					role="presentation"
 				></div>
 			{/if}
@@ -500,7 +523,9 @@
 	</div>
 </div>
 
-<BackToTop />
+{#if !mapExpanded || !isMobileViewport()}
+	<BackToTop />
+{/if}
 
 <style>
 	:global(html) {
@@ -781,6 +806,8 @@
 		/* Expanded map sits below controls; keep shell overflow visible for dropdowns */
 		.app-trap:has(.map-pane.portal-expanded) {
 			overflow: visible;
+			backdrop-filter: none;
+			-webkit-backdrop-filter: none;
 		}
 		.app-trap:has(.map-pane.portal-expanded) .content-area {
 			overflow: visible;

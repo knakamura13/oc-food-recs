@@ -231,6 +231,143 @@ test.describe('Mobile map interaction', () => {
 		}
 	});
 
+	test('open sheet stays within the viewport across mobile widths', async ({
+		page
+	}, testInfo) => {
+		test.skip(testInfo.project.name !== 'Mobile Chrome', 'Mobile viewport only');
+
+		for (const viewport of mobileViewports) {
+			await test.step(`${viewport.width}x${viewport.height}`, async () => {
+				await page.setViewportSize(viewport);
+				await page.goto('/');
+				await firstRenderedRow(page);
+
+				const mapTrigger = page.locator('.mobile-map-trigger');
+				const mapPane = page.locator('#restaurant-map-panel');
+				await mapTrigger.click();
+				await expect(mapPane).toBeVisible();
+				await expect(page.locator('html')).toHaveClass(/mobile-map-expanded-lock/);
+
+				const bounds = await mapPane.evaluate((pane) => {
+					const controls = document.querySelector<HTMLElement>('.controls-bar');
+					if (!controls) throw new Error('Missing controls bar');
+					const paneRect = pane.getBoundingClientRect();
+					const controlsRect = controls.getBoundingClientRect();
+					return {
+						paneTop: paneRect.top,
+						paneBottom: paneRect.bottom,
+						controlsBottom: controlsRect.bottom,
+						viewportBottom: window.innerHeight
+					};
+				});
+
+				expect(
+					bounds.paneTop,
+					`${viewport.width}px sheet must start below the controls`
+				).toBeGreaterThanOrEqual(bounds.controlsBottom - 2);
+				expect(
+					bounds.paneBottom,
+					`${viewport.width}px sheet must retain its bottom safe-area gap`
+				).toBeLessThanOrEqual(bounds.viewportBottom - 12);
+			});
+		}
+	});
+
+	test('open sheet removes Back to top until the deep-scrolled list is usable again', async ({
+		page
+	}, testInfo) => {
+		test.skip(testInfo.project.name !== 'Mobile Chrome', 'Mobile viewport only');
+		await page.setViewportSize({ width: 390, height: 844 });
+		await page.goto('/');
+		await firstRenderedRow(page);
+
+		const listScroll = page.locator('.list-scroll');
+		await listScroll.evaluate((element) => element.scrollTo({ top: 500, behavior: 'auto' }));
+		await expect.poll(() => listScroll.evaluate((element) => element.scrollTop)).toBeGreaterThan(300);
+
+		const backToTop = page.getByRole('button', { name: 'Back to top' });
+		await expect(backToTop).toBeVisible();
+		const backToTopBox = await backToTop.boundingBox();
+		expect(backToTopBox).toBeTruthy();
+
+		await page.locator('.mobile-map-trigger').click();
+		await expect(page.locator('#restaurant-map-panel')).toBeVisible();
+		await expect(page.locator('.map-close-btn')).toBeFocused();
+		await expect(backToTop).toHaveCount(0);
+		if (backToTopBox) {
+			const backToTopHit = await page.evaluate(
+				({ x, y }) => document.elementFromPoint(x, y)?.closest('.back-to-top') !== null,
+				{
+					x: backToTopBox.x + backToTopBox.width / 2,
+					y: backToTopBox.y + backToTopBox.height / 2
+				}
+			);
+			expect(backToTopHit).toBe(false);
+		}
+
+		await page.locator('.map-close-btn').click();
+		await expect(page.locator('#restaurant-map-panel')).toBeHidden();
+		await expect(backToTop).toBeVisible();
+		await expect.poll(() => listScroll.evaluate((element) => element.scrollTop)).toBeGreaterThan(300);
+	});
+
+	test('desktop breakpoint closes the mobile disclosure and focuses the inline map', async ({
+		page
+	}, testInfo) => {
+		test.skip(testInfo.project.name !== 'Mobile Chrome', 'Mobile viewport only');
+		await page.setViewportSize({ width: 390, height: 844 });
+		await page.goto('/');
+		await firstRenderedRow(page);
+
+		const mapTrigger = page.locator('.mobile-map-trigger');
+		const mapPane = page.locator('#restaurant-map-panel');
+		const listPane = page.locator('.list-pane');
+		const mapApplication = page.locator('.map-container');
+		await mapTrigger.click();
+		await expect(mapPane).toBeVisible();
+		await expect(mapApplication).toBeVisible({ timeout: 30_000 });
+
+		await page.setViewportSize({ width: 1024, height: 768 });
+
+		await expect(mapTrigger).toBeHidden();
+		await expect(mapTrigger).toHaveAttribute('aria-expanded', 'false');
+		await expect(mapPane).not.toHaveClass(/portal-expanded/);
+		await expect(listPane).not.toHaveAttribute('inert', '');
+		await expect(page.locator('html')).not.toHaveClass(/mobile-map-expanded-lock/);
+		await expect(mapApplication).toBeFocused();
+
+		await page.setViewportSize({ width: 390, height: 844 });
+
+		await expect(mapTrigger).toBeVisible();
+		await expect(mapTrigger).toHaveAccessibleName('Open map');
+		await expect(mapTrigger).toHaveAttribute('aria-expanded', 'false');
+		await expect(mapPane).toBeHidden();
+		await expect(listPane).not.toHaveAttribute('inert', '');
+		await expect(page.locator('html')).not.toHaveClass(/mobile-map-expanded-lock/);
+	});
+
+	test('desktop breakpoint restores a visible Show on map opener', async ({ page }, testInfo) => {
+		test.skip(testInfo.project.name !== 'Mobile Chrome', 'Mobile viewport only');
+		await page.setViewportSize({ width: 390, height: 844 });
+		await page.goto('/');
+
+		const rowId = await openRenderedRowWithMapAction(page);
+		const showOnMap = page
+			.locator(`#${rowId}`)
+			.getByRole('button', { name: 'Show on map' });
+		await showOnMap.click();
+		await expect(page.locator('.map-close-btn')).toBeFocused();
+
+		await page.setViewportSize({ width: 1024, height: 768 });
+
+		await expect(page.locator('#restaurant-map-panel')).not.toHaveClass(/portal-expanded/);
+		await expect(
+			page.locator(`#${rowId}`).getByRole('button', { name: 'Show on map' })
+		).toBeFocused();
+		await expect(page.locator('.list-pane')).not.toHaveAttribute('inert', '');
+		await expect(page.locator('html')).not.toHaveClass(/mobile-map-expanded-lock/);
+	});
+
 	test('desktop keeps the inline map interactive without mobile semantics', async ({
 		page
 	}, testInfo) => {
