@@ -72,13 +72,14 @@
 	let prevSavedOnly = $state(false);
 
 	let mapExpanded = $state(false);
+	let mapOpener = $state<HTMLButtonElement | null>(null);
+	let mapCloseButton = $state<HTMLButtonElement | undefined>(undefined);
 	let appTrapEl = $state<HTMLDivElement | undefined>(undefined);
 	let controlsBarEl = $state<HTMLDivElement | undefined>(undefined);
 	/** Subscribed by mobile-map $effect so resize clears scroll lock when crossing the breakpoint */
 	let viewportWidth = $state(0);
-	// True only while the window is actively resizing; gates off the map-pane transition so
-	// the desktop/mobile breakpoint switch is instant instead of morphing (the transition is
-	// meant only for the tap-to-expand toggle, which never involves a resize).
+	// True only while the window is actively resizing; gates off the desktop map-pane transition
+	// so crossing the desktop/mobile breakpoint switches layouts instantly.
 	let suppressMapTransition = $state(false);
 	let resizeSettleTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -176,6 +177,38 @@
 		const y = window.scrollY + anchor.getBoundingClientRect().top;
 		window.scrollTo(0, Math.max(0, y));
 		html.style.scrollBehavior = prev;
+	}
+
+	function openMobileMap(opener: HTMLButtonElement) {
+		if (!isMobileViewport()) return;
+		mapOpener = opener;
+		snapMobileShellToTop();
+		mapExpanded = true;
+		void tick().then(() => mapCloseButton?.focus());
+	}
+
+	function closeMobileMap() {
+		if (!mapExpanded) return;
+		const opener = mapOpener;
+		mapExpanded = false;
+		mapOpener = null;
+		void tick().then(() => {
+			if (opener?.isConnected) opener.focus();
+		});
+	}
+
+	function toggleMobileMap(opener: HTMLButtonElement) {
+		if (mapExpanded) {
+			closeMobileMap();
+		} else {
+			openMobileMap(opener);
+		}
+	}
+
+	function handleMobileMapEscape(event: KeyboardEvent) {
+		if (event.key !== 'Escape' || !mapExpanded || !isMobileViewport()) return;
+		event.preventDefault();
+		closeMobileMap();
 	}
 
 	// Mobile expanded map: snap shell to top, lock page scroll, measure controls for map placement
@@ -405,6 +438,8 @@
 	<link rel="dns-prefetch" href="https://c.tile.openstreetmap.org" />
 </svelte:head>
 
+<svelte:window onkeydown={handleMobileMapEscape} />
+
 <section class="hero-section">
 	<Hero meta={data.dataset.meta} />
 </section>
@@ -417,6 +452,8 @@
 			{threadSubreddit}
 			restaurantsForHistogram={restaurantsBeforeFreshness}
 			{dateExtent}
+			{mapExpanded}
+			onMapToggle={toggleMobileMap}
 		/>
 	</div>
 	<div class="content-area">
@@ -424,29 +461,16 @@
 			class="map-pane"
 			class:portal-expanded={mapExpanded}
 			class:no-map-transition={suppressMapTransition}
-			onpointerdown={() => {
-				if (mapExpanded) return;
-				if (typeof window !== 'undefined' && window.innerWidth <= MOBILE_MAX_PX) {
-					snapMobileShellToTop();
-				}
-				mapExpanded = true;
-			}}
-			onkeydown={(e) => {
-				if (mapExpanded) return;
-				if (e.key !== 'Enter' && e.key !== ' ') return;
-				e.preventDefault();
-				if (typeof window !== 'undefined' && window.innerWidth <= MOBILE_MAX_PX) {
-					snapMobileShellToTop();
-				}
-				mapExpanded = true;
-			}}
-			role="button"
-			tabindex="0"
+			id="restaurant-map-panel"
+			role={mapExpanded && isMobileViewport() ? 'region' : undefined}
+			aria-label={mapExpanded && isMobileViewport() ? 'Restaurant map' : undefined}
+			aria-hidden={isMobileViewport() && !mapExpanded ? 'true' : undefined}
+			inert={isMobileViewport() && !mapExpanded ? true : undefined}
 		>
 			{#if mapExpanded}
 				<div
 					class="portal-backdrop"
-					onclick={() => (mapExpanded = false)}
+					onclick={closeMobileMap}
 					role="presentation"
 				></div>
 			{/if}
@@ -456,19 +480,21 @@
 			{#if mapExpanded}
 				<button
 					class="map-close-btn"
-					onclick={(e) => { e.stopPropagation(); mapExpanded = false; }}
+					bind:this={mapCloseButton}
+					onclick={(event) => {
+						event.stopPropagation();
+						closeMobileMap();
+					}}
 					aria-label="Close map"
 				>
 					<X size={22} aria-hidden="true" />
 				</button>
 			{/if}
 		</div>
-		<div class="list-pane">
+		<div class="list-pane" inert={mapExpanded && isMobileViewport() ? true : undefined}>
 			<RestaurantList
 				restaurants={filteredRestaurants}
-				onShowOnMap={() => {
-					if (isMobileViewport()) mapExpanded = true;
-				}}
+				onShowOnMap={openMobileMap}
 			/>
 		</div>
 	</div>
@@ -664,7 +690,7 @@
 		}
 	}
 
-	/* ── Mobile: map-pane IS the circular FAB portal (< 1024px) ─────────── */
+	/* ── Mobile: explicit control opens the map sheet (< 1024px) ───────── */
 	@media (max-width: 1023px) {
 		:global(html.mobile-map-expanded-lock),
 		:global(html.mobile-map-expanded-lock body) {
@@ -673,29 +699,12 @@
 		}
 
 		.map-pane {
-			position: fixed;
-			bottom: max(20px, env(safe-area-inset-bottom, 0px));
-			right: max(16px, env(safe-area-inset-right, 0px));
-			width: clamp(88px, 22vw, 120px);
-			height: clamp(88px, 22vw, 120px);
-			border-radius: 50%;
-			border: 4px solid white;
-			box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
-			z-index: 1300;
-			cursor: pointer;
-			overflow: hidden;
-			/* Omit `top` so expanded `top: var(--mobile-map-top-offset)` applies immediately (no FAB→sheet tween) */
-			transition:
-				width 0.4s cubic-bezier(0.4, 0, 0.2, 1),
-				height 0.4s cubic-bezier(0.4, 0, 0.2, 1),
-				bottom 0.4s cubic-bezier(0.4, 0, 0.2, 1),
-				right 0.4s cubic-bezier(0.4, 0, 0.2, 1),
-				left 0.4s cubic-bezier(0.4, 0, 0.2, 1),
-				border-radius 0.4s cubic-bezier(0.4, 0, 0.2, 1),
-				box-shadow 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+			display: none;
 		}
 
 		.map-pane.portal-expanded {
+			display: block;
+			position: fixed;
 			top: var(--mobile-map-top-offset, 160px);
 			left: max(16px, env(safe-area-inset-left, 0px));
 			right: max(16px, env(safe-area-inset-right, 0px));
@@ -703,8 +712,10 @@
 			width: auto;
 			height: auto;
 			border-radius: 16px;
-			cursor: default;
+			border: 4px solid white;
+			box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
 			z-index: 1400;
+			overflow: hidden;
 		}
 
 		.list-pane {
