@@ -1,4 +1,4 @@
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page, type Route } from '@playwright/test';
 
 const mobileViewports = [
 	{ width: 320, height: 700 },
@@ -155,6 +155,99 @@ test.describe('Mobile map interaction', () => {
 		await expect(listPane).not.toHaveAttribute('inert', '');
 		await expect(page.locator('html')).not.toHaveClass(/mobile-map-expanded-lock/);
 		await expect(page.getByRole('application')).toHaveCount(0);
+	});
+
+	test('first open explains deferred map loading until Leaflet is ready', async ({
+		page
+	}, testInfo) => {
+		test.skip(testInfo.project.name !== 'Mobile Chrome', 'Mobile viewport only');
+		await page.setViewportSize({ width: 390, height: 844 });
+
+		const leafletPattern = '**/node_modules/.vite/deps/leaflet.js*';
+		let releaseLeaflet: () => void = () => {};
+		let finishLeafletHandler: () => void = () => {};
+		let leafletRequestHeld = false;
+		const leafletGate = new Promise<void>((resolve) => {
+			releaseLeaflet = resolve;
+		});
+		const leafletHandlerDone = new Promise<void>((resolve) => {
+			finishLeafletHandler = resolve;
+		});
+		const holdLeaflet = async (route: Route) => {
+			leafletRequestHeld = true;
+			try {
+				await leafletGate;
+				await route.continue();
+			} finally {
+				finishLeafletHandler();
+			}
+		};
+
+		await page.route(leafletPattern, holdLeaflet);
+		try {
+			await page.goto('/');
+			await firstRenderedRow(page);
+			await page.locator('.mobile-map-trigger').click();
+
+			await expect.poll(() => leafletRequestHeld).toBe(true);
+			const mapPanel = page.locator('.map-panel');
+			await expect(mapPanel).toHaveAttribute('aria-busy', 'true');
+			await expect(page.getByRole('status')).toHaveText('Loading map…');
+			await expect(page.getByRole('application')).toHaveCount(0);
+
+			releaseLeaflet();
+
+			await expect(page.locator('.leaflet-container')).toBeVisible({ timeout: 30_000 });
+			await expect(page.getByRole('status')).toHaveCount(0);
+			await expect(mapPanel).toHaveAttribute('aria-busy', 'false');
+		} finally {
+			releaseLeaflet();
+			if (leafletRequestHeld) await leafletHandlerDone;
+			await page.unroute(leafletPattern, holdLeaflet);
+		}
+	});
+
+	test('failed deferred map loading clears busy state and recovers after reload', async ({
+		page
+	}, testInfo) => {
+		test.skip(testInfo.project.name !== 'Mobile Chrome', 'Mobile viewport only');
+		await page.setViewportSize({ width: 390, height: 844 });
+
+		const leafletPattern = '**/node_modules/.vite/deps/leaflet.js*';
+		let leafletAttempts = 0;
+		const failLeafletOnce = async (route: Route) => {
+			leafletAttempts += 1;
+			if (leafletAttempts === 1) {
+				await route.abort('failed');
+				return;
+			}
+			await route.continue();
+		};
+
+		await page.route(leafletPattern, failLeafletOnce);
+		try {
+			await page.goto('/');
+			await firstRenderedRow(page);
+			await page.locator('.mobile-map-trigger').click();
+
+			const mapPanel = page.locator('.map-panel');
+			const loadError = page.getByRole('alert');
+			await expect(loadError).toContainText('Map couldn’t load.');
+			await expect(mapPanel).toHaveAttribute('aria-busy', 'false');
+			await expect(page.getByRole('status')).toHaveCount(0);
+			await expect(page.getByRole('application')).toHaveCount(0);
+
+			await loadError.getByRole('button', { name: 'Reload page' }).click();
+			await firstRenderedRow(page);
+			await page.locator('.mobile-map-trigger').click();
+
+			await expect.poll(() => leafletAttempts).toBe(2);
+			await expect(page.locator('.leaflet-container')).toBeVisible({ timeout: 30_000 });
+			await expect(loadError).toHaveCount(0);
+			await expect(mapPanel).toHaveAttribute('aria-busy', 'false');
+		} finally {
+			await page.unroute(leafletPattern, failLeafletOnce);
+		}
 	});
 
 	test('Show on map returns focus to the drawer action after the sheet closes', async ({
