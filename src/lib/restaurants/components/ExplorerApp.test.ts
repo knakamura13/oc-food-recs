@@ -150,4 +150,13 @@ describe("ExplorerApp URL sync", () => {
     render(ExplorerApp, { data: makeHomeData(), routerReady: false });
     expect(document.querySelector("main")).not.toBeNull();
   });
+
+  it("renders the map pane as a closed native dialog on desktop", () => {
+    render(ExplorerApp, { data: makeHomeData(), routerReady: false });
+    const pane = document.getElementById("restaurant-map-panel");
+    expect(pane?.tagName).toBe("DIALOG");
+    expect(pane).not.toHaveAttribute("role", "dialog");
+    expect(pane).not.toHaveAttribute("aria-modal", "true");
+    expect((pane as HTMLDialogElement | null)?.open).toBe(false);
+  });
 });
