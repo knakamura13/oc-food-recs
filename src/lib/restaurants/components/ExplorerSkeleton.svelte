@@ -524,4 +524,33 @@
 			margin: 0 0 0.3rem;
 		}
 	}
+
+	@media (max-width: 1023px) and (max-height: 720px) {
+		.app-trap {
+			height: auto;
+			min-height: 0;
+		}
+
+		.content-area {
+			overflow: visible;
+			flex: 1 0 auto;
+			min-height: 12rem;
+		}
+
+		.list-pane {
+			min-height: 12rem;
+		}
+
+		.restaurant-list {
+			height: auto;
+			min-height: 12rem;
+		}
+
+		.list-scroll {
+			flex: 0 0 auto;
+			min-height: 12rem;
+			height: auto;
+			overflow: visible;
+		}
+	}
 </style>
