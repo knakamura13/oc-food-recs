@@ -53,7 +53,7 @@ test.describe("Recency filter", () => {
     test.skip(testInfo.project.name !== "Desktop Chrome", "Desktop viewport only");
     await page.goto("/");
 
-    await expect(page.locator(".result-count")).toContainText(/\d+ restaurants/);
+    await expect(page.locator(".result-count")).toContainText(/\d+ restaurants?/);
     const initialCount = await resultCount(page);
     expect(initialCount).toBeGreaterThan(0);
 
@@ -82,7 +82,7 @@ test.describe("Recency filter", () => {
   }, testInfo) => {
     test.skip(testInfo.project.name !== "Desktop Chrome", "Desktop viewport only");
     await page.goto("/");
-    await expect(page.locator(".result-count")).toContainText(/\d+ restaurants/);
+    await expect(page.locator(".result-count")).toContainText(/\d+ restaurants?/);
 
     // Histogram with no other filter active.
     let panel = await openRecency(page);

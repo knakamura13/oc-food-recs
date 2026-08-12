@@ -1,14 +1,19 @@
 <script lang="ts">
 	import favicon from '$lib/assets/favicon.svg';
+	import { requestSkipToList } from '$lib/restaurants/skip-to-list';
 	import { Toaster } from 'svelte-sonner';
 
 	let { children } = $props();
 
 	function focusRestaurantList(event: MouseEvent) {
-		const main = document.getElementById('main-content');
-		if (!(main instanceof HTMLElement)) return;
 		event.preventDefault();
-		main.focus();
+		const main = document.getElementById('main-content');
+		if (main instanceof HTMLElement) {
+			main.focus();
+			// Real rows mean skip already landed; the skeleton has `.row` but no toggles.
+			if (main.querySelector('.row-toggle')) return;
+		}
+		requestSkipToList();
 	}
 </script>
 
