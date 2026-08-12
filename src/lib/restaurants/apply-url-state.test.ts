@@ -24,6 +24,12 @@ describe("applyUrlStateSnapshot", () => {
     expect(appState.sortDirection).toBe("asc");
   });
 
+  it("keeps default score sort when the URL omits sort", () => {
+    applyUrlStateSnapshot({ sortDirection: "asc" });
+    expect(appState.sortKey).toBe("score");
+    expect(appState.sortDirection).toBe("asc");
+  });
+
   it("selects a restaurant and sets map/list targets", () => {
     const restaurants = [
       makeRestaurant({ slug: "taco-spot", lat: 33.7, lng: -117.8 }),
