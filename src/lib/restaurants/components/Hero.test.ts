@@ -1,7 +1,14 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { render, screen } from "@testing-library/svelte";
 import { describe, expect, it } from "vitest";
 import Hero from "./Hero.svelte";
 import type { RestaurantData } from "$lib/restaurants/types";
+
+const heroSource = readFileSync(
+  join(process.cwd(), "src/lib/restaurants/components/Hero.svelte"),
+  "utf8",
+);
 
 const thread = {
   id: "t1",
@@ -52,5 +59,17 @@ describe("Hero", () => {
         /2 reddit threads across 2 subreddits and 5,000 community comments/i,
       ),
     ).toBeInTheDocument();
+  });
+
+  it("gives hero links pressed feedback without changing the Railway href", () => {
+    render(Hero, { meta: singleThreadMeta });
+    expect(screen.getByRole("link", { name: /railway/i })).toHaveAttribute(
+      "href",
+      expect.stringContaining("railway.com"),
+    );
+    expect(heroSource).toMatch(/a:active\s*\{/);
+    expect(heroSource).toMatch(/\.attribution a:active\s*\{/);
+    expect(heroSource).toContain("#fff0eb");
+    expect(heroSource).toContain("#c43700");
   });
 });

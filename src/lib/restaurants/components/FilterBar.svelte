@@ -553,12 +553,16 @@
 		cursor: pointer;
 		color: #5d4e37;
 		font-weight: 500;
-		transition: all 0.15s;
+		transition: all 0.15s ease;
 	}
 
 	.dropdown-trigger:hover {
 		border-color: #ff4500;
 		color: #c43700;
+	}
+
+	.dropdown-trigger:active:not(.mobile-map-trigger) {
+		transform: scale(0.97);
 	}
 
 	.dropdown-trigger.has-active {
@@ -740,6 +744,16 @@
 	.pill:active {
 		transform: scale(0.95) translateY(0);
 		box-shadow: none;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.dropdown-trigger {
+			transition: none;
+		}
+
+		.dropdown-trigger:active:not(.mobile-map-trigger) {
+			transform: none;
+		}
 	}
 
 	@media (max-width: 1023px) {
