@@ -216,6 +216,51 @@ function getFragmentsWithIndices(text: string): SentenceInfo[] {
   return fragments;
 }
 
+function shareALine(
+  left: SentenceInfo,
+  right: SentenceInfo,
+  body: string,
+): boolean {
+  return !body.slice(left.end, right.start).includes("\n");
+}
+
+function expandSameLineWindow(
+  fragments: SentenceInfo[],
+  targetIndex: number,
+  body: string,
+  maxLen: number,
+): { startIdx: number; endIdx: number } {
+  let startIdx = targetIndex;
+  let endIdx = targetIndex;
+
+  const windowText = (from: number, to: number) =>
+    body.slice(fragments[from].start, fragments[to].end);
+
+  if (targetIndex > 0) {
+    const prev = fragments[targetIndex - 1];
+    const named = fragments[targetIndex];
+    if (
+      shareALine(prev, named, body) &&
+      windowText(targetIndex - 1, endIdx).length <= maxLen
+    ) {
+      startIdx = targetIndex - 1;
+    }
+  }
+
+  if (endIdx + 1 < fragments.length) {
+    const last = fragments[endIdx];
+    const next = fragments[endIdx + 1];
+    if (
+      shareALine(last, next, body) &&
+      windowText(startIdx, endIdx + 1).length <= maxLen
+    ) {
+      endIdx += 1;
+    }
+  }
+
+  return { startIdx, endIdx };
+}
+
 function cropToMatchedWindow(
   text: string,
   localMatchStart: number,
@@ -317,7 +362,8 @@ export function buildSegments(
 /**
  * Main entry point: takes a comment body and a restaurant name, and returns
  * the delimiter-bounded fragment that names the restaurant (newlines or .!?),
- * capped at maxLen by cropping the prefix so the rest of the fragment is kept.
+ * plus same-line previous/next fragments when they fit in maxLen. Oversized
+ * named fragments crop the prefix so the rest of the sentence is kept.
  */
 export function getTrimmedSnippet(
   body: string,
@@ -358,9 +404,15 @@ export function getTrimmedSnippet(
     targetIndex = 0;
   }
 
-  const fragment = fragments[targetIndex];
-  const windowText = fragment.text;
-  const localMatchStart = matchIndex - fragment.start;
+  const { startIdx, endIdx } = expandSameLineWindow(
+    fragments,
+    targetIndex,
+    normalizedBody,
+    maxLen,
+  );
+  const windowStart = fragments[startIdx].start;
+  const windowText = normalizedBody.slice(windowStart, fragments[endIdx].end);
+  const localMatchStart = matchIndex - windowStart;
   const cropped = cropToMatchedWindow(
     windowText,
     localMatchStart,
