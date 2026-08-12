@@ -91,7 +91,7 @@
 	let mapDesktopExpanded = $state(false);
 	let mapOpener = $state<HTMLButtonElement | null>(null);
 	let mapCloseButton = $state<HTMLButtonElement | undefined>(undefined);
-	let mapPaneEl = $state<HTMLDivElement | undefined>(undefined);
+	let mapPaneEl = $state<HTMLDialogElement | undefined>(undefined);
 	let appTrapEl = $state<HTMLDivElement | undefined>(undefined);
 	let controlsBarEl = $state<HTMLDivElement | undefined>(undefined);
 	/** Subscribed by mobile-map $effect so resize clears scroll lock when crossing the breakpoint */
@@ -199,19 +199,7 @@
 		html.style.scrollBehavior = prev;
 	}
 
-	function openMobileMap(opener: HTMLButtonElement) {
-		if (!isMobileViewport()) return;
-		mapOpener = opener;
-		snapMobileShellToTop();
-		mapExpanded = true;
-		void tick().then(() => mapCloseButton?.focus());
-	}
-
-	function closeMobileMap({ focusDesktopMap = false }: { focusDesktopMap?: boolean } = {}) {
-		if (!mapExpanded) return;
-		const opener = mapOpener;
-		mapExpanded = false;
-		mapOpener = null;
+	function restoreMapFocus(opener: HTMLButtonElement | null, focusDesktopMap: boolean) {
 		void tick().then(() => {
 			const canRestoreOpener =
 				opener?.isConnected &&
@@ -232,34 +220,38 @@
 		});
 	}
 
-	function toggleMobileMap(opener: HTMLButtonElement) {
-		if (mapExpanded) {
-			closeMobileMap();
-		} else {
-			openMobileMap(opener);
-		}
+	function openMobileMap(opener: HTMLButtonElement) {
+		if (!isMobileViewport()) return;
+		mapOpener = opener;
+		snapMobileShellToTop();
+		mapExpanded = true;
 	}
 
-	function toggleDesktopMapExpanded() {
-		if (isMobileViewport()) return;
-		mapDesktopExpanded = !mapDesktopExpanded;
+	function closeMobileMap({ focusDesktopMap = false }: { focusDesktopMap?: boolean } = {}) {
+		if (!mapExpanded && !mapPaneEl?.open) return;
+		const opener = mapOpener;
+		mapExpanded = false;
+		mapOpener = null;
+		if (mapPaneEl?.open) {
+			mapPaneEl.close();
+		}
+		restoreMapFocus(opener, focusDesktopMap);
 	}
 
-	function handleMobileMapKeydown(event: KeyboardEvent) {
-		if (!mapExpanded || !isMobileViewport()) return;
+	function handleMapDialogClose() {
+		if (!mapExpanded) return;
+		const opener = mapOpener;
+		mapExpanded = false;
+		mapOpener = null;
+		restoreMapFocus(opener, false);
+	}
 
-		if (event.key === 'Escape') {
-			event.preventDefault();
-			closeMobileMap();
-			return;
-		}
+	function handleMapDialogKeydown(event: KeyboardEvent) {
+		// Native <dialog> handles Escape; Tab wrap still needs help here because
+		// Chrome sends focus to <body> from the last sheet control instead of cycling.
+		if (event.key !== 'Tab' || !mapPaneEl) return;
 
-		if (event.key !== 'Tab') return;
-
-		const pane = mapPaneEl ?? document.getElementById('restaurant-map-panel');
-		if (!(pane instanceof HTMLElement)) return;
-
-		const focusables = getFocusableElements(pane);
+		const focusables = getFocusableElements(mapPaneEl);
 		if (focusables.length === 0) {
 			event.preventDefault();
 			return;
@@ -268,7 +260,7 @@
 		const first = focusables[0];
 		const last = focusables[focusables.length - 1];
 		const active = document.activeElement;
-		const activeInside = active instanceof HTMLElement && pane.contains(active);
+		const activeInside = active instanceof HTMLElement && mapPaneEl.contains(active);
 
 		if (event.shiftKey) {
 			if (!activeInside || active === first) {
@@ -283,6 +275,40 @@
 			first.focus();
 		}
 	}
+
+	function toggleMobileMap(opener: HTMLButtonElement) {
+		if (mapExpanded) {
+			closeMobileMap();
+		} else {
+			openMobileMap(opener);
+		}
+	}
+
+	function toggleDesktopMapExpanded() {
+		if (isMobileViewport()) return;
+		mapDesktopExpanded = !mapDesktopExpanded;
+	}
+
+	// Keep the native <dialog> modal state in sync with mapExpanded + viewport.
+	// showModal() provides the focus trap and Escape-to-close; close() tears it down.
+	$effect(() => {
+		const dialog = mapPaneEl;
+		if (!dialog) return;
+
+		const wantModal = mapExpanded && isMobileViewport();
+		try {
+			if (wantModal) {
+				if (!dialog.open) {
+					dialog.showModal();
+					void tick().then(() => mapCloseButton?.focus());
+				}
+			} else if (dialog.open) {
+				dialog.close();
+			}
+		} catch {
+			// jsdom and older engines may not implement HTMLDialogElement.showModal.
+		}
+	});
 
 	// Mobile expanded map: snap shell to top, lock page scroll, measure controls for map placement
 	$effect(() => {
@@ -521,8 +547,6 @@
 	<link rel="dns-prefetch" href="https://c.tile.openstreetmap.org" />
 </svelte:head>
 
-<svelte:window onkeydown={handleMobileMapKeydown} />
-
 <main>
 	<section class="hero-section">
 		<Hero meta={data.dataset.meta} />
@@ -542,26 +566,20 @@
 			/>
 		</div>
 		<div class="content-area">
-			<div
+			<dialog
 				class="map-pane"
 				class:portal-expanded={mapExpanded}
 				class:desktop-expanded={mapDesktopExpanded}
 				class:no-map-transition={suppressMapTransition}
 				id="restaurant-map-panel"
 				bind:this={mapPaneEl}
-				role={mapExpanded && isMobileViewport() ? 'dialog' : undefined}
 				aria-modal={mapExpanded && isMobileViewport() ? 'true' : undefined}
 				aria-label={mapExpanded && isMobileViewport() ? 'Restaurant map' : undefined}
 				aria-hidden={isMobileViewport() && !mapExpanded ? 'true' : undefined}
 				inert={isMobileViewport() && !mapExpanded ? true : undefined}
+				onclose={handleMapDialogClose}
+				onkeydown={handleMapDialogKeydown}
 			>
-				{#if mapExpanded}
-					<div
-						class="portal-backdrop"
-						onclick={() => closeMobileMap()}
-						role="presentation"
-					></div>
-				{/if}
 				<div class="map-interactive-layer">
 					<Map restaurants={filteredRestaurants} {mapExpanded} />
 				</div>
@@ -578,7 +596,7 @@
 						<X size={22} aria-hidden="true" />
 					</button>
 				{/if}
-			</div>
+			</dialog>
 			{#if !isMobileViewport()}
 				<button
 					type="button"
@@ -674,6 +692,26 @@
 		transition: none !important;
 	}
 
+	/* <dialog> UA chrome (centered, bordered, display:none when closed). Desktop
+	   shows the closed dialog in-flow; mobile uses showModal() for the sheet. */
+	dialog.map-pane {
+		margin: 0;
+		padding: 0;
+		border: none;
+		width: auto;
+		height: auto;
+		max-width: none;
+		max-height: none;
+		background: transparent;
+		color: inherit;
+		position: relative;
+	}
+
+	dialog.map-pane::backdrop {
+		background: transparent;
+		pointer-events: none;
+	}
+
 	/* ── Desktop: expand via pin only (≥ 1024px) ─────────────────────────── */
 	@media (min-width: 1024px) {
 		:global(html) {
@@ -729,7 +767,7 @@
 			min-height: 0;
 			min-width: 0;
 			will-change: flex-basis;
-			transition: flex-basis 0.4s ease;
+			transition: flex-basis 0.25s ease;
 		}
 
 		.list-pane {
@@ -746,7 +784,7 @@
 			background: #fff;
 			border-radius: 12px 0 0 0;
 			will-change: flex-basis, margin-left;
-			transition: flex-basis 0.4s ease, margin-left 0.4s ease;
+			transition: flex-basis 0.25s ease, margin-left 0.25s ease;
 		}
 
 		/* Pinned expand: map grows, list retreats, layered depth collapses */
@@ -796,6 +834,10 @@
 			background: #fff0eb;
 			color: #ff4500;
 			border-color: rgba(0, 0, 0, 0.3);
+		}
+
+		.map-expand-toggle:active {
+			transform: scale(0.96);
 		}
 
 		@media (prefers-reduced-motion: reduce) {
@@ -860,17 +902,6 @@
 			touch-action: none;
 		}
 
-		/* Lives inside .map-pane so it stacks under the map (sibling .app-trap was 1100, so a
-		   global-sibling backdrop at 1110 painted over the entire trap including the map). */
-		.portal-backdrop {
-			position: absolute;
-			inset: 0;
-			z-index: 0;
-			background: rgba(0, 0, 0, 0.4);
-			backdrop-filter: blur(4px);
-			-webkit-backdrop-filter: blur(4px);
-		}
-
 		.map-interactive-layer {
 			position: absolute;
 			inset: 0;
@@ -889,6 +920,7 @@
 			border-radius: 50%;
 			border: none;
 			background: rgba(255, 255, 255, 0.92);
+			color: #3e2c23;
 			font-size: 1.4rem;
 			line-height: 1;
 			cursor: pointer;
@@ -897,6 +929,17 @@
 			align-items: center;
 			justify-content: center;
 			box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+			transition: background 0.15s, color 0.15s;
+		}
+
+		.map-close-btn:hover {
+			background: #fff0eb;
+			color: #ff4500;
+		}
+
+		.map-close-btn:active {
+			transform: scale(0.96);
+			background: #ffe4d6;
 		}
 
 		/* Expanded map sits below controls; keep shell overflow visible for dropdowns */
@@ -913,10 +956,6 @@
 	/* Hide mobile-only elements on desktop */
 	@media (min-width: 1024px) {
 		.map-close-btn {
-			display: none;
-		}
-
-		.portal-backdrop {
 			display: none;
 		}
 	}
