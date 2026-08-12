@@ -68,6 +68,38 @@ export function rankSearchResults(
   });
 }
 
+let cachedRestaurants: Restaurant[] | null = null;
+let cachedSlugKey: string | null = null;
+let cachedFuse: Fuse<SearchableRestaurant> | null = null;
+
+function restaurantListSlugKey(restaurants: Restaurant[]): string {
+  return restaurants.map((restaurant) => restaurant.slug).join("\0");
+}
+
+/** Reuse one Fuse index while the restaurant set (identity or slugs) is unchanged. */
+export function getCachedRestaurantFuse(
+  restaurants: Restaurant[],
+): Fuse<SearchableRestaurant> {
+  if (cachedFuse && cachedRestaurants === restaurants) return cachedFuse;
+
+  const slugKey = restaurantListSlugKey(restaurants);
+  if (cachedFuse && cachedSlugKey === slugKey) {
+    cachedRestaurants = restaurants;
+    return cachedFuse;
+  }
+
+  cachedRestaurants = restaurants;
+  cachedSlugKey = slugKey;
+  cachedFuse = new Fuse(prepareSearchIndex(restaurants), FUSE_SEARCH_OPTIONS);
+  return cachedFuse;
+}
+
+export function resetRestaurantFuseCache(): void {
+  cachedRestaurants = null;
+  cachedSlugKey = null;
+  cachedFuse = null;
+}
+
 export function filterRestaurantsByQuery(
   restaurants: Restaurant[],
   query: string,
@@ -75,7 +107,7 @@ export function filterRestaurantsByQuery(
   const q = query.trim();
   if (!q) return restaurants;
   const bySlug = new Map(restaurants.map((r) => [r.slug, r]));
-  const fuse = new Fuse(prepareSearchIndex(restaurants), FUSE_SEARCH_OPTIONS);
+  const fuse = getCachedRestaurantFuse(restaurants);
   return rankSearchResults(fuse.search(q), q)
     .map((r) => bySlug.get(r.item.slug))
     .filter((r): r is Restaurant => r != null);
