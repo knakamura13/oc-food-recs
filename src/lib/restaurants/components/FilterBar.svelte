@@ -22,6 +22,8 @@
 		restaurantsForHistogram: Restaurant[];
 		/** Full-dataset comment-date range (epoch ms) — the fixed slider/axis extent. */
 		dateExtent: { min: number; max: number };
+		/** Unmapped restaurants that match the current filters/search (whether or not they are included). */
+		unmappedCount?: number;
 		mapExpanded?: boolean;
 		onMapToggle?: (opener: HTMLButtonElement) => void;
 	}
@@ -31,6 +33,7 @@
 		threadSubreddit,
 		restaurantsForHistogram,
 		dateExtent,
+		unmappedCount = 0,
 		mapExpanded = false,
 		onMapToggle
 	}: Props = $props();
@@ -372,17 +375,25 @@
 			</button>
 		{/if}
 
-		<button
-			class="dropdown-trigger mapped-only-toggle"
-			class:has-active={appState.showUnmapped}
-			aria-pressed={appState.showUnmapped}
-			onclick={() => (appState.showUnmapped = !appState.showUnmapped)}
-		>
-			{#if appState.showUnmapped}
-				<span aria-hidden="true">✓</span>
-			{/if}
-			Show unmapped
-		</button>
+		{#if unmappedCount > 0 || appState.showUnmapped}
+			<button
+				class="dropdown-trigger mapped-only-toggle"
+				class:has-active={appState.showUnmapped}
+				aria-pressed={appState.showUnmapped}
+				aria-label={appState.showUnmapped
+					? `Including ${unmappedCount} unmapped ${unmappedCount === 1 ? 'restaurant' : 'restaurants'} in the list`
+					: `Include ${unmappedCount} unmapped ${unmappedCount === 1 ? 'restaurant' : 'restaurants'} in the list`}
+				onclick={() => (appState.showUnmapped = !appState.showUnmapped)}
+			>
+				{#if appState.showUnmapped}
+					<span aria-hidden="true">✓</span>
+				{/if}
+				Include unmapped
+				{#if unmappedCount > 0}
+					<span class="badge">{unmappedCount}</span>
+				{/if}
+			</button>
+		{/if}
 
 		{#if onMapToggle}
 			<button
@@ -463,7 +474,7 @@
 				<button
 					class="pill unmapped-pill"
 					onclick={() => (appState.showUnmapped = false)}
-					aria-label="Remove show unmapped filter"
+					aria-label="Stop including unmapped restaurants"
 				>
 					Unmapped &times;
 				</button>

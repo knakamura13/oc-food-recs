@@ -158,4 +158,43 @@ describe("filter-page-restaurants", () => {
     );
     expect(filtered).toEqual([]);
   });
+
+  it("counts unmapped matches even when they are hidden from results", () => {
+    const restaurants = [
+      makeRestaurant({ slug: "mapped", lat: 33.6, lng: -117.8 }),
+      makeRestaurant({ slug: "unmapped", lat: null, lng: null }),
+    ];
+    const hidden = filterPageRestaurantsWithSearch(
+      restaurants,
+      {
+        activeSubreddits: [],
+        activeCuisines: [],
+        activeCities: [],
+        showUnmapped: false,
+        freshnessCutoff: null,
+        searchQuery: "",
+      },
+      pageFilterCtx,
+    );
+    expect(hidden.filtered.map((r) => r.slug)).toEqual(["mapped"]);
+    expect(hidden.unmappedCount).toBe(1);
+
+    const included = filterPageRestaurantsWithSearch(
+      restaurants,
+      {
+        activeSubreddits: [],
+        activeCuisines: [],
+        activeCities: [],
+        showUnmapped: true,
+        freshnessCutoff: null,
+        searchQuery: "",
+      },
+      pageFilterCtx,
+    );
+    expect(included.filtered.map((r) => r.slug)).toEqual([
+      "mapped",
+      "unmapped",
+    ]);
+    expect(included.unmappedCount).toBe(1);
+  });
 });
