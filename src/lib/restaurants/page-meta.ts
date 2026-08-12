@@ -4,7 +4,7 @@ import { dateExtentOf } from "./stores.svelte";
 import type { Restaurant, RestaurantData } from "./types";
 import { buildSearchParams, type UrlStateSnapshot } from "./url-state";
 
-const DEFAULT_TITLE =
+export const DEFAULT_TITLE =
   "Best Mom & Pop Restaurants in Orange County | Reddit Community Picks";
 
 export function buildPageTitle(
