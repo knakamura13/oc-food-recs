@@ -548,6 +548,7 @@
 		border: 1px solid #d4c8bb;
 		border-radius: 6px;
 		background: #fffcf8;
+		font-family: inherit;
 		font-size: 0.85rem;
 		cursor: pointer;
 		color: #5d4e37;
@@ -557,17 +558,17 @@
 
 	.dropdown-trigger:hover {
 		border-color: #ff4500;
-		color: #ff4500;
+		color: #c43700;
 	}
 
 	.dropdown-trigger.has-active {
 		background: #fff0eb;
 		border-color: #ff4500;
-		color: #ff4500;
+		color: #c43700;
 	}
 
 	.badge {
-		background: #ff4500;
+		background: #c43700;
 		color: #fff;
 		font-size: 0.7rem;
 		padding: 1px 5px;
@@ -591,6 +592,7 @@
 		min-width: min(220px, calc(100vw - 2rem));
 		max-height: 320px;
 		overflow-y: auto;
+		overscroll-behavior: contain;
 		background: rgba(255, 252, 248, 0.95);
 		backdrop-filter: blur(12px);
 		-webkit-backdrop-filter: blur(12px);
@@ -609,6 +611,7 @@
 		border: none;
 		background: none;
 		cursor: pointer;
+		font-family: inherit;
 		font-size: 0.84rem;
 		text-align: left;
 		gap: 6px;
@@ -621,13 +624,13 @@
 
 	.dropdown-item.active {
 		background: #fff0eb;
-		color: #ff4500;
+		color: #c43700;
 	}
 
 	.item-check {
 		width: 16px;
 		font-size: 0.75rem;
-		color: #ff4500;
+		color: #c43700;
 		flex-shrink: 0;
 	}
 
@@ -641,11 +644,12 @@
 	}
 
 	.clear-filters {
+		font-family: inherit;
 		font-size: 0.8rem;
 		padding: 4px 10px;
 		border: none;
 		background: none;
-		color: #ff4500;
+		color: #c43700;
 		cursor: pointer;
 		font-weight: 500;
 	}
@@ -667,6 +671,7 @@
 		gap: 3px;
 		padding: 5px 10px;
 		border-radius: 12px;
+		font-family: inherit;
 		font-size: 0.75rem;
 		cursor: pointer;
 		border: none;
@@ -691,7 +696,7 @@
 
 	.recency-pill {
 		background: #fff0eb;
-		color: #ff4500;
+		color: #c43700;
 	}
 
 	.saved-pill {
@@ -740,6 +745,12 @@
 	@media (max-width: 1023px) {
 		.mobile-map-trigger {
 			display: inline-flex;
+		}
+
+		.dropdown-trigger {
+			min-height: 44px;
+			padding-top: 0;
+			padding-bottom: 0;
 		}
 	}
 </style>
