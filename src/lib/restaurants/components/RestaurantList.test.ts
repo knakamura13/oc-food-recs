@@ -181,6 +181,57 @@ describe("RestaurantList", () => {
     expect(appState.activeCuisines).toEqual([]);
   });
 
+  it("exposes restaurant names as h2 and drawer sections as h3", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => [
+          {
+            comment_id: "c1",
+            thread_id: "t1",
+            role: "primary",
+            author: "foodie",
+            body: "Best tacos in town",
+            score: 12,
+            comment_date: "2024-06-01",
+            permalink: "https://reddit.com/r/x/comments/1",
+            classification: null,
+          },
+          {
+            comment_id: "c2",
+            thread_id: "t1",
+            role: "endorsement",
+            author: "alice",
+            body: "Get the al pastor",
+            score: 8,
+            comment_date: "2024-06-02",
+            permalink: "https://reddit.com/r/x/comments/2",
+            classification: "dish_rec",
+          },
+        ],
+      }),
+    );
+
+    render(RestaurantList, { restaurants });
+
+    expect(
+      screen.getByRole("heading", { level: 2, name: /la taco spot/i }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { level: 3 })).not.toBeInTheDocument();
+
+    appState.selectedRestaurantSlug = "la-taco-spot";
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("heading", { level: 3, name: /what to order/i }),
+      ).toBeInTheDocument();
+    });
+    expect(
+      screen.getByRole("heading", { level: 2, name: /la taco spot/i }),
+    ).toBeInTheDocument();
+  });
+
   it("names the row toggle from identity, not the teaser or chevron", () => {
     render(RestaurantList, {
       restaurants: [
