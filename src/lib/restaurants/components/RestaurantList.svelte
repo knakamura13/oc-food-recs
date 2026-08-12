@@ -1739,19 +1739,27 @@
 			justify-self: end;
 		}
 
+		.row-header::before {
+			content: '';
+			grid-column: 1 / -1;
+			grid-row: 2;
+			height: 0;
+			border-top: 1px solid #e8e0d6;
+			align-self: start;
+			pointer-events: none;
+		}
+
 		.row-stats {
 			grid-column: 1;
 			grid-row: 2;
 			align-self: stretch;
 			align-items: center;
 			gap: 0.75rem;
-			border-top: 1px solid #e8e0d6;
 		}
 
 		.row-chevron-btn {
 			grid-column: 2;
 			grid-row: 2;
-			border-top: 1px solid #e8e0d6;
 		}
 
 		.row-name {

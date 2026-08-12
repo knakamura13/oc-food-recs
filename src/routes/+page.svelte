@@ -1,15 +1,25 @@
 <script lang="ts">
+	import { afterNavigate } from '$app/navigation';
 	import ExplorerApp from '$lib/restaurants/components/ExplorerApp.svelte';
 	import ExplorerSkeleton from '$lib/restaurants/components/ExplorerSkeleton.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
+
+	// afterNavigate must live on this page (always in the first hydrate tree).
+	// Kit registers the callback in onMount and only invokes callbacks that were
+	// already registered when the initial `'enter'` navigation fires — it does
+	// not replay `'enter'` for ExplorerApp, which mounts later behind {#await}.
+	let routerReady = $state(false);
+	afterNavigate(() => {
+		routerReady = true;
+	});
 </script>
 
 {#await data.home}
 	<ExplorerSkeleton />
 {:then home}
-	<ExplorerApp data={home} />
+	<ExplorerApp data={home} {routerReady} />
 {:catch}
 	<main class="load-error">
 		<p class="error-code">Error</p>

@@ -78,6 +78,22 @@ describe("buildSearchParams", () => {
     ).toBe("sort=recency");
   });
 
+  it("produces a non-empty query for first-load sort so replaceState can update the address bar", () => {
+    expect(
+      buildSearchParams({
+        ...defaults,
+        sortKey: "name",
+        sortDirection: "asc",
+      }).toString(),
+    ).not.toBe("");
+    expect(
+      buildSearchParams({
+        ...defaults,
+        activeCuisines: ["Mexican"],
+      }).toString(),
+    ).toBe("cuisine=Mexican");
+  });
+
   it("round-trips non-default state", () => {
     const state: UrlStateSnapshot = {
       ...defaults,

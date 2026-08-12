@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Maximize2, Minimize2, X } from 'lucide-svelte';
 	import { onMount, tick } from 'svelte';
-	import { afterNavigate, replaceState } from '$app/navigation';
+	import { replaceState } from '$app/navigation';
 	import type { Restaurant } from '$lib/restaurants/types';
 	import {
 		appState,
@@ -27,7 +27,7 @@
 	import BackToTop from '$lib/restaurants/components/BackToTop.svelte';
 	import type { ExplorerPageData } from '$lib/restaurants/explorer-page-data';
 
-	let { data }: { data: ExplorerPageData } = $props();
+	let { data, routerReady = false }: { data: ExplorerPageData; routerReady?: boolean } = $props();
 
 	const FOCUSABLE_SELECTOR = [
 		'a[href]',
@@ -52,7 +52,6 @@
 			endorsement_count: r.endorsement_count ?? countEndorsements(r.mentions)
 		}))
 	);
-	const threadCount = $derived(data.dataset.meta.source_threads.length);
 
 	// thread_id -> subreddit, so mentions/restaurants can be attributed to their origin subreddit.
 	// (Plain object, not a Map — `Map` is shadowed by the Map.svelte component import above.)
@@ -473,11 +472,9 @@
 	// SvelteKit's replaceState throws (dev guard) when called before the router has
 	// initialized, and the initial effect flush happens during hydration — before that.
 	// The throw also aborts the rest of the flush (the list's initial sort never
-	// activates), so gate URL writes until the initial navigation completes.
-	let routerReady = $state(false);
-	afterNavigate(() => {
-		routerReady = true;
-	});
+	// activates), so gate URL writes until +page.svelte arms `routerReady` via
+	// afterNavigate. That subscription cannot live here: Kit does not replay the
+	// initial `'enter'` navigation for components that missed it behind {#await}.
 
 	// Sync state -> URL params
 	$effect(() => {
