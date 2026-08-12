@@ -23,6 +23,92 @@
 {@render children()}
 
 <style>
+	:global(html) {
+		color-scheme: light;
+		accent-color: #ff4500;
+		-webkit-tap-highlight-color: rgba(255, 69, 0, 0.2);
+		scroll-behavior: smooth;
+	}
+
+	:global(body) {
+		margin: 0;
+		font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue',
+			Arial, sans-serif;
+		color: #3e2c23;
+		background: #faf7f2;
+		-webkit-font-smoothing: antialiased;
+		-moz-osx-font-smoothing: grayscale;
+		line-height: 1.55;
+	}
+
+	:global(*) {
+		box-sizing: border-box;
+	}
+
+	:global(button) {
+		font-family: inherit;
+	}
+
+	:global(button),
+	:global(a),
+	:global([role='button']) {
+		touch-action: manipulation;
+	}
+
+	:global(*:focus-visible) {
+		outline: 2px solid #ff4500;
+		outline-offset: 2px;
+	}
+
+	:global(::selection) {
+		background: #ff4500;
+		color: #fffdf9;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		:global(*),
+		:global(*::before),
+		:global(*::after) {
+			transition-duration: 0.01ms !important;
+			animation-duration: 0.01ms !important;
+			animation-iteration-count: 1 !important;
+			scroll-behavior: auto !important;
+		}
+	}
+
+	@media (forced-colors: active) {
+		:global(*:focus-visible) {
+			outline: 2px solid Highlight;
+			outline-offset: 2px;
+		}
+
+		:global(button),
+		:global([role='button']) {
+			background-color: ButtonFace;
+			color: ButtonText;
+			border-color: ButtonText;
+		}
+
+		:global(a) {
+			color: LinkText;
+		}
+
+		:global(.skip-link),
+		:global(.home-link) {
+			background: ButtonText;
+			color: Canvas;
+			border: 1px solid ButtonText;
+			forced-color-adjust: none;
+		}
+	}
+
+	@media (prefers-contrast: more) {
+		:global(*:focus-visible) {
+			outline-width: 3px;
+			outline-offset: 3px;
+		}
+	}
+
 	:global([data-sonner-toaster][data-sonner-theme='light']) {
 		--normal-bg: #fffcf8;
 		--normal-border: #e8e0d6;
@@ -56,7 +142,7 @@
 		top: 0;
 		z-index: 9999;
 		padding: 0.75rem 1rem;
-		background: #ff4500;
+		background: #c43700;
 		color: #fffdf9;
 		font-family: 'DM Sans', sans-serif;
 		font-weight: 600;
