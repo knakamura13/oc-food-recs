@@ -382,7 +382,8 @@
 		}
 	});
 
-	// Invalidate map size when container dimensions change (desktop hover or mobile expansion)
+	// Invalidate map size when the pane actually resizes (pin expand / mobile sheet).
+	// Do not reintroduce hover-driven flex-basis: hover highlight is pin-only.
 	$effect(() => {
 		if (!mapContainer || !leafletMap) return;
 

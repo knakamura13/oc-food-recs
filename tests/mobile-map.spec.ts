@@ -47,13 +47,13 @@ const desktopViewports = [
 ] as const;
 
 async function firstRenderedRow(page: Page): Promise<Locator> {
-	const row = page.locator('.row').first();
+	const row = page.locator('.row[id^="restaurant-"]').first();
 	await expect(row).toBeVisible({ timeout: 30_000 });
 	return row;
 }
 
 async function openRenderedRowWithMapAction(page: Page): Promise<string> {
-	const rows = page.locator('.row');
+	const rows = page.locator('.row[id^="restaurant-"]');
 	await firstRenderedRow(page);
 	const rowCount = await rows.count();
 
