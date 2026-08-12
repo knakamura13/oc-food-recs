@@ -41,6 +41,7 @@ describe("ExplorerSkeleton", () => {
     expect(screen.getByText("Share")).toBeInTheDocument();
     expect(screen.getByText("Sort by:")).toBeInTheDocument();
     expect(document.querySelector(".map-pane")).toBeTruthy();
+    expect(document.querySelector("main.explorer-skeleton")).toBeTruthy();
     expect(document.querySelectorAll(".row").length).toBe(8);
     expect(document.querySelectorAll(".skeleton-line").length).toBeGreaterThan(
       0,
