@@ -1,3 +1,4 @@
+import type { ExplorerPageData } from "$lib/restaurants/explorer-page-data";
 import { buildPageMeta } from "$lib/restaurants/page-meta";
 import { db } from "$lib/server/db";
 import type {
@@ -51,7 +52,11 @@ function threadSubredditLookup(
   return lookup;
 }
 
-export const load: PageServerLoad = async ({ url }) => {
+async function loadHomePage(
+  urlState: ReturnType<typeof parseSearchParams>,
+  pageOrigin: string,
+  pathname: string,
+): Promise<ExplorerPageData> {
   // Restaurants joined with their mentions; aggregated to one row per restaurant.
   // Only restaurants whose mentions belong to published threads are returned.
   const restaurantsResult = await db.execute(sql`
@@ -231,13 +236,12 @@ export const load: PageServerLoad = async ({ url }) => {
     total_comments_processed: statsRow.total_comments_processed ?? 0,
   };
 
-  const urlState = parseSearchParams(url.searchParams);
   const pageMeta = buildPageMeta(
     urlState,
     restaurants,
     meta,
-    url.origin,
-    url.pathname,
+    pageOrigin,
+    pathname,
     threadSubredditLookup(sourceThreads),
   );
 
@@ -248,6 +252,16 @@ export const load: PageServerLoad = async ({ url }) => {
     },
     urlState,
     pageMeta,
-    pageOrigin: url.origin,
+    pageOrigin,
   };
+}
+
+export const load: PageServerLoad = ({ url }) => {
+  // Read URL in the load body so SvelteKit tracks search-param dependencies.
+  // The DB work is returned as a promise so the explorer shell can stream
+  // before Postgres finishes — first paint is SSR/DB-bound, not client nav.
+  const urlState = parseSearchParams(url.searchParams);
+  const home = loadHomePage(urlState, url.origin, url.pathname);
+  void home.catch(() => {});
+  return { home };
 };
