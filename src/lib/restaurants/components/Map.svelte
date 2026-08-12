@@ -139,6 +139,13 @@
 			await import('leaflet.markercluster/dist/MarkerCluster.Default.css');
 			if (destroyed || generation !== mapInitializationGeneration) return;
 
+			// Restaurant pins and clusters stay pointer/touch targets. Putting hundreds
+			// of them in the tab order buries the list behind unnamed "2"/"27" buttons.
+			// Keyboard users browse via the list; the map container itself remains a
+			// single arrow-key pan stop.
+			L.Marker?.mergeOptions?.({ keyboard: false });
+			L.MarkerCluster?.mergeOptions?.({ keyboard: false });
+
 			// One combined marker carrying both a resting dot and an (initially hidden)
 			// red pin. The highlight toggles an `is-active` class on the element rather
 			// than swapping icons, so the dot->pin CSS transition fires cleanly.
@@ -273,7 +280,7 @@
 	function createMarker(r: Restaurant) {
 		const marker = L.marker([r.lat, r.lng], {
 			icon: dotIcon,
-			keyboard: true,
+			keyboard: false,
 			title: r.name,
 			riseOnHover: true
 		});
@@ -912,6 +919,10 @@
 		:global(.rec-dot),
 		:global(.rec-pin) {
 			transition: none !important;
+		}
+
+		:global(.rec-marker.is-active::after) {
+			animation: none;
 		}
 	}
 

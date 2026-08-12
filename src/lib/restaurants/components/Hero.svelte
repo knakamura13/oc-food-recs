@@ -80,6 +80,35 @@
 		color: #ff4500;
 	}
 
+	/* Desktop explorer is a locked viewport — keep the intro compact so map + list
+	   get the space. Short laptop windows hide the attribution line entirely. */
+	@media (min-width: 1024px) {
+		.hero {
+			padding: 0.85rem 1.5rem 0.4rem;
+		}
+
+		h1 {
+			font-size: 1.4rem;
+			margin: 0 0 0.25rem;
+		}
+
+		p {
+			font-size: 0.85rem;
+			line-height: 1.4;
+			margin: 0 0 0.2rem;
+		}
+
+		.attribution {
+			margin-top: 0;
+		}
+	}
+
+	@media (min-width: 1024px) and (max-height: 800px) {
+		.attribution {
+			display: none;
+		}
+	}
+
 	@media (max-width: 768px) {
 		.hero {
 			padding: 1rem 1rem 0.5rem;

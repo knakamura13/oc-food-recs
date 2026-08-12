@@ -254,6 +254,15 @@
 		});
 	});
 
+	function rowToggleLabel(restaurant: Restaurant): string {
+		const parts = [restaurant.name];
+		if (restaurant.cuisine) parts.push(normalizeCuisine(restaurant.cuisine));
+		if (restaurant.location) parts.push(restaurant.location);
+		if (restaurant.endorsement_count >= 15) parts.push('popular');
+		if (hasNewMentions(restaurant)) parts.push('new since last visit');
+		return parts.join(', ');
+	}
+
 	function toggleRow(restaurant: Restaurant) {
 		const slug = restaurant.slug;
 		if (appState.selectedRestaurantSlug === slug) {
@@ -433,7 +442,14 @@
 		</span>
 	</div>
 
-	<div class="list-scroll" id="main-content" {@attach bindListScroll} role="region" aria-label="Restaurant results">
+	<div
+		class="list-scroll"
+		id="main-content"
+		tabindex="-1"
+		{@attach bindListScroll}
+		role="region"
+		aria-label="Restaurant results"
+	>
 		{#if table.rows.length === 0}
 			<div class="empty-state">
 				{#if appState.showSavedOnly}
@@ -492,6 +508,7 @@
 									onclick={() => toggleRow(restaurant)}
 									onfocus={() => setHovered(restaurant)}
 									onblur={() => clearHovered(restaurant)}
+									aria-label={rowToggleLabel(restaurant)}
 									aria-expanded={isOpen}
 									aria-controls={isOpen ? `drawer-${slug}` : undefined}
 								>
@@ -555,17 +572,13 @@
 										aria-hidden="true"
 									/>
 								</button>
-								<button
-									type="button"
+								<span
 									class="row-chevron-btn"
 									onclick={() => toggleRow(restaurant)}
-									onfocus={() => setHovered(restaurant)}
-									onblur={() => clearHovered(restaurant)}
-									aria-label="{isOpen ? 'Collapse' : 'Expand'} {restaurant.name} details"
-									tabindex="-1"
+									aria-hidden="true"
 								>
 									<span class="chevron" class:open={isOpen} aria-hidden="true"><ChevronRight size={20} /></span>
-								</button>
+								</span>
 							</div>
 
 							<div
@@ -628,24 +641,24 @@
 												</span>
 												<span class="comment-score">
 													{primary.score} points
-										<button
-											type="button"
-											class="info-tip"
-											aria-label="Score info"
-											aria-expanded={openScoreTipSlug === slug}
-											aria-controls="score-tip-{slug}"
-											onclick={(e) => toggleScoreTip(slug, e)}
-										>
-											<span class="info-icon" aria-hidden="true">i</span>
-											<span
-												id="score-tip-{slug}"
-												class="info-tooltip"
-												class:open={openScoreTipSlug === slug}
-												role="tooltip"
-											>
-												Reddit upvotes on this recommendation comment.
-											</span>
-										</button>
+													<button
+														type="button"
+														class="info-tip"
+														aria-label="Score info"
+														aria-expanded={openScoreTipSlug === slug}
+														aria-controls="score-tip-{slug}"
+														onclick={(e) => toggleScoreTip(slug, e)}
+													>
+														<span class="info-icon" aria-hidden="true">i</span>
+													</button>
+													<span
+														id="score-tip-{slug}"
+														class="info-tooltip"
+														class:open={openScoreTipSlug === slug}
+														role="tooltip"
+													>
+														Reddit upvotes on this recommendation comment.
+													</span>
 												</span>
 											</div>
 											<p class="comment-body">{primary.body}</p>
@@ -871,6 +884,15 @@
 		min-height: 0;
 		overflow-y: auto;
 		overscroll-behavior: contain;
+	}
+
+	.list-scroll:focus {
+		outline: none;
+	}
+
+	.list-scroll:focus-visible {
+		outline: 2px solid #ff4500;
+		outline-offset: -2px;
 	}
 
 	.virtual-spacer {
@@ -1157,8 +1179,7 @@
 		pointer-events: none;
 	}
 
-	.info-tip:hover .info-tooltip,
-	.info-tip:focus .info-tooltip,
+	.info-tip:hover + .info-tooltip,
 	.info-tooltip.open {
 		display: block;
 	}
@@ -1390,6 +1411,7 @@
 	}
 
 	.comment-score {
+		position: relative;
 		font-size: 0.78rem;
 		color: #ff4500;
 		font-weight: 600;

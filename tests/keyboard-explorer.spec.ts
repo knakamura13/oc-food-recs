@@ -1,0 +1,50 @@
+import { expect, test } from "@playwright/test";
+
+test("skip link moves keyboard focus into the restaurant list", async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== "Desktop Chrome",
+    "Desktop viewport only",
+  );
+  await page.goto("/");
+  await expect(page.locator(".row").first()).toBeVisible({ timeout: 30_000 });
+
+  await page.keyboard.press("Tab");
+  const skip = page.getByRole("link", { name: /skip to restaurant list/i });
+  await expect(skip).toBeFocused();
+
+  await page.keyboard.press("Enter");
+  await expect(page.locator("#main-content")).toBeFocused();
+
+  await page.keyboard.press("Tab");
+  const activeName = await page.evaluate(() => {
+    const el = document.activeElement;
+    if (!(el instanceof HTMLElement)) return "";
+    return (el.getAttribute("aria-label") || el.textContent || "").trim();
+  });
+  expect(activeName.toLowerCase()).not.toMatch(/^(zoom|leaflet|\d+$)/);
+  await expect(page.locator(".row-toggle").first()).toBeFocused();
+});
+
+test("map markers and clusters are not sequential tab stops", async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== "Desktop Chrome",
+    "Desktop viewport only",
+  );
+  await page.goto("/");
+  await expect(page.locator(".leaflet-container")).toBeVisible({
+    timeout: 30_000,
+  });
+  await expect(page.locator(".leaflet-marker-icon").first()).toBeVisible();
+
+  const tabbableMarkers = await page
+    .locator(".map-pane .leaflet-marker-icon")
+    .evaluateAll(
+      (icons) => icons.filter((el) => (el as HTMLElement).tabIndex >= 0).length,
+    );
+
+  expect(tabbableMarkers).toBe(0);
+});
