@@ -6,7 +6,8 @@
 		clearExplorerFilters,
 		normalizeCuisine,
 		normalizeCity,
-		formatMonthYear
+		formatMonthYear,
+		setFreshnessFilter
 	} from '$lib/restaurants/stores.svelte';
 	import { savedState } from '$lib/restaurants/saved-restaurants.svelte';
 	import { getPriorVisitMs } from '$lib/restaurants/visit-tracker';
@@ -55,13 +56,16 @@
 	});
 
 	const isNewSinceVisit = $derived(
-		lastVisitMs !== null && appState.freshnessCutoff !== null && appState.freshnessCutoff === lastVisitMs
+		lastVisitMs !== null &&
+			appState.freshnessSource === 'visit' &&
+			appState.freshnessCutoff === lastVisitMs
 	);
 	const isCustomRecency = $derived(appState.freshnessCutoff !== null && !isNewSinceVisit);
 
 	function toggleNewSinceVisit() {
 		if (lastVisitMs === null) return;
-		appState.freshnessCutoff = isNewSinceVisit ? null : lastVisitMs;
+		if (isNewSinceVisit) setFreshnessFilter(null);
+		else setFreshnessFilter(lastVisitMs, 'visit');
 	}
 
 	function closeAllDropdowns() {
@@ -458,7 +462,7 @@
 			{#if recencyLabel}
 				<button
 					class="pill recency-pill"
-					onclick={() => (appState.freshnessCutoff = null)}
+					onclick={() => setFreshnessFilter(null)}
 					aria-label={isNewSinceVisit
 						? 'Remove new since last visit filter'
 						: 'Remove recency filter'}

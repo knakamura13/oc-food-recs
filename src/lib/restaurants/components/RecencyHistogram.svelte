@@ -5,7 +5,8 @@
 		appState,
 		buildDateHistogram,
 		formatMonthYear,
-		relativeAge
+		relativeAge,
+		setFreshnessFilter
 	} from '$lib/restaurants/stores.svelte';
 
 	interface Props {
@@ -65,7 +66,7 @@
 	let pendingCommit = false;
 
 	function commitNow() {
-		appState.freshnessCutoff = handleMs <= extent.min ? null : handleMs;
+		setFreshnessFilter(handleMs <= extent.min ? null : handleMs);
 	}
 
 	// Leading + trailing throttle: commit immediately, then at most once per THROTTLE_MS while

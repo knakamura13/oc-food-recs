@@ -7,6 +7,7 @@ export function resetAppState(): void {
   appState.activeCities = [];
   appState.activeSubreddits = [];
   appState.freshnessCutoff = null;
+  appState.freshnessSource = null;
   appState.showUnmapped = false;
   appState.sortKey = "score";
   appState.sortDirection = "desc";

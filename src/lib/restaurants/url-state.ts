@@ -1,5 +1,12 @@
 import type { SortDirection, SortKey } from "./types";
 
+/** How the shared freshness cutoff was chosen — last visit vs histogram date. */
+export type FreshnessSource = "visit" | "date";
+
+/** Query token for "New since last visit". Distinct from a date so a histogram
+ *  pick on the same UTC calendar day does not round-trip as last-visit. */
+export const FRESHNESS_SINCE_VISIT = "visit";
+
 /** Fields synced between appState and URL search params. */
 export interface UrlStateSnapshot {
   searchQuery: string;
@@ -7,6 +14,7 @@ export interface UrlStateSnapshot {
   activeCities: string[];
   activeSubreddits: string[];
   freshnessCutoff: number | null;
+  freshnessSource: FreshnessSource | null;
   showUnmapped: boolean;
   sortKey: SortKey;
   sortDirection: SortDirection;
@@ -33,9 +41,14 @@ export function parseSearchParams(
   if (subreddit) result.activeSubreddits = subreddit.split(",").filter(Boolean);
 
   const since = params.get("since");
-  if (since) {
+  if (since === FRESHNESS_SINCE_VISIT) {
+    result.freshnessSource = "visit";
+  } else if (since) {
     const t = Date.parse(since);
-    if (!Number.isNaN(t)) result.freshnessCutoff = t;
+    if (!Number.isNaN(t)) {
+      result.freshnessCutoff = t;
+      result.freshnessSource = "date";
+    }
   }
 
   const sort = params.get("sort");
@@ -74,7 +87,9 @@ export function buildSearchParams(state: UrlStateSnapshot): URLSearchParams {
     params.set("sortdir", state.sortDirection);
   if (state.selectedRestaurantSlug)
     params.set("restaurant", state.selectedRestaurantSlug);
-  if (state.freshnessCutoff !== null) {
+  if (state.freshnessSource === "visit" && state.freshnessCutoff !== null) {
+    params.set("since", FRESHNESS_SINCE_VISIT);
+  } else if (state.freshnessCutoff !== null) {
     params.set(
       "since",
       new Date(state.freshnessCutoff).toISOString().slice(0, 10),

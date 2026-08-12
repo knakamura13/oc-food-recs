@@ -87,6 +87,7 @@ export function buildCanonicalShareUrl(
     activeCities: state.activeCities ?? [],
     activeSubreddits: state.activeSubreddits ?? [],
     freshnessCutoff: state.freshnessCutoff ?? null,
+    freshnessSource: state.freshnessSource ?? null,
     showUnmapped: state.showUnmapped ?? false,
     sortKey: state.sortKey ?? "score",
     sortDirection: state.sortDirection ?? "desc",

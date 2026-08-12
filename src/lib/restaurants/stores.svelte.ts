@@ -1,4 +1,5 @@
 import type { ListMention, Restaurant, SortKey } from "./types";
+import type { FreshnessSource } from "./url-state";
 
 export const appState = $state({
   searchQuery: "",
@@ -8,6 +9,8 @@ export const appState = $state({
   // Comment-recency filter: epoch-ms cutoff; only mentions on/after it are kept.
   // null = "All time" (filter inactive). Mentions with a null comment_date are always kept.
   freshnessCutoff: null as number | null,
+  // Distinguishes last-visit vs histogram date for URL/copy. One cutoff either way.
+  freshnessSource: null as FreshnessSource | null,
   showUnmapped: false,
   // Device-local "Saved" filter (see saved-restaurants.svelte.ts). Session-only:
   // deliberately excluded from URL sync since saved lists don't travel with links.
@@ -27,9 +30,24 @@ export function clearExplorerFilters(opts?: { includeSearch?: boolean }) {
   appState.activeCities = [];
   appState.activeSubreddits = [];
   appState.freshnessCutoff = null;
+  appState.freshnessSource = null;
   appState.showUnmapped = false;
   appState.showSavedOnly = false;
   if (opts?.includeSearch) appState.searchQuery = "";
+}
+
+/** Set or clear the shared freshness cutoff and its URL/copy source together. */
+export function setFreshnessFilter(
+  cutoff: number | null,
+  source: FreshnessSource | null = null,
+): void {
+  if (cutoff === null) {
+    appState.freshnessCutoff = null;
+    appState.freshnessSource = null;
+    return;
+  }
+  appState.freshnessCutoff = cutoff;
+  appState.freshnessSource = source ?? "date";
 }
 
 export function isUnmappedRestaurant(
