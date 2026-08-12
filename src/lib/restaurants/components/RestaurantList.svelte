@@ -13,7 +13,13 @@
 	} from '@tanstack/virtual-core';
 	import { TableHandler } from '@vincjo/datatables';
 	import type { Mention, Restaurant, SortKey } from '$lib/restaurants/types';
-	import { appState, clearExplorerFilters, latestMentionMs, normalizeCuisine } from '$lib/restaurants/stores.svelte';
+	import {
+		appState,
+		clearExplorerFilters,
+		isUnmappedRestaurant,
+		latestMentionMs,
+		normalizeCuisine
+	} from '$lib/restaurants/stores.svelte';
 	import { buildCanonicalShareUrl } from '$lib/restaurants/page-meta';
 	import { isSaved, toggleSaved } from '$lib/restaurants/saved-restaurants.svelte';
 	import { getLastVisitMs, hasNewMentionsSince } from '$lib/restaurants/visit-tracker';
@@ -260,6 +266,7 @@
 		if (restaurant.location) parts.push(restaurant.location);
 		if (restaurant.endorsement_count >= 15) parts.push('popular');
 		if (hasNewMentions(restaurant)) parts.push('new since last visit');
+		if (isUnmappedRestaurant(restaurant)) parts.push('not on the map');
 		return parts.join(', ');
 	}
 
@@ -529,6 +536,9 @@
 											{#if restaurant.location}
 												<span class="tag location-tag">{restaurant.location}</span>
 											{/if}
+											{#if isUnmappedRestaurant(restaurant)}
+												<span class="tag unmapped-tag">Unmapped</span>
+											{/if}
 										</div>
 										{#if restaurant.top_comment_snippet}
 											{@const snippet = getTrimmedSnippet(restaurant.top_comment_snippet, restaurant.name, 150)}
@@ -760,6 +770,12 @@
 						{/if}
 							</div>
 						{/if}
+
+										{#if isUnmappedRestaurant(restaurant)}
+											<p class="unmapped-drawer-hint">
+												This place isn’t pinned on the map yet. Google Maps can still search for it by name.
+											</p>
+										{/if}
 
 										<div class="drawer-actions">
 											{#if restaurant.lat && restaurant.lng}
@@ -1095,6 +1111,11 @@
 		border: 1px solid #ffcca8;
 		font-weight: 600;
 		font-size: 0.68rem;
+	}
+
+	.unmapped-tag {
+		background: #e8ece8;
+		color: #3d5a45;
 	}
 
 	.row-stats {
@@ -1503,8 +1524,16 @@
 		text-decoration-thickness: 2px;
 	}
 
+	.unmapped-drawer-hint {
+		margin: 0.5rem 0 0;
+		font-size: 0.8rem;
+		line-height: 1.4;
+		color: #5d4e37;
+	}
+
 	.drawer-actions {
 		display: flex;
+		flex-wrap: wrap;
 		gap: 0.5rem;
 		margin-top: 0.5rem;
 	}

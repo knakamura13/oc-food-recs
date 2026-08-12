@@ -535,6 +535,7 @@
 			{threadSubreddit}
 			restaurantsForHistogram={restaurantsBeforeFreshness}
 			{dateExtent}
+			unmappedCount={pageFilterResult.unmappedCount}
 			{mapExpanded}
 			onMapToggle={toggleMobileMap}
 		/>
