@@ -290,4 +290,63 @@ describe("FilterBar", () => {
     expect(mapButton).toHaveAccessibleName("Close map");
     expect(mapButton).toHaveAttribute("aria-expanded", "true");
   });
+
+  it("closes a filter menu on Escape and returns focus to the trigger", async () => {
+    const user = userEvent.setup();
+    render(FilterBar, {
+      restaurants,
+      threadSubreddit,
+      restaurantsForHistogram: restaurants,
+      dateExtent,
+    });
+    const trigger = screen.getByRole("button", { name: /^cuisine$/i });
+    await user.click(trigger);
+    expect(
+      screen.getByRole("listbox", { name: /filter by cuisine/i }),
+    ).toBeInTheDocument();
+    await user.keyboard("{Escape}");
+    expect(
+      screen.queryByRole("listbox", { name: /filter by cuisine/i }),
+    ).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
+
+  it("closes a filter menu when focus leaves the dropdown", async () => {
+    const user = userEvent.setup();
+    render(FilterBar, {
+      restaurants,
+      threadSubreddit,
+      restaurantsForHistogram: restaurants,
+      dateExtent,
+    });
+    await user.click(screen.getByRole("button", { name: /^cuisine$/i }));
+    expect(
+      screen.getByRole("listbox", { name: /filter by cuisine/i }),
+    ).toBeInTheDocument();
+    await user.tab();
+    await user.tab();
+    await user.tab();
+    expect(
+      screen.queryByRole("listbox", { name: /filter by cuisine/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^city$/i })).toHaveFocus();
+  });
+
+  it("exposes recency as a labelled popup, not a dialog", async () => {
+    const user = userEvent.setup();
+    render(FilterBar, {
+      restaurants,
+      threadSubreddit,
+      restaurantsForHistogram: restaurants,
+      dateExtent,
+    });
+    const trigger = screen.getByRole("button", { name: /^recency$/i });
+    expect(trigger).toHaveAttribute("aria-haspopup", "true");
+    await user.click(trigger);
+    expect(trigger).toHaveAttribute("aria-controls", "recency-panel");
+    expect(
+      screen.getByRole("group", { name: /filter by comment recency/i }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
 });
