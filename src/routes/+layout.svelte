@@ -3,6 +3,13 @@
 	import { Toaster } from 'svelte-sonner';
 
 	let { children } = $props();
+
+	function focusRestaurantList(event: MouseEvent) {
+		const main = document.getElementById('main-content');
+		if (!(main instanceof HTMLElement)) return;
+		event.preventDefault();
+		main.focus();
+	}
 </script>
 
 <svelte:head>
@@ -11,7 +18,7 @@
 
 <Toaster position="bottom-center" richColors duration={2500} closeButton />
 
-<a href="#main-content" class="skip-link">Skip to restaurant list</a>
+<a href="#main-content" class="skip-link" onclick={focusRestaurantList}>Skip to restaurant list</a>
 
 {@render children()}
 

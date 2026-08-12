@@ -67,6 +67,20 @@
 		showRecencyDropdown = false;
 	}
 
+	function handleDropdownFocusOut(event: FocusEvent) {
+		const wrapper = event.currentTarget as HTMLElement;
+		const next = event.relatedTarget as Node | null;
+		if (next && wrapper.contains(next)) return;
+		if (!next) {
+			requestAnimationFrame(() => {
+				if (wrapper.contains(document.activeElement)) return;
+				closeAllDropdowns();
+			});
+			return;
+		}
+		closeAllDropdowns();
+	}
+
 	function toggleDropdown(which: 'cuisine' | 'city' | 'subreddit' | 'recency') {
 		const next = {
 			cuisine: which === 'cuisine' ? !showCuisineDropdown : false,
@@ -192,7 +206,7 @@
 <nav class="filter-bar" aria-label="Restaurant filters">
 	<div class="filter-controls">
 		<!-- Cuisine dropdown -->
-		<div class="dropdown-wrapper">
+		<div class="dropdown-wrapper" onfocusout={handleDropdownFocusOut}>
 			<button
 				class="dropdown-trigger"
 				class:has-active={appState.activeCuisines.length > 0}
@@ -228,7 +242,7 @@
 		</div>
 
 		<!-- City dropdown -->
-		<div class="dropdown-wrapper">
+		<div class="dropdown-wrapper" onfocusout={handleDropdownFocusOut}>
 			<button
 				class="dropdown-trigger"
 				class:has-active={appState.activeCities.length > 0}
@@ -264,12 +278,13 @@
 		</div>
 
 		<!-- Recency dropdown — comment-density histogram + freshness cutoff -->
-		<div class="dropdown-wrapper">
+		<div class="dropdown-wrapper" onfocusout={handleDropdownFocusOut}>
 			<button
 				class="dropdown-trigger"
 				class:has-active={appState.freshnessCutoff !== null}
 				aria-expanded={showRecencyDropdown}
-				aria-haspopup="dialog"
+				aria-haspopup="true"
+				aria-controls={showRecencyDropdown ? 'recency-panel' : undefined}
 				onclick={() => toggleDropdown('recency')}
 			>
 				Recency
@@ -277,7 +292,12 @@
 			</button>
 
 			{#if showRecencyDropdown}
-				<div class="dropdown-panel recency-panel">
+				<div
+					class="dropdown-panel recency-panel"
+					id="recency-panel"
+					role="group"
+					aria-label="Filter by comment recency"
+				>
 					<RecencyHistogram mentions={histogramMentions} extent={dateExtent} />
 				</div>
 			{/if}
@@ -285,7 +305,7 @@
 
 		<!-- Subreddit dropdown (only when data spans more than one subreddit) -->
 		{#if showSubredditFilter}
-			<div class="dropdown-wrapper">
+			<div class="dropdown-wrapper" onfocusout={handleDropdownFocusOut}>
 				<button
 					class="dropdown-trigger"
 					class:has-active={appState.activeSubreddits.length > 0}
@@ -462,7 +482,11 @@
 	}}
 	onkeydown={(e) => {
 		if (e.key === 'Escape') {
+			const openTrigger = document.querySelector<HTMLElement>(
+				'.dropdown-trigger[aria-expanded="true"]'
+			);
 			closeAllDropdowns();
+			openTrigger?.focus();
 			return;
 		}
 		const open =
