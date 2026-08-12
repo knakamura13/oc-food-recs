@@ -1,8 +1,7 @@
 <script lang="ts">
-	import { ChevronRight } from 'lucide-svelte';
 	import { onMount, untrack } from 'svelte';
 	import type { Restaurant } from '$lib/restaurants/types';
-	import { appState } from '$lib/restaurants/stores.svelte';
+	import { appState, isUnmappedRestaurant } from '$lib/restaurants/stores.svelte';
 
 	const reduceMotion = () =>
 		typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -25,8 +24,8 @@
 	let mapInitializationGeneration = 0;
 	let destroyed = false;
 
-	let unmappedRestaurants = $derived(restaurants.filter((r) => r.lat === null || r.lng === null));
-	let mappedRestaurants = $derived(restaurants.filter((r) => r.lat !== null && r.lng !== null));
+	let unmappedCount = $derived(restaurants.filter(isUnmappedRestaurant).length);
+	let mappedRestaurants = $derived(restaurants.filter((r) => !isUnmappedRestaurant(r)));
 	let showMapLoading = $derived(
 		(mapExpanded || mapInitializationStarted) && !mapInitialized && !mapLoadError
 	);
@@ -460,11 +459,6 @@
 		);
 	}
 
-	function scrollToRestaurant(r: Restaurant) {
-		appState.selectedRestaurantSlug = r.slug;
-		appState.listScrollTarget = r.slug;
-	}
-
 	function escapeHtml(value: string): string {
 		return value
 			.replace(/&/g, '&amp;')
@@ -579,26 +573,12 @@
 		{/if}
 	{/if}
 
-	{#if unmappedRestaurants.length > 0}
-		<button
-			class="unmapped-toggle"
-			onclick={() => (appState.showUnmapped = !appState.showUnmapped)}
-			aria-expanded={appState.showUnmapped}
-		>
-			{appState.showUnmapped ? 'Hide' : 'Show'} {unmappedRestaurants.length} unmapped restaurants
-			<span class="arrow" class:open={appState.showUnmapped} aria-hidden="true"><ChevronRight size={18} /></span>
-		</button>
-
-		{#if appState.showUnmapped}
-			<div class="unmapped-list">
-				{#each unmappedRestaurants as r}
-					<button class="unmapped-item" onclick={() => scrollToRestaurant(r)}>
-						<span class="unmapped-name">{r.name}</span>
-						<span class="unmapped-score">{r.aggregate_score} pts</span>
-					</button>
-				{/each}
-			</div>
-		{/if}
+	{#if appState.showUnmapped && unmappedCount > 0}
+		<p class="unmapped-status" role="status">
+			{unmappedCount === 1
+				? '1 restaurant in the list isn’t on the map'
+				: `${unmappedCount} restaurants in the list aren’t on the map`}
+		</p>
 	{/if}
 </div>
 
@@ -660,72 +640,24 @@
 		outline-offset: 2px;
 	}
 
-	.unmapped-toggle {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		width: 100%;
-		flex-shrink: 0;
-		padding: 0.5rem 0.75rem;
-		border: none;
-		background: #f0ebe3;
-		font-size: 0.82rem;
-		color: #5d4e37;
-		cursor: pointer;
-		border-top: 1px solid #e8e0d6;
-		margin-top: 4px;
-		border-radius: 0 0 8px 8px;
-	}
-
-	.unmapped-toggle:hover {
-		background: #e8e0d6;
-	}
-
-	.arrow {
-		transition: transform 0.2s;
-		display: inline-flex;
-		align-items: center;
-	}
-
-	.arrow.open {
-		transform: rotate(90deg);
-	}
-
-	.unmapped-list {
-		flex-shrink: 0;
-		max-height: 200px;
-		overflow-y: auto;
+	.unmapped-status {
+		position: absolute;
+		bottom: 28px;
+		left: 52px;
+		right: auto;
+		max-width: calc(100% - 64px);
+		z-index: 500;
+		margin: 0;
+		padding: 0.4rem 0.65rem;
+		border-radius: 6px;
+		background: rgba(255, 252, 248, 0.94);
 		border: 1px solid #e8e0d6;
-		border-top: 0;
-		border-radius: 0 0 8px 8px;
-		background: #faf7f2;
-	}
-
-	.unmapped-item {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		width: 100%;
-		padding: 0.4rem 0.75rem;
-		border: none;
-		background: none;
-		cursor: pointer;
-		font-size: 0.82rem;
-		text-align: left;
-	}
-
-	.unmapped-item:hover {
-		background: #fff0eb;
-	}
-
-	.unmapped-name {
-		color: #3e2c23;
-	}
-
-	.unmapped-score {
-		color: #ff4500;
-		font-weight: 600;
+		box-shadow: 0 1px 5px rgba(0, 0, 0, 0.12);
+		color: #5d4e37;
 		font-size: 0.78rem;
+		font-weight: 500;
+		line-height: 1.35;
+		pointer-events: none;
 	}
 
 	@media (max-width: 1023px) {
@@ -743,18 +675,8 @@
 			flex: 1;
 		}
 
-		.unmapped-toggle {
+		.unmapped-status {
 			display: none;
-		}
-
-		.unmapped-list {
-			display: none;
-		}
-	}
-
-	@media (min-width: 1024px) {
-		.unmapped-list {
-			max-height: min(240px, 35%);
 		}
 	}
 

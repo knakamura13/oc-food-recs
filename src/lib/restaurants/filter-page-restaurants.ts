@@ -1,5 +1,9 @@
 import type { Restaurant } from "./types";
-import { normalizeCity, normalizeCuisine } from "./stores.svelte";
+import {
+  normalizeCity,
+  normalizeCuisine,
+  isUnmappedRestaurant,
+} from "./stores.svelte";
 import {
   createSliceCache,
   sliceRestaurantMentions,
@@ -65,7 +69,7 @@ export function filterBeforeFreshness(
   }
 
   if (!state.showUnmapped) {
-    result = result.filter((r) => r.lat != null && r.lng != null);
+    result = result.filter((r) => !isUnmappedRestaurant(r));
   }
 
   return result;
@@ -114,14 +118,35 @@ export function filterPageRestaurantsWithSearch(
   allRestaurants: Restaurant[],
   state: PageFilterState & { searchQuery: string },
   ctx: PageFilterContext,
-): { beforeFreshness: Restaurant[]; filtered: Restaurant[] } {
-  const { beforeFreshness, filtered } = filterPageRestaurants(
+): {
+  beforeFreshness: Restaurant[];
+  filtered: Restaurant[];
+  unmappedCount: number;
+} {
+  const includingUnmapped = filterPageRestaurants(
     allRestaurants,
-    state,
+    { ...state, showUnmapped: true },
     ctx,
   );
+  const searched = filterRestaurantsByQuery(
+    includingUnmapped.filtered,
+    state.searchQuery,
+  );
+  const unmappedCount = searched.filter(isUnmappedRestaurant).length;
+  if (state.showUnmapped) {
+    return {
+      beforeFreshness: includingUnmapped.beforeFreshness,
+      filtered: searched,
+      unmappedCount,
+    };
+  }
   return {
-    beforeFreshness,
-    filtered: filterRestaurantsByQuery(filtered, state.searchQuery),
+    beforeFreshness: includingUnmapped.beforeFreshness.filter(
+      (restaurant) => !isUnmappedRestaurant(restaurant),
+    ),
+    filtered: searched.filter(
+      (restaurant) => !isUnmappedRestaurant(restaurant),
+    ),
+    unmappedCount,
   };
 }
