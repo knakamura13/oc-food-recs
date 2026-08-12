@@ -187,7 +187,7 @@ describe("RestaurantList", () => {
           slug: "la-taco-spot",
           cuisine: "Mexican",
           location: "Santa Ana",
-          top_dish_snippet: "Get the al pastor tacos",
+          top_comment_snippet: "Get the al pastor tacos",
         }),
       ],
     });
@@ -202,5 +202,9 @@ describe("RestaurantList", () => {
     expect(
       screen.queryByRole("button", { name: /al pastor/i }),
     ).not.toBeInTheDocument();
+    expect(toggle.querySelector(".dish-teaser")).toHaveTextContent(
+      "“Get the al pastor tacos”",
+    );
+    expect(toggle).not.toHaveTextContent(/Try:/);
   });
 });
