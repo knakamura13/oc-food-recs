@@ -707,7 +707,7 @@
 		transition: none !important;
 	}
 
-	/* ── Desktop: expand via hover, focus-within, or pin (≥ 1024px) ─────── */
+	/* ── Desktop: expand via pin only (≥ 1024px) ─────────────────────────── */
 	@media (min-width: 1024px) {
 		:global(html) {
 			height: 100%;
@@ -774,15 +774,11 @@
 			transition: flex-basis 0.4s ease, margin-left 0.4s ease;
 		}
 
-		/* Hover / focus-within / pinned expand: map grows, list retreats, layered depth collapses */
-		.content-area:has(.map-pane:hover) .map-pane,
-		.content-area:has(.map-pane:focus-within) .map-pane,
+		/* Pinned expand: map grows, list retreats, layered depth collapses */
 		.content-area:has(.map-pane.desktop-expanded) .map-pane {
 			flex-basis: 33.33%;
 		}
 
-		.content-area:has(.map-pane:hover) .list-pane,
-		.content-area:has(.map-pane:focus-within) .list-pane,
 		.content-area:has(.map-pane.desktop-expanded) .list-pane {
 			flex-basis: 66.67%;
 			margin-left: 0;
@@ -823,6 +819,13 @@
 			background: #fff0eb;
 			color: #ff4500;
 			border-color: rgba(0, 0, 0, 0.3);
+		}
+
+		@media (prefers-reduced-motion: reduce) {
+			.map-pane,
+			.list-pane {
+				transition: none;
+			}
 		}
 	}
 
