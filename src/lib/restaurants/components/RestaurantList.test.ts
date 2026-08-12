@@ -5,6 +5,10 @@ import RestaurantList from "./RestaurantList.svelte";
 import { appState } from "$lib/restaurants/stores.svelte";
 import { makeRestaurant, resetAppState } from "$lib/restaurants/test-utils";
 import { buildSearchParams } from "$lib/restaurants/url-state";
+import {
+  consumeSkipToList,
+  requestSkipToList,
+} from "$lib/restaurants/skip-to-list";
 import type { ListMention } from "$lib/restaurants/types";
 
 const mocks = vi.hoisted(() => ({
@@ -91,12 +95,22 @@ function stubListViewport() {
 describe("RestaurantList", () => {
   beforeEach(() => {
     resetAppState();
+    consumeSkipToList();
     mocks.toastError.mockReset();
     stubListViewport();
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({ ok: false, json: async () => [] }),
     );
+  });
+
+  it("moves skip-link focus onto the list when a skip was requested during the skeleton", async () => {
+    requestSkipToList();
+    render(RestaurantList, { restaurants });
+
+    await waitFor(() => {
+      expect(document.getElementById("main-content")).toHaveFocus();
+    });
   });
 
   it("shows a toast when mention details fail to load", async () => {

@@ -12,7 +12,7 @@ test.describe("Shareable URL state", () => {
 
     await expect(page).toHaveTitle(/Mexican — OC Food Recs/);
     await expect(page.locator(".result-count")).toContainText(
-      /\d+ restaurants/,
+      /\d+ restaurants?/,
     );
   });
 
