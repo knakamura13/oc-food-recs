@@ -7,6 +7,10 @@ import type {
   ThreadSummary,
 } from "$lib/restaurants/types";
 import { parseSearchParams } from "$lib/restaurants/url-state";
+import {
+  pickTopCommentSnippet,
+  type SnippetCandidate,
+} from "$lib/restaurants/top-comment-snippet";
 import { sql } from "drizzle-orm";
 import type { PageServerLoad } from "./$types";
 
@@ -21,7 +25,7 @@ interface RestaurantRow {
   mention_count: number;
   source_threads: string[];
   dish_rec_count: number;
-  top_dish_snippet: string | null;
+  snippet_candidates: SnippetCandidate[];
   mentions: Mention[];
 }
 
@@ -107,15 +111,23 @@ export const load: PageServerLoad = async ({ url }) => {
 					'[]'::json
 				) AS mentions,
 				COUNT(*) FILTER (WHERE rm.classification = 'dish_rec')::int AS dish_rec_count,
-				(
-					SELECT TRIM(sub.body)
-					FROM ranked_mentions sub
-					WHERE sub.restaurant_id = r.id
-						AND sub.classification = 'dish_rec'
-						AND TRIM(sub.body) <> ''
-					ORDER BY sub.score DESC, LENGTH(sub.body) ASC
-					LIMIT 1
-				) AS top_dish_snippet
+				COALESCE(
+					JSON_AGG(
+						JSON_BUILD_OBJECT(
+							'body', rm.body,
+							'score', rm.score,
+							'classification', rm.classification
+						)
+					) FILTER (
+						WHERE rm.id IS NOT NULL
+							AND TRIM(rm.body) <> ''
+							AND (
+								rm.classification IS NULL
+								OR rm.classification NOT IN ('filler', 'question')
+							)
+					),
+					'[]'::json
+				) AS snippet_candidates
 			FROM restaurants r
 			INNER JOIN ranked_mentions rm ON rm.restaurant_id = r.id
 			-- Hide registry-excluded restaurants (chains / corporate groups). Only the
@@ -136,7 +148,7 @@ export const load: PageServerLoad = async ({ url }) => {
 			source_threads,
 			mentions,
 			dish_rec_count,
-			top_dish_snippet
+			snippet_candidates
 		FROM restaurant_mentions
 		ORDER BY aggregate_score DESC, name ASC
 	`);
@@ -152,7 +164,10 @@ export const load: PageServerLoad = async ({ url }) => {
     aggregate_score: row.aggregate_score,
     mention_count: row.mention_count,
     dish_rec_count: row.dish_rec_count ?? 0,
-    top_dish_snippet: row.top_dish_snippet ?? null,
+    top_comment_snippet: pickTopCommentSnippet(
+      row.name,
+      row.snippet_candidates ?? [],
+    ),
     source_threads: row.source_threads ?? [],
     mentions: (row.mentions ?? []).map((m) => ({
       thread_id: m.thread_id,

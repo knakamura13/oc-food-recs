@@ -34,8 +34,8 @@ export interface Restaurant {
   endorsement_count: number;
   /** Count of dish_rec endorsements (from published mentions). */
   dish_rec_count: number;
-  /** Truncated top dish recommendation snippet, if any. */
-  top_dish_snippet: string | null;
+  /** Best published comment body for the collapsed teaser, if any. */
+  top_comment_snippet: string | null;
   lat: number | null;
   lng: number | null;
   mentions: ListMention[];
