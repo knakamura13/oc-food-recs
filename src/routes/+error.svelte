@@ -23,7 +23,7 @@
 
 <style>
 	.error-page {
-		min-height: 60vh;
+		min-height: 100dvh;
 		display: flex;
 		flex-direction: column;
 		align-items: center;
@@ -61,7 +61,7 @@
 		align-items: center;
 		padding: 0.625rem 1.25rem;
 		border-radius: 8px;
-		background: #ff4500;
+		background: #c43700;
 		color: #fffdf9;
 		font-weight: 600;
 		text-decoration: none;
@@ -69,6 +69,6 @@
 	}
 
 	.home-link:hover {
-		background: #e03d00;
+		background: #a82f00;
 	}
 </style>

@@ -30,47 +30,6 @@
 {/await}
 
 <style>
-	:global(html) {
-		scroll-behavior: smooth;
-	}
-
-	:global(body) {
-		margin: 0;
-		font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue',
-			Arial, sans-serif;
-		color: #3e2c23;
-		background: #faf7f2;
-		-webkit-font-smoothing: antialiased;
-		-moz-osx-font-smoothing: grayscale;
-		line-height: 1.55;
-	}
-
-	:global(*) {
-		box-sizing: border-box;
-	}
-
-	:global(button),
-	:global(a),
-	:global([role='button']) {
-		touch-action: manipulation;
-	}
-
-	:global(*:focus-visible) {
-		outline: 2px solid #ff4500;
-		outline-offset: 2px;
-	}
-
-	@media (prefers-reduced-motion: reduce) {
-		:global(*),
-		:global(*::before),
-		:global(*::after) {
-			transition-duration: 0.01ms !important;
-			animation-duration: 0.01ms !important;
-			animation-iteration-count: 1 !important;
-			scroll-behavior: auto !important;
-		}
-	}
-
 	.load-error {
 		min-height: 60vh;
 		display: flex;
