@@ -79,6 +79,27 @@ test.describe("Shareable URL state", () => {
       .toBe("Mexican");
   });
 
+  test("first-load sort updates the URL without another navigation", async ({
+    page,
+  }, testInfo) => {
+    test.skip(
+      testInfo.project.name !== "Desktop Chrome",
+      "Desktop viewport only",
+    );
+    await page.goto("/");
+    await expect(page.locator(".row").first()).toBeVisible({ timeout: 30_000 });
+    expect(new URL(page.url()).searchParams.get("sort")).toBeNull();
+
+    await page.getByRole("button", { name: /^sort by name$/i }).click();
+
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get("sort"))
+      .toBe("name");
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get("sortdir"))
+      .toBe("asc");
+  });
+
   test("keyboard shortcuts focus search without blocking a slash query", async ({
     page,
   }, testInfo) => {

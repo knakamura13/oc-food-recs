@@ -63,6 +63,46 @@ test('390px results prioritize restaurant content and keep full-size controls', 
 	expect(geometry.row.height).toBeLessThanOrEqual(170);
 });
 
+test('390px card hairline is continuous across the bookmark/chevron gutter', async ({
+	page
+}, testInfo) => {
+	test.skip(testInfo.project.name !== 'Mobile Chrome', 'Mobile viewport only');
+	await page.setViewportSize({ width: 390, height: 844 });
+	await page.goto('/');
+
+	const hairline = await (await firstRecommendationRow(page)).evaluate((element) => {
+		const header = element.querySelector<HTMLElement>('.row-header');
+		const stats = element.querySelector<HTMLElement>('.row-stats');
+		const chevron = element.querySelector<HTMLElement>('.row-chevron-btn');
+		if (!header || !stats || !chevron) throw new Error('Missing card chrome');
+		const headerStyle = getComputedStyle(header);
+		const before = getComputedStyle(header, '::before');
+		const headerBox = header.getBoundingClientRect();
+		const contentWidth =
+			headerBox.width -
+			Number.parseFloat(headerStyle.paddingLeft) -
+			Number.parseFloat(headerStyle.paddingRight);
+		const statsBox = stats.getBoundingClientRect();
+		const chevronBox = chevron.getBoundingClientRect();
+		return {
+			beforeWidth: Number.parseFloat(before.width),
+			contentWidth,
+			beforeBorderTop: before.borderTopWidth,
+			beforeBorderColor: before.borderTopColor,
+			statsBorderTop: getComputedStyle(stats).borderTopWidth,
+			chevronBorderTop: getComputedStyle(chevron).borderTopWidth,
+			gutter: chevronBox.left - statsBox.right
+		};
+	});
+
+	expect(hairline.gutter).toBeGreaterThan(4);
+	expect(hairline.statsBorderTop).toBe('0px');
+	expect(hairline.chevronBorderTop).toBe('0px');
+	expect(hairline.beforeBorderTop).toBe('1px');
+	expect(hairline.beforeBorderColor).toBe('rgb(232, 224, 214)');
+	expect(hairline.beforeWidth).toBeGreaterThan(hairline.contentWidth - 2);
+});
+
 test('600px results retain compact horizontal density with full-size controls', async ({
 	page
 }, testInfo) => {
