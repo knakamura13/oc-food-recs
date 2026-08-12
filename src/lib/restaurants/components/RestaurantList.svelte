@@ -515,45 +515,47 @@
 							onmouseleave={() => clearHovered(restaurant)}
 						>
 							<div class="row-header">
-								<button
-									type="button"
-									class="row-toggle"
-									onclick={() => toggleRow(restaurant)}
-									onfocus={() => setHovered(restaurant)}
-									onblur={() => clearHovered(restaurant)}
-									aria-label={rowToggleLabel(restaurant)}
-									aria-expanded={isOpen}
-									aria-controls={isOpen ? `drawer-${slug}` : undefined}
-								>
-									<div class="row-main">
-										<div class="row-name-line">
-											<span class="row-name">{restaurant.name}</span>
-											{#if hasNewMentions(restaurant)}
-												<span class="tag new-tag" aria-label="New mentions since your last visit">New</span>
+								<h2 class="row-heading">
+									<button
+										type="button"
+										class="row-toggle"
+										onclick={() => toggleRow(restaurant)}
+										onfocus={() => setHovered(restaurant)}
+										onblur={() => clearHovered(restaurant)}
+										aria-label={rowToggleLabel(restaurant)}
+										aria-expanded={isOpen}
+										aria-controls={isOpen ? `drawer-${slug}` : undefined}
+									>
+										<div class="row-main">
+											<div class="row-name-line">
+												<span class="row-name">{restaurant.name}</span>
+												{#if hasNewMentions(restaurant)}
+													<span class="tag new-tag" aria-label="New mentions since your last visit">New</span>
+												{/if}
+											</div>
+											<div class="row-tags">
+												{#if restaurant.endorsement_count >= 15}
+													<span class="tag popular-tag" aria-label="Highly endorsed community favorite">🔥 Popular</span>
+												{/if}
+												{#if restaurant.cuisine}
+													<span class="tag cuisine-tag">{normalizeCuisine(restaurant.cuisine)}</span>
+												{/if}
+												{#if restaurant.location}
+													<span class="tag location-tag">{restaurant.location}</span>
+												{/if}
+												{#if isUnmappedRestaurant(restaurant)}
+													<span class="tag unmapped-tag">Unmapped</span>
+												{/if}
+											</div>
+											{#if restaurant.top_comment_snippet}
+												{@const snippet = getTrimmedSnippet(restaurant.top_comment_snippet, restaurant.name, 150)}
+												<p class="dish-teaser">
+													“{#each snippet.segments as segment, i (i)}{#if segment.isMatch}<strong>{segment.text}</strong>{:else}{segment.text}{/if}{/each}”
+												</p>
 											{/if}
 										</div>
-										<div class="row-tags">
-											{#if restaurant.endorsement_count >= 15}
-												<span class="tag popular-tag" aria-label="Highly endorsed community favorite">🔥 Popular</span>
-											{/if}
-											{#if restaurant.cuisine}
-												<span class="tag cuisine-tag">{normalizeCuisine(restaurant.cuisine)}</span>
-											{/if}
-											{#if restaurant.location}
-												<span class="tag location-tag">{restaurant.location}</span>
-											{/if}
-											{#if isUnmappedRestaurant(restaurant)}
-												<span class="tag unmapped-tag">Unmapped</span>
-											{/if}
-										</div>
-										{#if restaurant.top_comment_snippet}
-											{@const snippet = getTrimmedSnippet(restaurant.top_comment_snippet, restaurant.name, 150)}
-											<p class="dish-teaser">
-												“{#each snippet.segments as segment, i (i)}{#if segment.isMatch}<strong>{segment.text}</strong>{:else}{segment.text}{/if}{/each}”
-											</p>
-										{/if}
-									</div>
-								</button>
+									</button>
+								</h2>
 								<div class="row-stats">
 									<span class="stat score">
 										{restaurant.aggregate_score} <small>pts</small>
@@ -856,6 +858,7 @@
 	}
 
 	.sort-btn {
+		font-family: inherit;
 		font-size: 0.8rem;
 		padding: 4px 12px;
 		border: 1px solid #d4c8bb;
@@ -869,13 +872,13 @@
 
 	.sort-btn:hover {
 		border-color: #ff4500;
-		color: #ff4500;
+		color: #c43700;
 	}
 
 	.sort-btn.active {
-		background: #ff4500;
+		background: #c43700;
 		color: #fff;
-		border-color: #ff4500;
+		border-color: #c43700;
 	}
 
 	.sort-btn:active {
@@ -889,7 +892,7 @@
 
 	.sort-btn.active:focus-visible {
 		outline-color: #fff;
-		box-shadow: 0 0 0 2px #ff4500;
+		box-shadow: 0 0 0 2px #c43700;
 	}
 
 	.sort-dir {
@@ -904,6 +907,12 @@
 		.sort-bar {
 			flex-wrap: wrap;
 			row-gap: 0.35rem;
+		}
+
+		.sort-btn {
+			min-height: 44px;
+			padding-top: 0;
+			padding-bottom: 0;
 		}
 	}
 
@@ -929,6 +938,9 @@
 		min-height: 0;
 		overflow-y: auto;
 		overscroll-behavior: contain;
+		scrollbar-gutter: stable;
+		container-type: inline-size;
+		container-name: list-pane;
 	}
 
 	.list-scroll:focus {
@@ -1017,9 +1029,16 @@
 		text-align: left;
 	}
 
-	.row-toggle {
+	.row-heading {
 		flex: 1;
 		min-width: 0;
+		margin: 0;
+		padding: 0;
+		font: inherit;
+	}
+
+	.row-toggle {
+		width: 100%;
 	}
 
 	.row-toggle:focus-visible {
@@ -1045,12 +1064,12 @@
 		padding: 10px;
 		margin: -10px -6px;
 		border-radius: 50%;
-		color: #d4c8bb;
+		color: #7a6e63;
 		transition: color 0.2s ease, transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
 	}
 
 	.row-save-btn:hover {
-		color: #ff4500;
+		color: #c43700;
 		transform: scale(1.15);
 	}
 
@@ -1059,7 +1078,7 @@
 	}
 
 	.row-save-btn.saved {
-		color: #ff4500;
+		color: #c43700;
 		animation: save-pop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
 	}
 
@@ -1109,7 +1128,7 @@
 	}
 
 	.new-tag {
-		background: #ff4500;
+		background: #c43700;
 		color: #fff;
 		font-weight: 600;
 		font-size: 0.65rem;
@@ -1143,7 +1162,7 @@
 
 	.popular-tag {
 		background: #fff0eb;
-		color: #ff4500;
+		color: #c43700;
 		border: 1px solid #ffcca8;
 		font-weight: 600;
 		font-size: 0.68rem;
@@ -1168,7 +1187,7 @@
 	}
 
 	.stat.score {
-		background: #ff4500;
+		background: #c43700;
 		color: #fff;
 		font-weight: 700;
 		position: relative;
@@ -1261,8 +1280,8 @@
 	}
 
 	.row-header:hover .chevron,
-	.row-toggle:focus-visible ~ .row-chevron-btn .chevron {
-		color: #ff4500;
+	.row-heading:has(.row-toggle:focus-visible) ~ .row-chevron-btn .chevron {
+		color: #c43700;
 	}
 
 	.drawer {
@@ -1303,7 +1322,8 @@
 		border: 1px solid #e4d9ce;
 		border-radius: 8px;
 		background: #fffcf8;
-		color: #ff4500;
+		color: #c43700;
+		font-family: inherit;
 		font-size: 0.82rem;
 		font-weight: 600;
 		cursor: pointer;
@@ -1463,7 +1483,7 @@
 	.comment-score {
 		position: relative;
 		font-size: 0.78rem;
-		color: #ff4500;
+		color: #c43700;
 		font-weight: 600;
 	}
 
@@ -1482,7 +1502,7 @@
 		display: inline-block;
 		margin-top: 0.4rem;
 		font-size: 0.78rem;
-		color: #ff4500;
+		color: #c43700;
 		text-decoration: underline;
 		text-decoration-thickness: 1px;
 		text-underline-offset: 2px;
@@ -1533,7 +1553,7 @@
 
 	.endorsement-score {
 		font-size: 0.75rem;
-		color: #ff4500;
+		color: #c43700;
 		font-weight: 600;
 	}
 
@@ -1549,7 +1569,7 @@
 		display: inline-block;
 		margin-top: 0.35rem;
 		font-size: 0.72rem;
-		color: #ff4500;
+		color: #c43700;
 		text-decoration: underline;
 		text-decoration-thickness: 1px;
 		text-underline-offset: 2px;
@@ -1575,19 +1595,20 @@
 	}
 
 	.map-link {
+		font-family: inherit;
 		font-size: 0.8rem;
 		padding: 5px 14px;
 		border-radius: 6px;
 		cursor: pointer;
-		border: 1px solid #ff4500;
+		border: 1px solid #c43700;
 		background: #fffcf8;
-		color: #ff4500;
+		color: #c43700;
 		transition: all 0.15s ease;
 		font-weight: 500;
 	}
 
 	.map-link:hover {
-		background: #ff4500;
+		background: #c43700;
 		color: #fff;
 		box-shadow: 0 2px 6px rgba(255, 69, 0, 0.15);
 	}
@@ -1597,8 +1618,8 @@
 	}
 
 
-	.share-link { display: inline-flex; align-items: center; gap: 4px; font-size: 0.8rem; padding: 5px 14px; border-radius: 6px; cursor: pointer; border: 1px solid #d4c8bb; background: #fffcf8; color: #5d4e37; transition: all 0.15s ease; font-weight: 500; }
-	.share-link:hover { border-color: #ff4500; color: #ff4500; box-shadow: 0 2px 6px rgba(255, 69, 0, 0.1); }
+	.share-link { display: inline-flex; align-items: center; gap: 4px; font-family: inherit; font-size: 0.8rem; padding: 5px 14px; border-radius: 6px; cursor: pointer; border: 1px solid #d4c8bb; background: #fffcf8; color: #5d4e37; transition: all 0.15s ease; font-weight: 500; }
+	.share-link:hover { border-color: #ff4500; color: #c43700; box-shadow: 0 2px 6px rgba(255, 69, 0, 0.1); }
 	.share-link:active { transform: scale(0.97); }
 	.share-icon { width: 14px; height: 14px; flex-shrink: 0; }
 
@@ -1665,21 +1686,21 @@
 
 	.empty-action {
 		margin-top: 1rem;
-		font-family: 'DM Sans', sans-serif;
+		font-family: inherit;
 		font-size: 0.85rem;
 		font-weight: 600;
 		padding: 0.45rem 1.1rem;
 		border-radius: 8px;
-		border: 1px solid #ff4500;
+		border: 1px solid #c43700;
 		background: #fffcf8;
-		color: #ff4500;
+		color: #c43700;
 		cursor: pointer;
 		transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease,
 			transform 0.12s ease;
 	}
 
 	.empty-action:hover {
-		background: #ff4500;
+		background: #c43700;
 		color: #fff;
 		box-shadow: 0 2px 8px rgba(255, 69, 0, 0.16);
 	}
@@ -1711,7 +1732,7 @@
 		}
 	}
 
-	@media (max-width: 480px) {
+	@container list-pane (max-width: 480px) {
 		.row-header {
 			display: grid;
 			grid-template-columns: minmax(0, 1fr) 44px;
@@ -1722,9 +1743,13 @@
 			padding: 0.75rem 0.75rem 0.5625rem;
 		}
 
-		.row-toggle {
+		.row-heading {
 			grid-column: 1 / -1;
 			grid-row: 1;
+			width: 100%;
+		}
+
+		.row-toggle {
 			width: 100%;
 		}
 

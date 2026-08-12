@@ -369,7 +369,7 @@
 		font-family: 'DM Sans', system-ui, sans-serif;
 		font-size: 0.72rem;
 		font-weight: 500;
-		color: #9a8c7e;
+		color: #6b5d52;
 		background: #f4ede4;
 		border: 1px solid #e0d6cc;
 		border-radius: 4px;
@@ -393,6 +393,7 @@
 		padding: 4px 0;
 		max-height: 360px;
 		overflow-y: auto;
+		overscroll-behavior: contain;
 	}
 
 	li {

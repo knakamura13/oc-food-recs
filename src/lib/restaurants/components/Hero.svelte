@@ -36,12 +36,13 @@
 
 	h1 {
 		font-family: 'DM Serif Display', Georgia, serif;
-		font-size: 1.75rem;
+		font-size: clamp(1.25rem, 0.7rem + 2.75vw, 1.75rem);
 		font-weight: 400;
 		margin: 0 0 0.5rem;
 		line-height: 1.15;
 		color: #3e2c23;
 		letter-spacing: -0.01em;
+		text-wrap: balance;
 	}
 
 	p {
@@ -52,7 +53,7 @@
 	}
 
 	a {
-		color: #ff4500;
+		color: #c43700;
 		text-decoration: underline;
 		text-decoration-thickness: 1px;
 		text-underline-offset: 2px;
@@ -77,7 +78,7 @@
 	}
 
 	.attribution a:hover {
-		color: #ff4500;
+		color: #c43700;
 	}
 
 	/* Desktop explorer is a locked viewport — keep the intro compact so map + list
@@ -115,7 +116,6 @@
 		}
 
 		h1 {
-			font-size: 1.25rem;
 			margin: 0 0 0.3rem;
 		}
 
