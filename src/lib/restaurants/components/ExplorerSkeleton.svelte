@@ -14,7 +14,7 @@
 	<meta name="theme-color" content="#ff4500" />
 </svelte:head>
 
-<div
+<main
 	class="explorer-skeleton"
 	class:no-motion={reduceMotion()}
 	aria-busy="true"
@@ -94,7 +94,7 @@
 			</div>
 		</div>
 	</div>
-</div>
+</main>
 
 <style>
 	.explorer-skeleton {
@@ -159,6 +159,7 @@
 	.app-trap {
 		position: sticky;
 		top: 0;
+		padding-top: env(safe-area-inset-top, 0px);
 		height: 100dvh;
 		display: flex;
 		flex-direction: column;
@@ -249,6 +250,11 @@
 		position: relative;
 		isolation: isolate;
 		overflow: hidden;
+	}
+
+	.list-pane {
+		container-type: inline-size;
+		container-name: list-pane;
 	}
 
 	.restaurant-list {

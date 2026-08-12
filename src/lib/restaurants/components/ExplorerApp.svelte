@@ -520,132 +520,93 @@
 
 <svelte:window onkeydown={handleMobileMapKeydown} />
 
-<section class="hero-section">
-	<Hero meta={data.dataset.meta} />
-</section>
+<main>
+	<section class="hero-section">
+		<Hero meta={data.dataset.meta} />
+	</section>
 
-<div class="app-trap" bind:this={appTrapEl}>
-	<div class="controls-bar" bind:this={controlsBarEl}>
-		<SearchBar restaurants={allRestaurants} {cuisineNames} {cityNames} />
-		<FilterBar
-			restaurants={allRestaurants}
-			{threadSubreddit}
-			restaurantsForHistogram={restaurantsBeforeFreshness}
-			{dateExtent}
-			unmappedCount={pageFilterResult.unmappedCount}
-			{mapExpanded}
-			onMapToggle={toggleMobileMap}
-		/>
-	</div>
-	<div class="content-area">
-		<div
-			class="map-pane"
-			class:portal-expanded={mapExpanded}
-			class:desktop-expanded={mapDesktopExpanded}
-			class:no-map-transition={suppressMapTransition}
-			id="restaurant-map-panel"
-			bind:this={mapPaneEl}
-			role={mapExpanded && isMobileViewport() ? 'dialog' : undefined}
-			aria-modal={mapExpanded && isMobileViewport() ? 'true' : undefined}
-			aria-label={mapExpanded && isMobileViewport() ? 'Restaurant map' : undefined}
-			aria-hidden={isMobileViewport() && !mapExpanded ? 'true' : undefined}
-			inert={isMobileViewport() && !mapExpanded ? true : undefined}
-		>
-			{#if mapExpanded}
-				<div
-					class="portal-backdrop"
-					onclick={() => closeMobileMap()}
-					role="presentation"
-				></div>
-			{/if}
-			<div class="map-interactive-layer">
-				<Map restaurants={filteredRestaurants} {mapExpanded} />
-			</div>
-			{#if mapExpanded}
-				<button
-					class="map-close-btn"
-					bind:this={mapCloseButton}
-					onclick={(event) => {
-						event.stopPropagation();
-						closeMobileMap();
-					}}
-					aria-label="Close map"
-				>
-					<X size={22} aria-hidden="true" />
-				</button>
-			{/if}
-		</div>
-		{#if !isMobileViewport()}
-			<button
-				type="button"
-				class="map-expand-toggle"
-				aria-pressed={mapDesktopExpanded}
-				aria-label={mapDesktopExpanded ? 'Collapse map pane' : 'Expand map pane'}
-				title={mapDesktopExpanded ? 'Collapse map pane' : 'Expand map pane'}
-				onclick={toggleDesktopMapExpanded}
-			>
-				{#if mapDesktopExpanded}
-					<Minimize2 size={16} aria-hidden="true" />
-				{:else}
-					<Maximize2 size={16} aria-hidden="true" />
-				{/if}
-			</button>
-		{/if}
-		<div class="list-pane" inert={mapExpanded && isMobileViewport() ? true : undefined}>
-			<RestaurantList
-				restaurants={filteredRestaurants}
-				onShowOnMap={openMobileMap}
+	<div class="app-trap" bind:this={appTrapEl}>
+		<div class="controls-bar" bind:this={controlsBarEl}>
+			<SearchBar restaurants={allRestaurants} {cuisineNames} {cityNames} />
+			<FilterBar
+				restaurants={allRestaurants}
+				{threadSubreddit}
+				restaurantsForHistogram={restaurantsBeforeFreshness}
+				{dateExtent}
+				unmappedCount={pageFilterResult.unmappedCount}
+				{mapExpanded}
+				onMapToggle={toggleMobileMap}
 			/>
 		</div>
+		<div class="content-area">
+			<div
+				class="map-pane"
+				class:portal-expanded={mapExpanded}
+				class:desktop-expanded={mapDesktopExpanded}
+				class:no-map-transition={suppressMapTransition}
+				id="restaurant-map-panel"
+				bind:this={mapPaneEl}
+				role={mapExpanded && isMobileViewport() ? 'dialog' : undefined}
+				aria-modal={mapExpanded && isMobileViewport() ? 'true' : undefined}
+				aria-label={mapExpanded && isMobileViewport() ? 'Restaurant map' : undefined}
+				aria-hidden={isMobileViewport() && !mapExpanded ? 'true' : undefined}
+				inert={isMobileViewport() && !mapExpanded ? true : undefined}
+			>
+				{#if mapExpanded}
+					<div
+						class="portal-backdrop"
+						onclick={() => closeMobileMap()}
+						role="presentation"
+					></div>
+				{/if}
+				<div class="map-interactive-layer">
+					<Map restaurants={filteredRestaurants} {mapExpanded} />
+				</div>
+				{#if mapExpanded}
+					<button
+						class="map-close-btn"
+						bind:this={mapCloseButton}
+						onclick={(event) => {
+							event.stopPropagation();
+							closeMobileMap();
+						}}
+						aria-label="Close map"
+					>
+						<X size={22} aria-hidden="true" />
+					</button>
+				{/if}
+			</div>
+			{#if !isMobileViewport()}
+				<button
+					type="button"
+					class="map-expand-toggle"
+					aria-pressed={mapDesktopExpanded}
+					aria-label={mapDesktopExpanded ? 'Collapse map pane' : 'Expand map pane'}
+					title={mapDesktopExpanded ? 'Collapse map pane' : 'Expand map pane'}
+					onclick={toggleDesktopMapExpanded}
+				>
+					{#if mapDesktopExpanded}
+						<Minimize2 size={16} aria-hidden="true" />
+					{:else}
+						<Maximize2 size={16} aria-hidden="true" />
+					{/if}
+				</button>
+			{/if}
+			<div class="list-pane" inert={mapExpanded && isMobileViewport() ? true : undefined}>
+				<RestaurantList
+					restaurants={filteredRestaurants}
+					onShowOnMap={openMobileMap}
+				/>
+			</div>
+		</div>
 	</div>
-</div>
 
-{#if !mapExpanded || !isMobileViewport()}
-	<BackToTop />
-{/if}
+	{#if !mapExpanded || !isMobileViewport()}
+		<BackToTop />
+	{/if}
+</main>
 
 <style>
-	:global(html) {
-		scroll-behavior: smooth;
-	}
-
-	:global(body) {
-		margin: 0;
-		font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue',
-			Arial, sans-serif;
-		color: #3e2c23;
-		background: #faf7f2;
-		-webkit-font-smoothing: antialiased;
-		-moz-osx-font-smoothing: grayscale;
-		line-height: 1.55;
-	}
-
-	:global(*) {
-		box-sizing: border-box;
-	}
-
-	:global(button),
-	:global(a),
-	:global([role='button']) {
-		touch-action: manipulation;
-	}
-
-	:global(*:focus-visible) {
-		outline: 2px solid #ff4500;
-		outline-offset: 2px;
-	}
-
-	@media (prefers-reduced-motion: reduce) {
-		:global(*),
-		:global(*::before),
-		:global(*::after) {
-			transition-duration: 0.01ms !important;
-			animation-duration: 0.01ms !important;
-			animation-iteration-count: 1 !important;
-			scroll-behavior: auto !important;
-		}
-	}
-
 	/* Hero parallax fade — CSS scroll-driven, no JS */
 	@supports (animation-timeline: scroll()) {
 		.hero-section {
@@ -670,6 +631,7 @@
 	.app-trap {
 		position: sticky;
 		top: 0;
+		padding-top: env(safe-area-inset-top, 0px);
 		height: 100dvh;
 		display: flex;
 		flex-direction: column;
@@ -685,6 +647,11 @@
 		flex-shrink: 0;
 		position: relative;
 		z-index: 1200; /* above map portal (1050) and backdrop (1040) */
+	}
+
+	.list-pane {
+		container-type: inline-size;
+		container-name: list-pane;
 	}
 
 	/* Content area clips its children (map + list) but NOT the controls-bar sibling */
@@ -713,6 +680,14 @@
 
 		:global(body) {
 			height: 100%;
+			display: flex;
+			flex-direction: column;
+			overflow: hidden;
+		}
+
+		main {
+			flex: 1;
+			min-height: 0;
 			display: flex;
 			flex-direction: column;
 			overflow: hidden;
@@ -796,8 +771,10 @@
 			bottom: 12px;
 			left: 12px;
 			z-index: 3;
-			width: 36px;
-			height: 36px;
+			width: 44px;
+			height: 44px;
+			min-width: 44px;
+			min-height: 44px;
 			padding: 0;
 			border: 2px solid rgba(0, 0, 0, 0.2);
 			border-radius: 6px;
@@ -852,6 +829,11 @@
 			box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
 			z-index: 1400;
 			overflow: hidden;
+			overscroll-behavior: contain;
+		}
+
+		.map-pane.portal-expanded .map-interactive-layer {
+			overscroll-behavior: contain;
 		}
 
 		.list-pane {

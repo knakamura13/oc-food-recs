@@ -145,4 +145,9 @@ describe("ExplorerApp URL sync", () => {
     expect(url).toContain("sort=name");
     expect(url).toContain("sortdir=asc");
   });
+
+  it("wraps the explorer chrome in a main landmark", () => {
+    render(ExplorerApp, { data: makeHomeData(), routerReady: false });
+    expect(document.querySelector("main")).not.toBeNull();
+  });
 });

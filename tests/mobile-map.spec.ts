@@ -199,6 +199,18 @@ test.describe('Mobile map interaction', () => {
 		await expect(page.locator('.leaflet-container')).toBeVisible({ timeout: 30_000 });
 		await expect(page.getByRole('application')).toBeVisible();
 
+		const zoomInBox = await page.getByRole('button', { name: 'Zoom in' }).boundingBox();
+		const zoomOutBox = await page.getByRole('button', { name: 'Zoom out' }).boundingBox();
+		expect(zoomInBox).toBeTruthy();
+		expect(zoomOutBox).toBeTruthy();
+		expect(zoomInBox!.width).toBeGreaterThanOrEqual(44);
+		expect(zoomInBox!.height).toBeGreaterThanOrEqual(44);
+		expect(zoomOutBox!.width).toBeGreaterThanOrEqual(44);
+		expect(zoomOutBox!.height).toBeGreaterThanOrEqual(44);
+		expect(
+			await mapPane.evaluate((pane) => getComputedStyle(pane).overscrollBehavior)
+		).toMatch(/contain/);
+
 		const closeButton = page.locator('.map-close-btn');
 		await expect(closeButton).toBeFocused();
 		await expect(listPane).toHaveAttribute('inert', '');
@@ -499,6 +511,8 @@ test.describe('Mobile map interaction', () => {
 		await expect(backToTop).toBeVisible();
 		const backToTopBox = await backToTop.boundingBox();
 		expect(backToTopBox).toBeTruthy();
+		expect(backToTopBox!.width).toBeGreaterThanOrEqual(44);
+		expect(backToTopBox!.height).toBeGreaterThanOrEqual(44);
 
 		await page.locator('.mobile-map-trigger').click();
 		await expect(page.locator('#restaurant-map-panel')).toBeVisible();
@@ -620,6 +634,10 @@ test.describe('Mobile map interaction', () => {
 		await expect(page.locator('.leaflet-container')).toBeVisible({ timeout: 30_000 });
 
 		const locateButton = page.getByRole('button', { name: 'Jump to my current location' });
+		const locateBox = await locateButton.boundingBox();
+		expect(locateBox).toBeTruthy();
+		expect(locateBox!.width).toBeGreaterThanOrEqual(44);
+		expect(locateBox!.height).toBeGreaterThanOrEqual(44);
 		expect(
 			await locateButton.evaluate((button) => {
 				const rect = button.getBoundingClientRect();
@@ -797,6 +815,10 @@ test.describe('Mobile map interaction', () => {
 		await expect(expandToggle).toBeVisible();
 		await expect(expandToggle).toHaveAccessibleName('Expand map pane');
 		await expect(expandToggle).toHaveAttribute('aria-pressed', 'false');
+		const expandBox = await expandToggle.boundingBox();
+		expect(expandBox).toBeTruthy();
+		expect(expandBox!.width).toBeGreaterThanOrEqual(44);
+		expect(expandBox!.height).toBeGreaterThanOrEqual(44);
 
 		const paneWidth = (locator: Locator) =>
 			locator.evaluate((pane) => pane.getBoundingClientRect().width);
