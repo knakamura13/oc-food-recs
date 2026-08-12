@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import RestaurantList from "./RestaurantList.svelte";
 import { appState } from "$lib/restaurants/stores.svelte";
 import { makeRestaurant, resetAppState } from "$lib/restaurants/test-utils";
+import { buildSearchParams } from "$lib/restaurants/url-state";
+import type { ListMention } from "$lib/restaurants/types";
 
 const mocks = vi.hoisted(() => ({
   toastError: vi.fn(),
@@ -253,3 +255,274 @@ describe("RestaurantList", () => {
     ).not.toBeInTheDocument();
   });
 });
+
+function mentionOn(date: string): ListMention {
+  return {
+    author: "alice",
+    score: 1,
+    comment_date: date,
+    thread_id: "thread-1",
+    role: "primary",
+  };
+}
+
+const sortRestaurants = [
+  makeRestaurant({
+    name: "Bravo Kitchen",
+    slug: "bravo",
+    aggregate_score: 50,
+    mentions: [mentionOn("2025-01-01")],
+  }),
+  makeRestaurant({
+    name: "Alpha Kitchen",
+    slug: "alpha",
+    aggregate_score: 10,
+    mentions: [mentionOn("2024-06-01")],
+  }),
+  makeRestaurant({
+    name: "Charlie Kitchen",
+    slug: "charlie",
+    aggregate_score: 30,
+    mentions: [mentionOn("2023-01-01")],
+  }),
+];
+
+function rowNames() {
+  return screen.getAllByRole("group").map((el) => el.getAttribute("aria-label"));
+}
+
+function sortQuery() {
+  return buildSearchParams({
+    searchQuery: appState.searchQuery,
+    activeCuisines: appState.activeCuisines,
+    activeCities: appState.activeCities,
+    activeSubreddits: appState.activeSubreddits,
+    freshnessCutoff: appState.freshnessCutoff,
+    showUnmapped: appState.showUnmapped,
+    sortKey: appState.sortKey,
+    sortDirection: appState.sortDirection,
+    selectedRestaurantSlug: appState.selectedRestaurantSlug,
+  }).toString();
+}
+
+describe("RestaurantList sort cycle", () => {
+  beforeEach(() => {
+    resetAppState();
+    mocks.toastError.mockReset();
+    stubListViewport();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: false, json: async () => [] }),
+    );
+  });
+
+  it("defaults to score descending and omits sort from the URL", async () => {
+    render(RestaurantList, { restaurants: sortRestaurants });
+
+    const score = await screen.findByRole("button", {
+      name: /sorted by score, highest first/i,
+    });
+    expect(score).toHaveAttribute("aria-pressed", "true");
+    expect(score).toHaveTextContent(/high-low/i);
+    expect(
+      screen.getByRole("button", { name: /^sort by name$/i }),
+    ).toHaveAttribute("aria-pressed", "false");
+    await waitFor(() => {
+      expect(rowNames()).toEqual([
+        "Bravo Kitchen",
+        "Charlie Kitchen",
+        "Alpha Kitchen",
+      ]);
+    });
+    expect(appState.sortKey).toBe("score");
+    expect(appState.sortDirection).toBe("desc");
+    expect(sortQuery()).toBe("");
+  });
+
+  it("toggles the active key instead of clearing sort on the third click", async () => {
+    const user = userEvent.setup();
+    render(RestaurantList, { restaurants: sortRestaurants });
+    const score = await screen.findByRole("button", {
+      name: /sorted by score, highest first/i,
+    });
+
+    await user.click(score);
+    await waitFor(() => {
+      expect(score).toHaveAccessibleName(/sorted by score, lowest first/i);
+      expect(rowNames()).toEqual([
+        "Alpha Kitchen",
+        "Charlie Kitchen",
+        "Bravo Kitchen",
+      ]);
+    });
+    expect(score).toHaveAttribute("aria-pressed", "true");
+    expect(appState.sortKey).toBe("score");
+    expect(appState.sortDirection).toBe("asc");
+    expect(sortQuery()).toBe("sortdir=asc");
+
+    await user.click(score);
+    await waitFor(() => {
+      expect(score).toHaveAccessibleName(/sorted by score, highest first/i);
+      expect(rowNames()).toEqual([
+        "Bravo Kitchen",
+        "Charlie Kitchen",
+        "Alpha Kitchen",
+      ]);
+    });
+    expect(score).toHaveAttribute("aria-pressed", "true");
+    expect(appState.sortKey).toBe("score");
+    expect(appState.sortDirection).toBe("desc");
+    expect(sortQuery()).toBe("");
+
+    await user.click(score);
+    await waitFor(() => {
+      expect(score).toHaveAccessibleName(/sorted by score, lowest first/i);
+      expect(rowNames()).toEqual([
+        "Alpha Kitchen",
+        "Charlie Kitchen",
+        "Bravo Kitchen",
+      ]);
+    });
+    expect(appState.sortKey).not.toBeNull();
+    expect(sortQuery()).toBe("sortdir=asc");
+  });
+
+  it("applies a key's default direction when switching keys", async () => {
+    const user = userEvent.setup();
+    render(RestaurantList, { restaurants: sortRestaurants });
+    await screen.findByRole("button", {
+      name: /sorted by score, highest first/i,
+    });
+
+    await user.click(screen.getByRole("button", { name: /^sort by name$/i }));
+    const name = await screen.findByRole("button", {
+      name: /sorted by name, a to z/i,
+    });
+    expect(name).toHaveAttribute("aria-pressed", "true");
+    expect(name).toHaveTextContent(/A-Z/);
+    await waitFor(() => {
+      expect(rowNames()).toEqual([
+        "Alpha Kitchen",
+        "Bravo Kitchen",
+        "Charlie Kitchen",
+      ]);
+    });
+    expect(sortQuery()).toBe("sort=name&sortdir=asc");
+
+    await user.click(name);
+    await waitFor(() => {
+      expect(name).toHaveAccessibleName(/sorted by name, z to a/i);
+      expect(rowNames()).toEqual([
+        "Charlie Kitchen",
+        "Bravo Kitchen",
+        "Alpha Kitchen",
+      ]);
+    });
+    expect(name).toHaveAttribute("aria-pressed", "true");
+    expect(sortQuery()).toBe("sort=name");
+
+    await user.click(
+      screen.getByRole("button", { name: /^sort by score$/i }),
+    );
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", {
+          name: /sorted by score, highest first/i,
+        }),
+      ).toHaveAttribute("aria-pressed", "true");
+      expect(rowNames()).toEqual([
+        "Bravo Kitchen",
+        "Charlie Kitchen",
+        "Alpha Kitchen",
+      ]);
+    });
+    expect(sortQuery()).toBe("");
+  });
+
+  it("sorts by recency and keeps a named order after repeated clicks", async () => {
+    const user = userEvent.setup();
+    render(RestaurantList, { restaurants: sortRestaurants });
+    await user.click(
+      await screen.findByRole("button", { name: /^sort by recent$/i }),
+    );
+
+    const recent = await screen.findByRole("button", {
+      name: /sorted by recent, newest first/i,
+    });
+    expect(recent).toHaveTextContent(/new-old/i);
+    await waitFor(() => {
+      expect(rowNames()).toEqual([
+        "Bravo Kitchen",
+        "Alpha Kitchen",
+        "Charlie Kitchen",
+      ]);
+    });
+    expect(sortQuery()).toBe("sort=recency");
+
+    await user.click(recent);
+    await waitFor(() => {
+      expect(recent).toHaveAccessibleName(/sorted by recent, oldest first/i);
+      expect(rowNames()).toEqual([
+        "Charlie Kitchen",
+        "Alpha Kitchen",
+        "Bravo Kitchen",
+      ]);
+    });
+    expect(recent).toHaveAttribute("aria-pressed", "true");
+    expect(sortQuery()).toBe("sort=recency&sortdir=asc");
+  });
+
+  it("toggles sort from the keyboard", async () => {
+    const user = userEvent.setup();
+    render(RestaurantList, { restaurants: sortRestaurants });
+    const score = await screen.findByRole("button", {
+      name: /sorted by score, highest first/i,
+    });
+
+    score.focus();
+    expect(score).toHaveFocus();
+    await user.keyboard("{Enter}");
+    await waitFor(() => {
+      expect(score).toHaveAccessibleName(/sorted by score, lowest first/i);
+    });
+    expect(appState.sortDirection).toBe("asc");
+
+    await user.keyboard(" ");
+    await waitFor(() => {
+      expect(score).toHaveAccessibleName(/sorted by score, highest first/i);
+    });
+    expect(appState.sortKey).toBe("score");
+    expect(appState.sortDirection).toBe("desc");
+  });
+
+  it("re-applies table sort when only direction is hydrated", async () => {
+    render(RestaurantList, { restaurants: sortRestaurants });
+    await screen.findByRole("button", {
+      name: /sorted by score, highest first/i,
+    });
+    await waitFor(() => {
+      expect(rowNames()).toEqual([
+        "Bravo Kitchen",
+        "Charlie Kitchen",
+        "Alpha Kitchen",
+      ]);
+    });
+
+    appState.sortDirection = "asc";
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", {
+          name: /sorted by score, lowest first/i,
+        }),
+      ).toHaveAttribute("aria-pressed", "true");
+      expect(rowNames()).toEqual([
+        "Alpha Kitchen",
+        "Charlie Kitchen",
+        "Bravo Kitchen",
+      ]);
+    });
+    expect(sortQuery()).toBe("sortdir=asc");
+  });
+});
+
