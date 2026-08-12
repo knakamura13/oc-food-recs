@@ -43,6 +43,8 @@
 		right: 1.5rem;
 		width: 44px;
 		height: 44px;
+		min-width: 44px;
+		min-height: 44px;
 		border-radius: 50%;
 		border: 2px solid #ff4500;
 		background: #fffcf8;
@@ -95,11 +97,6 @@
 	}
 
 	@media (max-width: 768px) {
-		.back-to-top {
-			width: 40px;
-			height: 40px;
-		}
-
 		.back-to-top-icon {
 			width: 20px;
 			height: 20px;

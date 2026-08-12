@@ -644,9 +644,9 @@
 	.unmapped-status {
 		position: absolute;
 		bottom: 28px;
-		left: 52px;
+		left: 64px;
 		right: auto;
-		max-width: calc(100% - 64px);
+		max-width: calc(100% - 76px);
 		z-index: 500;
 		margin: 0;
 		padding: 0.4rem 0.65rem;
@@ -854,8 +854,10 @@
 		top: 10px;
 		right: 10px;
 		z-index: 600;
-		width: 34px;
-		height: 34px;
+		width: 44px;
+		height: 44px;
+		min-width: 44px;
+		min-height: 44px;
 		padding: 0;
 		border: 2px solid rgba(0, 0, 0, 0.2);
 		border-radius: 6px;
@@ -890,7 +892,7 @@
 
 	.location-error {
 		position: absolute;
-		top: 52px;
+		top: 62px;
 		right: 10px;
 		z-index: 600;
 		background: #3e2c23;
@@ -914,6 +916,17 @@
 			max-width: calc(100% - 80px);
 			white-space: normal;
 			text-align: center;
+		}
+
+		/* Leaflet default zoom hits are 26px (30px with .leaflet-touch). */
+		:global(.leaflet-control-zoom a),
+		:global(.leaflet-touch .leaflet-control-zoom a) {
+			width: 44px;
+			min-width: 44px;
+			height: 44px;
+			min-height: 44px;
+			line-height: 44px;
+			font-size: 18px;
 		}
 	}
 
