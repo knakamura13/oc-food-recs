@@ -122,11 +122,13 @@ describe("snippet utility", () => {
       ]);
     });
 
-    it("keeps only the sentence that names the restaurant", () => {
+    it("keeps neighboring same-line sentences when they fit", () => {
       const body =
         "First sentence here. Second sentence has El Farolito. Third sentence here. Fourth sentence is long.";
       const result = getTrimmedSnippet(body, "El Farolito", 200);
-      expect(result.text).toBe("Second sentence has El Farolito.");
+      expect(result.text).toBe(
+        "First sentence here. Second sentence has El Farolito. Third sentence here.",
+      );
     });
 
     it("keeps the matched restaurant name fully visible even if truncation is needed", () => {
@@ -178,6 +180,22 @@ describe("snippet utility", () => {
       expect(result.text).toBe(
         "Uyghur- Dolans Cuisine in Irvine ( very very unique and the only Uyghur restaurant I know of in OC )",
       );
+    });
+
+    it("includes same-line previous and next fragments when they fit", () => {
+      const body =
+        "6 year old me? McDonalds 12 year old me? Del Taco 18 year old me? Elephant Bar 21 year old me? Yard House";
+      const result = getTrimmedSnippet(body, "Del Taco", 150);
+      expect(result.text).toBe(
+        "McDonalds 12 year old me? Del Taco 18 year old me? Elephant Bar 21 year old me?",
+      );
+    });
+
+    it("skips same-line neighbors that would exceed maxLen", () => {
+      const body =
+        "6 year old me? McDonalds 12 year old me? Del Taco 18 year old me? Elephant Bar 21 year old me? Yard House";
+      const result = getTrimmedSnippet(body, "Del Taco", 30);
+      expect(result.text).toBe("Del Taco 18 year old me?");
     });
   });
 });
