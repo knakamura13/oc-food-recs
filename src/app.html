@@ -5,6 +5,7 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 		<meta name="text-scale" content="scale" />
 		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
 		<!-- Self-hosted fonts (replaces render-blocking Google Fonts) -->
 		<link rel="preload" href="/fonts/dm-serif-display-normal-400-latin.woff2" as="font" type="font/woff2" crossorigin />
 		<link rel="preload" href="/fonts/dm-sans-normal-400-latin.woff2" as="font" type="font/woff2" crossorigin />
@@ -104,6 +105,55 @@
 				font-display: swap;
 				src: url('/fonts/dm-sans-italic-400-latin-ext.woff2') format('woff2');
 				unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+			}
+			/* Fallback metric overrides: scale Georgia / system-ui faces to DM Serif Display
+			   and DM Sans so font-display:swap does not shift line boxes or average width.
+			   Values from frequency-weighted glyph widths (Fontaine formula) against the
+			   self-hosted woff2s. Preload hrefs above are unchanged. */
+			@font-face {
+				font-family: Georgia;
+				src: local('Georgia');
+				font-weight: 100 900;
+				size-adjust: 101.02%;
+				ascent-override: 102.55%;
+				descent-override: 33.16%;
+				line-gap-override: 0%;
+			}
+			@font-face {
+				font-family: Arial;
+				src: local('Arial');
+				font-weight: 100 900;
+				size-adjust: 106.74%;
+				ascent-override: 92.94%;
+				descent-override: 29.04%;
+				line-gap-override: 0%;
+			}
+			@font-face {
+				font-family: 'Helvetica Neue';
+				src: local('Helvetica Neue');
+				font-weight: 100 900;
+				size-adjust: 105.36%;
+				ascent-override: 94.15%;
+				descent-override: 29.42%;
+				line-gap-override: 0%;
+			}
+			@font-face {
+				font-family: 'Segoe UI';
+				src: local('Segoe UI');
+				font-weight: 100 900;
+				size-adjust: 106.74%;
+				ascent-override: 92.94%;
+				descent-override: 29.04%;
+				line-gap-override: 0%;
+			}
+			@font-face {
+				font-family: Roboto;
+				src: local('Roboto');
+				font-weight: 100 900;
+				size-adjust: 106.74%;
+				ascent-override: 92.94%;
+				descent-override: 29.04%;
+				line-gap-override: 0%;
 			}
 		</style>
 		%sveltekit.head%
