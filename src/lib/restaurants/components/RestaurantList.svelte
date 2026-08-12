@@ -14,6 +14,11 @@
 	import { TableHandler } from '@vincjo/datatables';
 	import type { Mention, Restaurant, SortKey } from '$lib/restaurants/types';
 	import {
+		nextSortState,
+		sortButtonAccessibleName,
+		sortDirectionShort
+	} from '$lib/restaurants/sort-cycle';
+	import {
 		appState,
 		clearExplorerFilters,
 		isUnmappedRestaurant,
@@ -115,9 +120,9 @@
 	const nameSort = table.createSort('name');
 
 	const sortOptions = [
-		{ key: 'score' as const, label: 'Score', sort: scoreSort, defaultDirection: 'desc' as const },
-		{ key: 'recency' as const, label: 'Recent', sort: recencySort, defaultDirection: 'desc' as const },
-		{ key: 'name' as const, label: 'Name', sort: nameSort, defaultDirection: 'asc' as const }
+		{ key: 'score' as const, label: 'Score', sort: scoreSort },
+		{ key: 'recency' as const, label: 'Recent', sort: recencySort },
+		{ key: 'name' as const, label: 'Name', sort: nameSort }
 	] as const;
 
 	function optionFor(key: SortKey) {
@@ -133,27 +138,21 @@
 	$effect(() => {
 		table.setRows(restaurants);
 		const opt = optionFor(appState.sortKey);
-		if (opt && !opt.sort.isActive) {
+		// Named two-state sort: restore() after setRows can leave the wrong key
+		// (first paint) or the wrong direction (URL hydration that only changes sortdir).
+		if (
+			opt &&
+			(!opt.sort.isActive || opt.sort.direction !== appState.sortDirection)
+		) {
 			applySortFromAppState();
 		}
 	});
 
-	function cycleSort(key: Exclude<SortKey, null>) {
-		const opt = optionFor(key);
-		if (!opt) return;
-		if (appState.sortKey !== key) {
-			appState.sortKey = key;
-			appState.sortDirection = opt.defaultDirection;
-			applySortFromAppState();
-		} else if (appState.sortDirection === opt.defaultDirection) {
-			appState.sortDirection = opt.defaultDirection === 'desc' ? 'asc' : 'desc';
-			applySortFromAppState();
-		} else {
-			appState.sortKey = null;
-			appState.sortDirection = 'desc'; // direction is meaningless unsorted; avoids a stray ?sortdir= in the URL
-			table.clearSort();
-			table.setRows(restaurants);
-		}
+	function cycleSort(key: SortKey) {
+		const next = nextSortState(appState.sortKey, appState.sortDirection, key);
+		appState.sortKey = next.sortKey;
+		appState.sortDirection = next.sortDirection;
+		applySortFromAppState();
 	}
 
 	let listScrollEl = $state<HTMLDivElement | undefined>();
@@ -433,14 +432,21 @@
 		<span class="sort-label" id="sort-label">Sort by:</span>
 		{#each sortOptions as opt (opt.key)}
 			<button
+				type="button"
 				class="sort-btn"
 				class:active={opt.sort.isActive}
 				onclick={() => cycleSort(opt.key)}
 				aria-pressed={opt.sort.isActive}
+				aria-label={sortButtonAccessibleName(
+					opt.key,
+					opt.label,
+					opt.sort.isActive,
+					opt.sort.direction
+				)}
 			>
 				{opt.label}
-				{#if opt.sort.isActive && opt.sort.direction}
-					<span class="sort-arrow">{opt.sort.direction === 'desc' ? '\u25BC' : '\u25B2'}</span>
+				{#if opt.sort.isActive}
+					<span class="sort-dir">{sortDirectionShort(opt.key, opt.sort.direction)}</span>
 				{/if}
 			</button>
 		{/each}
@@ -543,7 +549,7 @@
 										{#if restaurant.top_comment_snippet}
 											{@const snippet = getTrimmedSnippet(restaurant.top_comment_snippet, restaurant.name, 150)}
 											<p class="dish-teaser">
-												“{#each snippet.segments as segment}{#if segment.isMatch}<strong>{segment.text}</strong>{:else}{segment.text}{/if}{/each}”
+												“{#each snippet.segments as segment, i (i)}{#if segment.isMatch}<strong>{segment.text}</strong>{:else}{segment.text}{/if}{/each}”
 											</p>
 										{/if}
 									</div>
@@ -876,9 +882,39 @@
 		transform: scale(0.96);
 	}
 
-	.sort-arrow {
-		font-size: 0.65rem;
-		margin-left: 2px;
+	.sort-btn:focus-visible {
+		outline: 2px solid #ff4500;
+		outline-offset: 2px;
+	}
+
+	.sort-btn.active:focus-visible {
+		outline-color: #fff;
+		box-shadow: 0 0 0 2px #ff4500;
+	}
+
+	.sort-dir {
+		font-size: 0.68rem;
+		font-weight: 600;
+		letter-spacing: 0.01em;
+		margin-left: 0.2rem;
+		opacity: 0.92;
+	}
+
+	@media (max-width: 1023px) {
+		.sort-bar {
+			flex-wrap: wrap;
+			row-gap: 0.35rem;
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.sort-btn {
+			transition: none;
+		}
+
+		.sort-btn:active {
+			transform: none;
+		}
 	}
 
 	.result-count {

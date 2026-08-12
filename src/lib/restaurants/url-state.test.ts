@@ -51,6 +51,33 @@ describe("buildSearchParams", () => {
     expect(buildSearchParams(defaults).toString()).toBe("");
   });
 
+  it("omits sort for score and includes sortdir only when not desc", () => {
+    expect(
+      buildSearchParams({ ...defaults, sortKey: "score", sortDirection: "asc" }).toString(),
+    ).toBe("sortdir=asc");
+    expect(
+      buildSearchParams({
+        ...defaults,
+        sortKey: "name",
+        sortDirection: "asc",
+      }).toString(),
+    ).toBe("sort=name&sortdir=asc");
+    expect(
+      buildSearchParams({
+        ...defaults,
+        sortKey: "name",
+        sortDirection: "desc",
+      }).toString(),
+    ).toBe("sort=name");
+    expect(
+      buildSearchParams({
+        ...defaults,
+        sortKey: "recency",
+        sortDirection: "desc",
+      }).toString(),
+    ).toBe("sort=recency");
+  });
+
   it("round-trips non-default state", () => {
     const state: UrlStateSnapshot = {
       ...defaults,

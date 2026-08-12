@@ -69,8 +69,7 @@ export function buildSearchParams(state: UrlStateSnapshot): URLSearchParams {
     params.set("city", state.activeCities.join(","));
   if (state.activeSubreddits.length > 0)
     params.set("subreddit", state.activeSubreddits.join(","));
-  if (state.sortKey && state.sortKey !== "score")
-    params.set("sort", state.sortKey);
+  if (state.sortKey !== "score") params.set("sort", state.sortKey);
   if (state.sortDirection !== "desc")
     params.set("sortdir", state.sortDirection);
   if (state.selectedRestaurantSlug)
@@ -90,6 +89,6 @@ export function buildSearchQueryString(state: UrlStateSnapshot): string {
   return buildSearchParams(state).toString();
 }
 
-export function isValidSortKey(value: string): value is NonNullable<SortKey> {
+export function isValidSortKey(value: string): value is SortKey {
   return VALID_SORT_KEYS.has(value as SortKey);
 }
