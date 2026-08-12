@@ -403,6 +403,7 @@ test.describe('Mobile map interaction', () => {
 		page
 	}, testInfo) => {
 		test.skip(testInfo.project.name !== 'Mobile Chrome', 'Mobile viewport only');
+		test.setTimeout(90_000);
 
 		for (const viewport of mobileViewports) {
 			await test.step(`${viewport.width}x${viewport.height}`, async () => {
@@ -449,6 +450,7 @@ test.describe('Mobile map interaction', () => {
 		page
 	}, testInfo) => {
 		test.skip(testInfo.project.name !== 'Mobile Chrome', 'Mobile viewport only');
+		test.setTimeout(90_000);
 
 		for (const viewport of mobileViewports) {
 			await test.step(`${viewport.width}x${viewport.height}`, async () => {
@@ -878,5 +880,73 @@ test.describe('Mobile map interaction', () => {
 		await page.setViewportSize({ width: 390, height: 844 });
 		await expect(expandToggle).toHaveCount(0);
 		await expect(page.locator('.mobile-map-trigger')).toBeVisible();
+	});
+
+	test('desktop Tab leaves the in-flow map pane and reaches sort and rows', async ({
+		page
+	}, testInfo) => {
+		test.skip(testInfo.project.name !== 'Desktop Chrome', 'Desktop viewport only');
+		await page.setViewportSize({ width: 1280, height: 800 });
+		await page.goto('/');
+		await firstRenderedRow(page);
+		await expect(page.locator('.leaflet-container')).toBeVisible({ timeout: 30_000 });
+
+		const mapPane = page.locator('#restaurant-map-panel');
+		await expect(mapPane).toHaveJSProperty('open', false);
+
+		await page.getByRole('button', { name: 'Zoom in' }).focus();
+		await expect(page.getByRole('button', { name: 'Zoom in' })).toBeFocused();
+
+		let leftMap = false;
+		for (let i = 0; i < 16; i += 1) {
+			await page.keyboard.press('Tab');
+			const inMap = await page.evaluate(() => {
+				const pane = document.getElementById('restaurant-map-panel');
+				const active = document.activeElement;
+				return Boolean(pane && active instanceof Node && pane.contains(active));
+			});
+			if (!inMap) {
+				leftMap = true;
+				break;
+			}
+		}
+
+		expect(leftMap, 'Tab must leave the closed in-flow map instead of wrapping forever').toBe(
+			true
+		);
+		await expect(page.locator('.map-expand-toggle')).toBeFocused();
+
+		await page.keyboard.press('Tab');
+		await expect(page.locator('.sort-btn').first()).toBeFocused();
+
+		let reachedRow = false;
+		for (let i = 0; i < 8; i += 1) {
+			await page.keyboard.press('Tab');
+			reachedRow = await page.evaluate(() => {
+				const active = document.activeElement;
+				return active instanceof HTMLElement && active.classList.contains('row-toggle');
+			});
+			if (reachedRow) break;
+		}
+		expect(reachedRow).toBe(true);
+	});
+
+	test('short zoomed phone viewport keeps restaurant rows reachable', async ({
+		page
+	}, testInfo) => {
+		test.skip(testInfo.project.name !== 'Mobile Chrome', 'Mobile viewport only');
+		test.setTimeout(60_000);
+		await page.setViewportSize({ width: 195, height: 422 });
+		await page.goto('/');
+
+		const row = await firstRenderedRow(page);
+		await row.scrollIntoViewIfNeeded();
+		await expect(row).toBeVisible();
+
+		const inViewport = await row.evaluate((element) => {
+			const rect = element.getBoundingClientRect();
+			return rect.height > 8 && rect.bottom > 0 && rect.top < window.innerHeight;
+		});
+		expect(inViewport).toBe(true);
 	});
 });

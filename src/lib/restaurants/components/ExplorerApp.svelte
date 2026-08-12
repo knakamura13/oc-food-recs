@@ -247,10 +247,18 @@
 		restoreMapFocus(opener, false);
 	}
 
+	function isMapDialogTabTrapActive() {
+		// Desktop reuses this <dialog> in-flow while it stays closed (`open` is false).
+		// Only wrap Tab when the sheet is actually modal so sequential focus can leave
+		// the map for the expand pin, sort bar, and rows (WCAG 2.1.2).
+		return Boolean(mapPaneEl?.open) || (mapExpanded && isMobileViewport());
+	}
+
 	function handleMapDialogKeydown(event: KeyboardEvent) {
-		// Native <dialog> handles Escape; Tab wrap still needs help here because
-		// Chrome sends focus to <body> from the last sheet control instead of cycling.
+		// Native <dialog> handles Escape; Chrome still needs a Tab wrap while
+		// `showModal()` is up, or focus jumps to <body> from the last sheet control.
 		if (event.key !== 'Tab' || !mapPaneEl) return;
+		if (!isMapDialogTabTrapActive()) return;
 
 		const focusables = getFocusableElements(mapPaneEl);
 		if (focusables.length === 0) {
@@ -984,6 +992,35 @@
 	@media (max-width: 1023px) {
 		.map-expand-toggle {
 			display: none;
+		}
+	}
+
+	/* Short/narrow viewports (phone at ~200% zoom): a sticky 100dvh trap plus
+	   overflow:hidden clips `.list-scroll` under the non-shrinking controls.
+	   Let the document scroll instead. Desktop ≥1024 keeps the split pane. */
+	@media (max-width: 1023px) and (max-height: 720px) {
+		.app-trap {
+			height: auto;
+			min-height: 0;
+		}
+
+		.content-area {
+			overflow: visible;
+			flex: 1 0 auto;
+			min-height: 12rem;
+		}
+
+		.list-pane {
+			min-height: 12rem;
+		}
+
+		.list-pane :global(.restaurant-list) {
+			height: auto;
+			min-height: 12rem;
+		}
+
+		.list-pane :global(.list-scroll) {
+			min-height: 12rem;
 		}
 	}
 </style>
