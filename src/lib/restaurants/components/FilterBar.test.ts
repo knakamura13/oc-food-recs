@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { render, screen, waitFor } from "@testing-library/svelte";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -6,6 +8,11 @@ import { appState, formatMonthYear, setFreshnessFilter } from "$lib/restaurants/
 import { applyUrlStateSnapshot } from "$lib/restaurants/apply-url-state";
 import { parseSearchParams } from "$lib/restaurants/url-state";
 import { makeRestaurant, resetAppState } from "$lib/restaurants/test-utils";
+
+const filterBarSource = readFileSync(
+  join(process.cwd(), "src/lib/restaurants/components/FilterBar.svelte"),
+  "utf8",
+);
 
 const mocks = vi.hoisted(() => ({
   toastSuccess: vi.fn(),
@@ -723,6 +730,17 @@ describe("FilterBar", () => {
       screen.queryByRole("listbox", { name: /filter by cuisine/i }),
     ).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^city$/i })).toHaveFocus();
+  });
+
+  it("adds pressed feedback on filter triggers but not the map control or pills", () => {
+    expect(filterBarSource).toContain(
+      ".dropdown-trigger:active:not(.mobile-map-trigger)",
+    );
+    expect(filterBarSource).toContain("prefers-reduced-motion");
+    expect(filterBarSource).toMatch(/\.pill:active\s*\{/);
+    expect(filterBarSource).not.toMatch(
+      /\.mobile-map-trigger:active\s*\{/,
+    );
   });
 
   it("exposes recency as a labelled popup, not a dialog", async () => {

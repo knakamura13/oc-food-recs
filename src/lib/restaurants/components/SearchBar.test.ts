@@ -1,9 +1,16 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { render, screen, waitFor } from "@testing-library/svelte";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 import SearchBar from "./SearchBar.svelte";
 import { appState } from "$lib/restaurants/stores.svelte";
 import { makeRestaurant, resetAppState } from "$lib/restaurants/test-utils";
+
+const searchBarSource = readFileSync(
+  join(process.cwd(), "src/lib/restaurants/components/SearchBar.svelte"),
+  "utf8",
+);
 
 const restaurants = [
   makeRestaurant({
@@ -266,6 +273,40 @@ describe("SearchBar", () => {
     expect(appState.listScrollTarget).toBe("sushi-zen");
     expect(appState.activeCities).toEqual([]);
     expect(appState.searchQuery).toBe("Sushi Zen");
+  });
+
+  it("keeps keyboard .highlighted when arrowing after a pointer hover", async () => {
+    const user = userEvent.setup();
+    render(SearchBar, { restaurants, cuisineNames, cityNames });
+    const input = screen.getByRole("combobox", {
+      name: /search restaurants, cuisines, or cities/i,
+    });
+    await user.click(input);
+    await user.type(input, "a");
+    await waitFor(() => {
+      expect(
+        screen.getByRole("listbox", { name: /search results/i }),
+      ).toBeInTheDocument();
+    });
+    const options = screen.getAllByRole("option");
+    expect(options.length).toBeGreaterThan(1);
+    await user.hover(options[0]);
+    expect(options[0]).toHaveClass("highlighted");
+    await user.keyboard("{ArrowDown}");
+    expect(options[1]).toHaveClass("highlighted");
+    expect(options[0]).not.toHaveClass("highlighted");
+  });
+
+  it("styles the clear button and search hits with hover, and highlighted wins over hover", () => {
+    expect(searchBarSource).toMatch(/\.clear-btn:hover\s*\{/);
+    expect(searchBarSource).toMatch(/\.clear-btn:active\s*\{/);
+    expect(searchBarSource).toMatch(/li:hover\s*\{/);
+    expect(searchBarSource).toMatch(/li\.highlighted:hover\s*\{/);
+    expect(searchBarSource).toContain("prefers-reduced-motion");
+    const hoverIdx = searchBarSource.indexOf("li:hover");
+    const highlightedHoverIdx = searchBarSource.indexOf("li.highlighted:hover");
+    expect(hoverIdx).toBeGreaterThan(-1);
+    expect(highlightedHoverIdx).toBeGreaterThan(hoverIdx);
   });
 
   it("applies the city filter when the filter option is clicked", async () => {

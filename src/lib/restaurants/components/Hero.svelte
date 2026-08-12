@@ -58,11 +58,16 @@
 		text-decoration-thickness: 1px;
 		text-underline-offset: 2px;
 		font-weight: 500;
-		transition: text-decoration-thickness 0.15s ease;
+		border-radius: 2px;
+		transition: text-decoration-thickness 0.15s ease, background 0.15s ease, color 0.15s ease;
 	}
 
 	a:hover {
 		text-decoration-thickness: 2px;
+	}
+
+	a:active {
+		background: #fff0eb;
 	}
 
 	.attribution {
@@ -79,6 +84,11 @@
 
 	.attribution a:hover {
 		color: #c43700;
+	}
+
+	.attribution a:active {
+		color: #c43700;
+		background: #fff0eb;
 	}
 
 	/* Desktop explorer is a locked viewport — keep the intro compact so map + list

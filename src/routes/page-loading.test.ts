@@ -1,7 +1,14 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { render, screen } from "@testing-library/svelte";
 import { describe, expect, it, vi } from "vitest";
 import type { ExplorerPageData } from "$lib/restaurants/explorer-page-data";
 import Page from "./+page.svelte";
+
+const pageSource = readFileSync(
+  join(process.cwd(), "src/routes/+page.svelte"),
+  "utf8",
+);
 
 const nav = vi.hoisted(() => ({
   afterNavigate: vi.fn<(callback: () => void) => void>(),
@@ -58,5 +65,24 @@ describe("home page first-load shell", () => {
     expect(document.querySelector(".explorer-skeleton")).toBeTruthy();
     expect(nav.afterNavigate).toHaveBeenCalledTimes(1);
     expect(typeof nav.afterNavigate.mock.calls[0][0]).toBe("function");
+  });
+
+  it("shows a home link when streamed home data rejects", async () => {
+    stubMatchMedia();
+    nav.afterNavigate.mockClear();
+    const home = Promise.reject(new Error("load failed"));
+    home.catch(() => {});
+    render(Page, { data: { home } });
+
+    const link = await screen.findByRole("link", {
+      name: /back to restaurants/i,
+    });
+    expect(link).toHaveAttribute("href", "/");
+    expect(link).toHaveClass("home-link");
+    expect(screen.queryByText("Loading restaurants…")).not.toBeInTheDocument();
+    expect(nav.afterNavigate).toHaveBeenCalledTimes(1);
+    expect(pageSource).toMatch(/\.home-link:hover\s*\{/);
+    expect(pageSource).toMatch(/\.home-link:active\s*\{/);
+    expect(pageSource).toContain("prefers-reduced-motion");
   });
 });

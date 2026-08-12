@@ -359,6 +359,19 @@
 		cursor: pointer;
 		padding: 6px;
 		line-height: 1;
+		border-radius: 6px;
+		transition: color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+	}
+
+	.clear-btn:hover {
+		color: #c43700;
+		background: #fff0eb;
+	}
+
+	.clear-btn:active {
+		color: #c43700;
+		background: #fff0eb;
+		transform: translateY(-50%) scale(0.97);
 	}
 
 	.search-shortcut {
@@ -403,9 +416,16 @@
 		align-items: center;
 		justify-content: space-between;
 		gap: 0.5rem;
+		transition: background 0.15s ease;
 	}
 
-	li.highlighted {
+	/* Pointer hover is independent of keyboard .highlighted so they don't fight. */
+	li:hover {
+		background: #faf7f2;
+	}
+
+	li.highlighted,
+	li.highlighted:hover {
 		background: #fff0eb;
 	}
 
@@ -465,5 +485,19 @@
 		color: #7a6e63;
 		text-align: center;
 		list-style: none;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.clear-btn {
+			transition: color 0.15s ease, background 0.15s ease;
+		}
+
+		.clear-btn:active {
+			transform: translateY(-50%);
+		}
+
+		li {
+			transition: none;
+		}
 	}
 </style>
