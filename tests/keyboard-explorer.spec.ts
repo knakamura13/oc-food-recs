@@ -8,7 +8,10 @@ test("skip link moves keyboard focus into the restaurant list", async ({
     "Desktop viewport only",
   );
   await page.goto("/");
-  await expect(page.locator(".row").first()).toBeVisible({ timeout: 30_000 });
+  // Skeleton rows have `.row` but no `.row-toggle`; wait for the streamed list.
+  await expect(page.locator(".row-toggle").first()).toBeVisible({
+    timeout: 30_000,
+  });
 
   await page.keyboard.press("Tab");
   const skip = page.getByRole("link", { name: /skip to restaurant list/i });

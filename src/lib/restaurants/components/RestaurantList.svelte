@@ -28,6 +28,7 @@
 	import { buildCanonicalShareUrl } from '$lib/restaurants/page-meta';
 	import { isSaved, toggleSaved } from '$lib/restaurants/saved-restaurants.svelte';
 	import { getLastVisitMs, hasNewMentionsSince } from '$lib/restaurants/visit-tracker';
+	import { consumeSkipToList } from '$lib/restaurants/skip-to-list';
 	import { onMount } from 'svelte';
 	import { toast } from '$lib/toast';
 
@@ -300,6 +301,11 @@
 
 	const bindListScroll: Attachment<HTMLDivElement> = (el) => {
 		listScrollEl = el;
+		if (consumeSkipToList()) {
+			void tick().then(() => {
+				if (listScrollEl === el) el.focus();
+			});
+		}
 		return () => {
 			listScrollEl = undefined;
 		};
