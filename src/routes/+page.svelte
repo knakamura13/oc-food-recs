@@ -73,5 +73,25 @@
 		color: #fffdf9;
 		font-weight: 600;
 		text-decoration: none;
+		transition: background 0.15s ease, transform 0.15s ease;
+	}
+
+	.home-link:hover {
+		background: #c43700;
+	}
+
+	.home-link:active {
+		background: #c43700;
+		transform: scale(0.97);
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.home-link {
+			transition: background 0.15s ease;
+		}
+
+		.home-link:active {
+			transform: none;
+		}
 	}
 </style>
