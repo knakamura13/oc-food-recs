@@ -16,6 +16,11 @@
 		cityNames: string[];
 	}
 
+	type FilterMatch = { type: 'cuisine' | 'city'; value: string };
+	type SearchOption =
+		| { kind: 'filter'; match: FilterMatch; id: 'search-option-filter' }
+		| { kind: 'restaurant'; restaurant: Restaurant; id: string };
+
 	let { restaurants, cuisineNames, cityNames }: Props = $props();
 
 	let inputEl: HTMLInputElement | undefined = $state();
@@ -40,10 +45,30 @@
 	});
 
 	let queryTrimmed = $derived(appState.searchQuery.trim());
-	let showNoResults = $derived(
-		Boolean(showDropdown && FuseCtor && queryTrimmed && results.length === 0)
+
+	let filterMatch = $derived.by(() =>
+		queryTrimmed ? findFilterMatch(queryTrimmed, cuisineNames, cityNames) : null
 	);
-	let showResultsDropdown = $derived(showDropdown && results.length > 0);
+
+	let options = $derived.by((): SearchOption[] => {
+		const list: SearchOption[] = [];
+		if (filterMatch) {
+			list.push({ kind: 'filter', match: filterMatch, id: 'search-option-filter' });
+		}
+		for (const result of results) {
+			list.push({
+				kind: 'restaurant',
+				restaurant: result.item,
+				id: `search-option-${result.item.slug}`
+			});
+		}
+		return list;
+	});
+
+	let showNoResults = $derived(
+		Boolean(showDropdown && FuseCtor && queryTrimmed && options.length === 0)
+	);
+	let showResultsDropdown = $derived(showDropdown && options.length > 0);
 
 	let isFocused = $state(false);
 	let shortcutLabel = $state(
@@ -55,6 +80,12 @@
 			? '⌘K'
 			: 'Ctrl+K'
 	);
+
+	function filterOptionLabel(match: FilterMatch): string {
+		return match.type === 'city'
+			? `Filter by city: ${match.value}`
+			: `Filter by cuisine: ${match.value}`;
+	}
 
 	function handleGlobalKeydown(e: KeyboardEvent) {
 		const target = e.target as HTMLElement | null;
@@ -85,40 +116,51 @@
 		}
 	}
 
+	function applyFilterMatch(match: FilterMatch) {
+		if (match.type === 'cuisine') {
+			if (!appState.activeCuisines.includes(match.value)) {
+				appState.activeCuisines = [...appState.activeCuisines, match.value];
+			}
+		} else {
+			if (!appState.activeCities.includes(match.value)) {
+				appState.activeCities = [...appState.activeCities, match.value];
+			}
+		}
+		appState.searchQuery = '';
+		showDropdown = false;
+		highlightIndex = -1;
+	}
+
+	function activateOption(index: number) {
+		const option = options[index];
+		if (!option) return;
+		if (option.kind === 'filter') {
+			applyFilterMatch(option.match);
+			return;
+		}
+		selectResult(option.restaurant);
+	}
+
 	function applyFilterFromSearch() {
 		const query = appState.searchQuery.trim();
 		if (!query) return;
 
-		// Try to match a filter (cuisine or city)
-		const match = findFilterMatch(query, cuisineNames, cityNames);
-		if (match) {
-			if (match.type === 'cuisine') {
-				if (!appState.activeCuisines.includes(match.value)) {
-					appState.activeCuisines = [...appState.activeCuisines, match.value];
-				}
-			} else {
-				if (!appState.activeCities.includes(match.value)) {
-					appState.activeCities = [...appState.activeCities, match.value];
-				}
-			}
-			appState.searchQuery = '';
-			showDropdown = false;
-			return true;
+		// Highlighted row always wins — matches what the user sees selected.
+		if (highlightIndex >= 0 && options.length > 0) {
+			activateOption(highlightIndex);
+			return;
 		}
 
-		// If a dropdown result is highlighted, select it
-		if (highlightIndex >= 0 && results.length > 0) {
-			selectResult(results[highlightIndex].item);
-			return true;
+		const match = findFilterMatch(query, cuisineNames, cityNames);
+		if (match) {
+			applyFilterMatch(match);
+			return;
 		}
 
 		// If there's exactly one result, select it
 		if (results.length === 1) {
 			selectResult(results[0].item);
-			return true;
 		}
-
-		return false;
 	}
 
 	function handleKeydown(e: KeyboardEvent) {
@@ -128,11 +170,11 @@
 			return;
 		}
 
-		if (!showDropdown || results.length === 0) return;
+		if (!showDropdown || options.length === 0) return;
 
 		if (e.key === 'ArrowDown') {
 			e.preventDefault();
-			highlightIndex = Math.min(highlightIndex + 1, results.length - 1);
+			highlightIndex = Math.min(highlightIndex + 1, options.length - 1);
 		} else if (e.key === 'ArrowUp') {
 			e.preventDefault();
 			highlightIndex = Math.max(highlightIndex - 1, 0);
@@ -172,7 +214,7 @@
 			role="combobox"
 			aria-expanded={showResultsDropdown || showNoResults}
 			aria-controls="search-listbox"
-			aria-activedescendant={highlightIndex >= 0 ? `search-option-${highlightIndex}` : undefined}
+			aria-activedescendant={highlightIndex >= 0 ? options[highlightIndex]?.id : undefined}
 			aria-autocomplete="list"
 			aria-label="Search restaurants, cuisines, or cities"
 		/>
@@ -195,25 +237,47 @@
 
 	{#if showResultsDropdown}
 		<ul class="dropdown" id="search-listbox" role="listbox" aria-label="Search results">
-			{#each results as result, i (result.item.slug)}
-				<li
-					id="search-option-{i}"
-					class:highlighted={i === highlightIndex}
-					onmousedown={() => selectResult(result.item)}
-					onmouseenter={() => (highlightIndex = i)}
-					role="option"
-					aria-selected={i === highlightIndex}
-				>
-					<span class="result-name">{result.item.name}</span>
-					<span class="result-meta">
-						{#if result.item.cuisine}
-							<span class="result-cuisine">{result.item.cuisine}</span>
-						{/if}
-						{#if result.item.location}
-							<span class="result-location">{result.item.location}</span>
-						{/if}
-					</span>
-				</li>
+			{#each options as option, i (option.id)}
+				{#if option.kind === 'filter'}
+					<li
+						id={option.id}
+						class="filter-option"
+						class:highlighted={i === highlightIndex}
+						onmousedown={() => activateOption(i)}
+						onmouseenter={() => (highlightIndex = i)}
+						role="option"
+						aria-selected={i === highlightIndex}
+					>
+						<span class="filter-label">{filterOptionLabel(option.match)}</span>
+						<span
+							class="filter-chip"
+							class:city-chip={option.match.type === 'city'}
+							class:cuisine-chip={option.match.type === 'cuisine'}
+							aria-hidden="true"
+						>
+							{option.match.value}
+						</span>
+					</li>
+				{:else}
+					<li
+						id={option.id}
+						class:highlighted={i === highlightIndex}
+						onmousedown={() => activateOption(i)}
+						onmouseenter={() => (highlightIndex = i)}
+						role="option"
+						aria-selected={i === highlightIndex}
+					>
+						<span class="result-name">{option.restaurant.name}</span>
+						<span class="result-meta">
+							{#if option.restaurant.cuisine}
+								<span class="result-cuisine">{option.restaurant.cuisine}</span>
+							{/if}
+							{#if option.restaurant.location}
+								<span class="result-location">{option.restaurant.location}</span>
+							{/if}
+						</span>
+					</li>
+				{/if}
 			{/each}
 		</ul>
 	{:else if showNoResults}
@@ -342,6 +406,35 @@
 
 	li.highlighted {
 		background: #fff0eb;
+	}
+
+	.filter-option {
+		border-bottom: 1px solid #ebe6df;
+	}
+
+	.filter-label {
+		font-family: 'DM Sans', sans-serif;
+		font-size: 0.875rem;
+		font-weight: 500;
+		color: #3e2c23;
+	}
+
+	.filter-chip {
+		flex-shrink: 0;
+		padding: 1px 8px;
+		border-radius: 12px;
+		font-size: 0.75rem;
+		font-weight: 500;
+	}
+
+	.cuisine-chip {
+		background: #f0ebe3;
+		color: #5d4e37;
+	}
+
+	.city-chip {
+		background: #fce8e0;
+		color: #b5543a;
 	}
 
 	.result-name {

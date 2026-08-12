@@ -214,4 +214,73 @@ describe("SearchBar", () => {
     expect(options[0]).toHaveTextContent("Fullerton");
     expect(options[1]).toHaveTextContent("Garden Grove");
   });
+
+  it("shows a city filter option when the query matches a city", async () => {
+    const user = userEvent.setup();
+    render(SearchBar, { restaurants, cuisineNames, cityNames });
+    const input = screen.getByRole("combobox", {
+      name: /search restaurants, cuisines, or cities/i,
+    });
+    await user.click(input);
+    await user.type(input, "Irvine");
+    await waitFor(() => {
+      expect(
+        screen.getByRole("option", { name: /filter by city.*irvine/i }),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it("applies the city filter on Enter when no option is highlighted", async () => {
+    const user = userEvent.setup();
+    render(SearchBar, { restaurants, cuisineNames, cityNames });
+    const input = screen.getByRole("combobox", {
+      name: /search restaurants, cuisines, or cities/i,
+    });
+    await user.click(input);
+    await user.type(input, "Irvine");
+    await waitFor(() => {
+      expect(
+        screen.getByRole("option", { name: /filter by city.*irvine/i }),
+      ).toBeInTheDocument();
+    });
+    await user.keyboard("{Enter}");
+    expect(appState.activeCities).toEqual(["Irvine"]);
+    expect(appState.searchQuery).toBe("");
+    expect(appState.selectedRestaurantSlug).toBeNull();
+  });
+
+  it("selects a highlighted restaurant even when the query matches a city", async () => {
+    const user = userEvent.setup();
+    render(SearchBar, { restaurants, cuisineNames, cityNames });
+    const input = screen.getByRole("combobox", {
+      name: /search restaurants, cuisines, or cities/i,
+    });
+    await user.click(input);
+    await user.type(input, "Irvine");
+    const sushiOption = await screen.findByRole("option", {
+      name: /sushi zen/i,
+    });
+    await user.hover(sushiOption);
+    await user.keyboard("{Enter}");
+    expect(appState.selectedRestaurantSlug).toBe("sushi-zen");
+    expect(appState.listScrollTarget).toBe("sushi-zen");
+    expect(appState.activeCities).toEqual([]);
+    expect(appState.searchQuery).toBe("Sushi Zen");
+  });
+
+  it("applies the city filter when the filter option is clicked", async () => {
+    const user = userEvent.setup();
+    render(SearchBar, { restaurants, cuisineNames, cityNames });
+    const input = screen.getByRole("combobox", {
+      name: /search restaurants, cuisines, or cities/i,
+    });
+    await user.click(input);
+    await user.type(input, "Irvine");
+    const filterOption = await screen.findByRole("option", {
+      name: /filter by city.*irvine/i,
+    });
+    await user.click(filterOption);
+    expect(appState.activeCities).toEqual(["Irvine"]);
+    expect(appState.searchQuery).toBe("");
+  });
 });
