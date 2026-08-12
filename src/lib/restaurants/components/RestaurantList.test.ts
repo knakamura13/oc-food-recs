@@ -178,4 +178,29 @@ describe("RestaurantList", () => {
 
     expect(appState.activeCuisines).toEqual([]);
   });
+
+  it("names the row toggle from identity, not the teaser or chevron", () => {
+    render(RestaurantList, {
+      restaurants: [
+        makeRestaurant({
+          name: "La Taco Spot",
+          slug: "la-taco-spot",
+          cuisine: "Mexican",
+          location: "Santa Ana",
+          top_dish_snippet: "Get the al pastor tacos",
+        }),
+      ],
+    });
+
+    const toggle = screen.getByRole("button", {
+      name: "La Taco Spot, Mexican, Santa Ana",
+    });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(
+      screen.queryByRole("button", { name: /expand la taco spot details/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /al pastor/i }),
+    ).not.toBeInTheDocument();
+  });
 });
