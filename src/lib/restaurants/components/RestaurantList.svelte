@@ -530,17 +530,10 @@
 												<span class="tag location-tag">{restaurant.location}</span>
 											{/if}
 										</div>
-										{#if restaurant.top_dish_snippet}
-											{@const snippet = getTrimmedSnippet(restaurant.top_dish_snippet, restaurant.name, 150)}
+										{#if restaurant.top_comment_snippet}
+											{@const snippet = getTrimmedSnippet(restaurant.top_comment_snippet, restaurant.name, 150)}
 											<p class="dish-teaser">
-												<span class="dish-label">Try:</span>
-												{#each snippet.segments as segment}
-													{#if segment.isMatch}
-														<strong>{segment.text}</strong>
-													{:else}
-														{segment.text}
-													{/if}
-												{/each}
+												“{#each snippet.segments as segment}{#if segment.isMatch}<strong>{segment.text}</strong>{:else}{segment.text}{/if}{/each}”
 											</p>
 										{/if}
 									</div>
@@ -1706,11 +1699,6 @@
 			font-size: 0.875rem;
 			font-style: normal;
 			line-height: 1.43;
-		}
-
-		.dish-label {
-			color: #ff4500;
-			font-weight: 600;
 		}
 	}
 

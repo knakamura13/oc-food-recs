@@ -33,7 +33,7 @@ export function makeRestaurant(
     mentions: [],
     source_threads: ["thread-1"],
     dish_rec_count: 0,
-    top_dish_snippet: null,
+    top_comment_snippet: null,
     ...overrides,
   };
 }
