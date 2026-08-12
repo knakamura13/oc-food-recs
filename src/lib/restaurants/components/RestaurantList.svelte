@@ -1041,10 +1041,14 @@
 		margin: 0;
 		padding: 0;
 		font: inherit;
+		/* Flex, not block: an h2 line box would offset .row-toggle from .row-stats. */
+		display: flex;
 	}
 
 	.row-toggle {
+		flex: 1;
 		width: 100%;
+		min-width: 0;
 	}
 
 	.row-toggle:focus-visible {
