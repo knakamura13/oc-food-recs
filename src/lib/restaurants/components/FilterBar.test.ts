@@ -2,7 +2,9 @@ import { render, screen, waitFor } from "@testing-library/svelte";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import FilterBar from "./FilterBar.svelte";
-import { appState, formatMonthYear } from "$lib/restaurants/stores.svelte";
+import { appState, formatMonthYear, setFreshnessFilter } from "$lib/restaurants/stores.svelte";
+import { applyUrlStateSnapshot } from "$lib/restaurants/apply-url-state";
+import { parseSearchParams } from "$lib/restaurants/url-state";
 import { makeRestaurant, resetAppState } from "$lib/restaurants/test-utils";
 
 const mocks = vi.hoisted(() => ({
@@ -250,8 +252,10 @@ describe("FilterBar", () => {
     expect(btn).toBeEnabled();
     await user.click(btn);
     expect(appState.freshnessCutoff).toBe(priorMs);
+    expect(appState.freshnessSource).toBe("visit");
     await user.click(btn);
     expect(appState.freshnessCutoff).toBeNull();
+    expect(appState.freshnessSource).toBeNull();
   });
 
   it("marks last-visit active and shows its pill, not Recency, when toggled on", async () => {
@@ -339,7 +343,7 @@ describe("FilterBar", () => {
       dateExtent,
     });
     screen.getByRole("button", { name: /^new since last visit$/i });
-    appState.freshnessCutoff = customMs;
+    setFreshnessFilter(customMs);
 
     await waitFor(() => {
       expect(
@@ -383,7 +387,7 @@ describe("FilterBar", () => {
     );
     expect(appState.freshnessCutoff).toBe(priorMs);
 
-    appState.freshnessCutoff = customMs;
+    setFreshnessFilter(customMs);
 
     await waitFor(() => {
       expect(
@@ -413,7 +417,7 @@ describe("FilterBar", () => {
       dateExtent,
     });
     screen.getByRole("button", { name: /^new since last visit$/i });
-    appState.freshnessCutoff = customMs;
+    setFreshnessFilter(customMs);
     await waitFor(() => {
       expect(
         screen.getByRole("button", { name: /remove recency filter/i }),
@@ -453,7 +457,7 @@ describe("FilterBar", () => {
       dateExtent,
     });
     screen.getByRole("button", { name: /^new since last visit$/i });
-    appState.freshnessCutoff = customMs;
+    setFreshnessFilter(customMs);
     await user.click(
       await screen.findByRole("button", { name: /remove recency filter/i }),
     );
@@ -495,7 +499,7 @@ describe("FilterBar", () => {
       dateExtent,
     });
     screen.getByRole("button", { name: /^new since last visit$/i });
-    appState.freshnessCutoff = customMs;
+    setFreshnessFilter(customMs);
     await waitFor(() => {
       expect(
         screen.getByRole("button", { name: /^recency$/i }),
@@ -505,6 +509,119 @@ describe("FilterBar", () => {
     await user.click(screen.getByRole("button", { name: /^reset$/i }));
 
     expect(appState.freshnessCutoff).toBeNull();
+    expect(
+      screen.getByRole("button", { name: /^recency$/i }),
+    ).not.toHaveClass("has-active");
+  });
+
+  it("round-trips last-visit from since=visit as last-visit, not Recency", async () => {
+    const priorMs = Date.parse("2024-06-01T15:30:00Z");
+    localStorage.setItem(
+      "ocFoodRecs_lastVisit",
+      new Date(priorMs).toISOString(),
+    );
+    applyUrlStateSnapshot(parseSearchParams(new URLSearchParams("since=visit")));
+    render(FilterBar, {
+      restaurants,
+      threadSubreddit,
+      restaurantsForHistogram: restaurants,
+      dateExtent,
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: /^new since last visit$/i }),
+      ).toHaveClass("has-active");
+    });
+
+    const lastVisitBtn = screen.getByRole("button", {
+      name: /^new since last visit$/i,
+    });
+    const recencyTrigger = screen.getByRole("button", { name: /^recency$/i });
+    const pill = screen.getByRole("button", {
+      name: /remove new since last visit filter/i,
+    });
+
+    expect(lastVisitBtn).toHaveAttribute("aria-pressed", "true");
+    expect(recencyTrigger).not.toHaveClass("has-active");
+    expect(pill).toHaveTextContent(/new since last visit/i);
+    expect(pill).not.toHaveTextContent(`Since ${formatMonthYear(priorMs)}`);
+    expect(appState.freshnessCutoff).toBe(priorMs);
+    expect(appState.freshnessSource).toBe("visit");
+  });
+
+  it("round-trips a histogram date URL as Recency even on the last-visit calendar day", async () => {
+    const priorMs = Date.parse("2024-06-01T00:00:00Z");
+    const dayStart = Date.parse("2024-06-01");
+    localStorage.setItem(
+      "ocFoodRecs_lastVisit",
+      new Date(priorMs).toISOString(),
+    );
+    applyUrlStateSnapshot(
+      parseSearchParams(new URLSearchParams("since=2024-06-01")),
+    );
+    render(FilterBar, {
+      restaurants,
+      threadSubreddit,
+      restaurantsForHistogram: restaurants,
+      dateExtent,
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: /^recency$/i }),
+      ).toHaveClass("has-active");
+    });
+
+    const lastVisitBtn = screen.getByRole("button", {
+      name: /^new since last visit$/i,
+    });
+    const pill = screen.getByRole("button", {
+      name: /remove recency filter/i,
+    });
+
+    expect(lastVisitBtn).toHaveAttribute("aria-pressed", "false");
+    expect(lastVisitBtn).not.toHaveClass("has-active");
+    expect(pill).toHaveTextContent(`Since ${formatMonthYear(dayStart)}`);
+    expect(
+      screen.queryByRole("button", {
+        name: /remove new since last visit filter/i,
+      }),
+    ).not.toBeInTheDocument();
+    expect(appState.freshnessCutoff).toBe(dayStart);
+    expect(appState.freshnessSource).toBe("date");
+  });
+
+  it("clears the shared cutoff after restoring last-visit from the URL", async () => {
+    const user = userEvent.setup();
+    const priorMs = Date.parse("2024-06-01T15:30:00Z");
+    localStorage.setItem(
+      "ocFoodRecs_lastVisit",
+      new Date(priorMs).toISOString(),
+    );
+    applyUrlStateSnapshot(parseSearchParams(new URLSearchParams("since=visit")));
+    render(FilterBar, {
+      restaurants,
+      threadSubreddit,
+      restaurantsForHistogram: restaurants,
+      dateExtent,
+    });
+    await user.click(
+      await screen.findByRole("button", {
+        name: /remove new since last visit filter/i,
+      }),
+    );
+
+    expect(appState.freshnessCutoff).toBeNull();
+    expect(appState.freshnessSource).toBeNull();
+    expect(
+      screen.queryByRole("button", {
+        name: /remove new since last visit filter/i,
+      }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /^new since last visit$/i }),
+    ).toHaveAttribute("aria-pressed", "false");
     expect(
       screen.getByRole("button", { name: /^recency$/i }),
     ).not.toHaveClass("has-active");

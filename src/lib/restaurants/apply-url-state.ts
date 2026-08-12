@@ -1,6 +1,7 @@
-import { appState } from "./stores.svelte";
+import { appState, setFreshnessFilter } from "./stores.svelte";
 import type { Restaurant } from "./types";
 import type { UrlStateSnapshot } from "./url-state";
+import { getLastVisitMs } from "./visit-tracker";
 
 /** Apply parsed URL params to global appState (client hydration). */
 export function applyUrlStateSnapshot(
@@ -15,8 +16,15 @@ export function applyUrlStateSnapshot(
     appState.activeCities = parsed.activeCities;
   if (parsed.activeSubreddits !== undefined)
     appState.activeSubreddits = parsed.activeSubreddits;
-  if (parsed.freshnessCutoff !== undefined)
-    appState.freshnessCutoff = parsed.freshnessCutoff;
+  if (parsed.freshnessSource === "visit") {
+    const visitMs = getLastVisitMs();
+    setFreshnessFilter(visitMs, visitMs === null ? null : "visit");
+  } else if (parsed.freshnessCutoff !== undefined) {
+    setFreshnessFilter(
+      parsed.freshnessCutoff,
+      parsed.freshnessCutoff === null ? null : (parsed.freshnessSource ?? "date"),
+    );
+  }
   if (parsed.sortKey !== undefined) appState.sortKey = parsed.sortKey;
   if (parsed.sortDirection !== undefined)
     appState.sortDirection = parsed.sortDirection;

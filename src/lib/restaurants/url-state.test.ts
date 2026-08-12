@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { buildSearchParams, parseSearchParams } from "./url-state";
+import {
+  buildSearchParams,
+  FRESHNESS_SINCE_VISIT,
+  parseSearchParams,
+} from "./url-state";
 import type { UrlStateSnapshot } from "./url-state";
 
 const defaults: UrlStateSnapshot = {
@@ -8,6 +12,7 @@ const defaults: UrlStateSnapshot = {
   activeCities: [],
   activeSubreddits: [],
   freshnessCutoff: null,
+  freshnessSource: null,
   showUnmapped: false,
   sortKey: "score",
   sortDirection: "desc",
@@ -25,10 +30,17 @@ describe("parseSearchParams", () => {
       activeCities: ["Irvine"],
       activeSubreddits: ["orangecounty"],
       freshnessCutoff: Date.parse("2024-06-01"),
+      freshnessSource: "date",
       sortKey: "name",
       sortDirection: "asc",
       selectedRestaurantSlug: "taco-spot",
       showUnmapped: true,
+    });
+  });
+
+  it("parses since=visit as last-visit source without a date cutoff", () => {
+    expect(parseSearchParams(new URLSearchParams("since=visit"))).toEqual({
+      freshnessSource: "visit",
     });
   });
 
@@ -102,6 +114,7 @@ describe("buildSearchParams", () => {
       activeCities: ["Costa Mesa"],
       activeSubreddits: ["orangecounty"],
       freshnessCutoff: Date.parse("2025-01-15T00:00:00Z"),
+      freshnessSource: "date",
       sortKey: "recency",
       sortDirection: "asc",
       selectedRestaurantSlug: "men-ya",
@@ -119,5 +132,40 @@ describe("buildSearchParams", () => {
       showUnmapped: true,
     });
     expect(built.get("since")).toBe("2025-01-15");
+    expect(parseSearchParams(built).freshnessSource).toBe("date");
+  });
+
+  it("serializes last-visit as since=visit, not a truncated date", () => {
+    const visitMs = Date.parse("2024-06-01T15:30:00Z");
+    const built = buildSearchParams({
+      ...defaults,
+      freshnessCutoff: visitMs,
+      freshnessSource: "visit",
+    });
+    expect(built.get("since")).toBe(FRESHNESS_SINCE_VISIT);
+    expect(parseSearchParams(built)).toEqual({ freshnessSource: "visit" });
+  });
+
+  it("round-trips a histogram date even on the last-visit calendar day", () => {
+    const dayStart = Date.parse("2024-06-01T00:00:00Z");
+    const built = buildSearchParams({
+      ...defaults,
+      freshnessCutoff: dayStart,
+      freshnessSource: "date",
+    });
+    expect(built.get("since")).toBe("2024-06-01");
+    expect(parseSearchParams(built)).toEqual({
+      freshnessCutoff: dayStart,
+      freshnessSource: "date",
+    });
+  });
+
+  it("omits since when last-visit source has no cutoff", () => {
+    expect(
+      buildSearchParams({
+        ...defaults,
+        freshnessSource: "visit",
+      }).get("since"),
+    ).toBeNull();
   });
 });

@@ -363,6 +363,7 @@ function sortQuery() {
     activeCities: appState.activeCities,
     activeSubreddits: appState.activeSubreddits,
     freshnessCutoff: appState.freshnessCutoff,
+    freshnessSource: appState.freshnessSource,
     showUnmapped: appState.showUnmapped,
     sortKey: appState.sortKey,
     sortDirection: appState.sortDirection,
