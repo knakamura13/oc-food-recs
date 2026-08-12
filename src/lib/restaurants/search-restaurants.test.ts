@@ -1,11 +1,13 @@
 import Fuse from "fuse.js";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { normalizeSearchText } from "./normalize-name";
 import {
   FUSE_SEARCH_OPTIONS,
   filterRestaurantsByQuery,
+  getCachedRestaurantFuse,
   prepareSearchIndex,
   rankSearchResults,
+  resetRestaurantFuseCache,
 } from "./search-restaurants";
 import { makeRestaurant } from "./test-utils";
 
@@ -119,6 +121,10 @@ describe("filterRestaurantsByQuery", () => {
     }),
   ];
 
+  beforeEach(() => {
+    resetRestaurantFuseCache();
+  });
+
   it("returns all restaurants for empty or whitespace query", () => {
     expect(filterRestaurantsByQuery(restaurants, "")).toEqual(restaurants);
     expect(filterRestaurantsByQuery(restaurants, "   ")).toEqual(restaurants);
@@ -138,6 +144,36 @@ describe("filterRestaurantsByQuery", () => {
     const results = filterRestaurantsByQuery(restaurants, "japanese");
 
     expect(results.map((r) => r.slug)).toEqual(["ramen-house"]);
+  });
+
+  it("reuses the Fuse index for the same list across queries", () => {
+    const taco = filterRestaurantsByQuery(restaurants, "taco");
+    const first = getCachedRestaurantFuse(restaurants);
+    const ramen = filterRestaurantsByQuery(restaurants, "ramen house");
+    const second = getCachedRestaurantFuse(restaurants);
+
+    expect(second).toBe(first);
+    expect(taco.map((r) => r.slug)).toEqual(["taco-palace"]);
+    expect(ramen.map((r) => r.slug)[0]).toBe("ramen-house");
+  });
+
+  it("reuses the Fuse index when a new array has the same slugs", () => {
+    const first = getCachedRestaurantFuse(restaurants);
+    const copy = [...restaurants];
+    const second = getCachedRestaurantFuse(copy);
+
+    expect(second).toBe(first);
+  });
+
+  it("rebuilds the Fuse index when the restaurant set changes", () => {
+    const first = getCachedRestaurantFuse(restaurants);
+    const expanded = [
+      ...restaurants,
+      makeRestaurant({ name: "Sushi Zen", slug: "sushi-zen" }),
+    ];
+    const second = getCachedRestaurantFuse(expanded);
+
+    expect(second).not.toBe(first);
   });
 });
 

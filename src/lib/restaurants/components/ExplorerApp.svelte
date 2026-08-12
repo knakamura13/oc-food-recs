@@ -13,6 +13,7 @@
 		countEndorsements,
 		createSliceCache
 	} from '$lib/restaurants/filter-restaurants';
+	import { SEARCH_DEBOUNCE_MS, scheduleDebounced } from '$lib/debounce';
 	import { filterPageRestaurantsWithSearch } from '$lib/restaurants/filter-page-restaurants';
 	import { buildPageTitle, buildPageDescription, buildCanonicalShareUrl } from '$lib/restaurants/page-meta';
 	import { applyUrlStateSnapshot } from '$lib/restaurants/apply-url-state';
@@ -352,13 +353,33 @@
 	const subredditSliceCache = createSliceCache();
 	const recencySliceCache = createSliceCache();
 
+	// Keep the search caret live; only the page list/virtualizer waits for this copy.
+	let debouncedSearchQuery = $state('');
+	let searchDebouncePrimed = false;
+	$effect.pre(() => {
+		if (searchDebouncePrimed) return;
+		searchDebouncePrimed = true;
+		debouncedSearchQuery = appState.searchQuery;
+	});
+	$effect(() => {
+		const q = appState.searchQuery;
+		if (q === debouncedSearchQuery) return;
+		if (!q.trim()) {
+			debouncedSearchQuery = q;
+			return;
+		}
+		return scheduleDebounced(() => {
+			debouncedSearchQuery = q;
+		}, SEARCH_DEBOUNCE_MS);
+	});
+
 	const pageFilterState = $derived({
 		activeSubreddits: appState.activeSubreddits,
 		activeCuisines: appState.activeCuisines,
 		activeCities: appState.activeCities,
 		showUnmapped: appState.showUnmapped,
 		freshnessCutoff: appState.freshnessCutoff,
-		searchQuery: appState.searchQuery
+		searchQuery: debouncedSearchQuery
 	});
 
 	// "Saved" narrows the population before the shared filters so the histogram,

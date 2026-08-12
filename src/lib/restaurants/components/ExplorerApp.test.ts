@@ -1,10 +1,12 @@
 import { render, waitFor } from "@testing-library/svelte";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { flushSync } from "svelte";
 import ExplorerApp from "./ExplorerApp.svelte";
 import type { ExplorerPageData } from "$lib/restaurants/explorer-page-data";
 import { appState } from "$lib/restaurants/stores.svelte";
 import { makeRestaurant, resetAppState } from "$lib/restaurants/test-utils";
 import { DEFAULT_TITLE } from "$lib/restaurants/page-meta";
+import { SEARCH_DEBOUNCE_MS } from "$lib/debounce";
 
 const nav = vi.hoisted(() => ({
   replaceState: vi.fn(),
@@ -158,5 +160,65 @@ describe("ExplorerApp URL sync", () => {
     expect(pane).not.toHaveAttribute("role", "dialog");
     expect(pane).not.toHaveAttribute("aria-modal", "true");
     expect((pane as HTMLDialogElement | null)?.open).toBe(false);
+  });
+});
+
+describe("ExplorerApp page search debounce", () => {
+  beforeEach(() => {
+    resetAppState();
+    nav.replaceState.mockClear();
+    stubExplorerViewport();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: false, json: async () => [] }),
+    );
+    window.history.replaceState({}, "", "/");
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("filters the list after debounce and restores the full list when cleared", () => {
+    const data = makeHomeData();
+    data.dataset.restaurants = [
+      makeRestaurant({
+        name: "Taco Palace",
+        slug: "taco-palace",
+        cuisine: "Mexican",
+        location: "Santa Ana",
+      }),
+      makeRestaurant({
+        name: "Sushi Zen",
+        slug: "sushi-zen",
+        cuisine: "Japanese",
+        location: "Irvine",
+      }),
+    ];
+
+    render(ExplorerApp, { data, routerReady: false });
+    flushSync();
+    expect(document.querySelector(".result-count")).toHaveTextContent(
+      "2 restaurants",
+    );
+
+    appState.searchQuery = "taco";
+    flushSync();
+    expect(document.querySelector(".result-count")).toHaveTextContent(
+      "2 restaurants",
+    );
+
+    vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS);
+    flushSync();
+    expect(document.querySelector(".result-count")).toHaveTextContent(
+      "1 restaurant",
+    );
+
+    appState.searchQuery = "";
+    flushSync();
+    expect(document.querySelector(".result-count")).toHaveTextContent(
+      "2 restaurants",
+    );
   });
 });
