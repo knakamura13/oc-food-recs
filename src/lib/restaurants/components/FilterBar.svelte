@@ -57,6 +57,7 @@
 	const isNewSinceVisit = $derived(
 		lastVisitMs !== null && appState.freshnessCutoff !== null && appState.freshnessCutoff === lastVisitMs
 	);
+	const isCustomRecency = $derived(appState.freshnessCutoff !== null && !isNewSinceVisit);
 
 	function toggleNewSinceVisit() {
 		if (lastVisitMs === null) return;
@@ -100,9 +101,11 @@
 	// Flattened dated mentions for the density histogram; reacts to the other active filters.
 	let histogramMentions = $derived(restaurantsForHistogram.flatMap((r) => r.mentions));
 	// Non-empty only when the recency filter is engaged; doubles as the pill label.
-	let recencyLabel = $derived(
-		appState.freshnessCutoff === null ? '' : `Since ${formatMonthYear(appState.freshnessCutoff)}`
-	);
+	let recencyLabel = $derived.by(() => {
+		if (appState.freshnessCutoff === null) return '';
+		if (isNewSinceVisit) return 'New since last visit';
+		return `Since ${formatMonthYear(appState.freshnessCutoff)}`;
+	});
 
 	let subredditCounts = $derived.by(() => {
 		const counts = new Map<string, number>();
@@ -284,7 +287,7 @@
 		<div class="dropdown-wrapper" onfocusout={handleDropdownFocusOut}>
 			<button
 				class="dropdown-trigger"
-				class:has-active={appState.freshnessCutoff !== null}
+				class:has-active={isCustomRecency}
 				aria-expanded={showRecencyDropdown}
 				aria-haspopup="true"
 				aria-controls={showRecencyDropdown ? 'recency-panel' : undefined}
@@ -456,7 +459,9 @@
 				<button
 					class="pill recency-pill"
 					onclick={() => (appState.freshnessCutoff = null)}
-					aria-label="Remove recency filter"
+					aria-label={isNewSinceVisit
+						? 'Remove new since last visit filter'
+						: 'Remove recency filter'}
 				>
 					{recencyLabel} &times;
 				</button>
