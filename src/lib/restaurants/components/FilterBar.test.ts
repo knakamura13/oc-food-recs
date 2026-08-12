@@ -149,24 +149,44 @@ describe("FilterBar", () => {
     expect(appState.searchQuery).toBe("");
   });
 
-  it("toggles show unmapped via filter bar", async () => {
+  it("toggles include unmapped via filter bar", async () => {
     const user = userEvent.setup();
     render(FilterBar, {
       restaurants,
       threadSubreddit,
       restaurantsForHistogram: restaurants,
       dateExtent,
+      unmappedCount: 4,
     });
-    const toggle = screen.getByRole("button", { name: /show unmapped/i });
+    const toggle = screen.getByRole("button", {
+      name: /include 4 unmapped restaurants in the list/i,
+    });
     await user.click(toggle);
     expect(appState.showUnmapped).toBe(true);
     expect(
-      screen.getByRole("button", { name: /remove show unmapped filter/i }),
+      screen.getByRole("button", {
+        name: /stop including unmapped restaurants/i,
+      }),
     ).toBeInTheDocument();
     await user.click(
-      screen.getByRole("button", { name: /remove show unmapped filter/i }),
+      screen.getByRole("button", {
+        name: /stop including unmapped restaurants/i,
+      }),
     );
     expect(appState.showUnmapped).toBe(false);
+  });
+
+  it("hides include unmapped when none match", () => {
+    render(FilterBar, {
+      restaurants,
+      threadSubreddit,
+      restaurantsForHistogram: restaurants,
+      dateExtent,
+      unmappedCount: 0,
+    });
+    expect(
+      screen.queryByRole("button", { name: /unmapped/i }),
+    ).not.toBeInTheDocument();
   });
 
   it("copies the current view URL and confirms it", async () => {

@@ -207,4 +207,49 @@ describe("RestaurantList", () => {
     );
     expect(toggle).not.toHaveTextContent(/Try:/);
   });
+
+  it("marks unmapped restaurants in the row name and tags", () => {
+    render(RestaurantList, {
+      restaurants: [
+        makeRestaurant({
+          name: "Secret Kitchen",
+          slug: "secret-kitchen",
+          cuisine: "Thai",
+          location: "Irvine",
+          lat: null,
+          lng: null,
+        }),
+      ],
+    });
+
+    expect(
+      screen.getByRole("button", {
+        name: "Secret Kitchen, Thai, Irvine, not on the map",
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Unmapped")).toBeInTheDocument();
+  });
+
+  it("explains missing map pins in the unmapped drawer", async () => {
+    render(RestaurantList, {
+      restaurants: [
+        makeRestaurant({
+          name: "Secret Kitchen",
+          slug: "secret-kitchen",
+          lat: null,
+          lng: null,
+        }),
+      ],
+    });
+    appState.selectedRestaurantSlug = "secret-kitchen";
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/isn’t pinned on the map yet/i),
+      ).toBeInTheDocument();
+    });
+    expect(
+      screen.queryByRole("button", { name: /show on map/i }),
+    ).not.toBeInTheDocument();
+  });
 });

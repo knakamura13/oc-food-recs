@@ -32,6 +32,12 @@ export function clearExplorerFilters(opts?: { includeSearch?: boolean }) {
   if (opts?.includeSearch) appState.searchQuery = "";
 }
 
+export function isUnmappedRestaurant(
+  restaurant: Pick<Restaurant, "lat" | "lng">,
+): boolean {
+  return restaurant.lat == null || restaurant.lng == null;
+}
+
 // Cuisine consolidation: map raw values to canonical categories
 const CUISINE_MAP: Record<string, string> = {
   // Case variants
