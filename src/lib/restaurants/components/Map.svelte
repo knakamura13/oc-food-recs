@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount, untrack } from 'svelte';
+	import { SEARCH_DEBOUNCE_MS, scheduleDebounced } from '$lib/debounce';
 	import type { Restaurant } from '$lib/restaurants/types';
 	import { appState, isUnmappedRestaurant } from '$lib/restaurants/stores.svelte';
 
@@ -361,12 +362,14 @@
 		syncMarkers();
 	}
 
-	// Re-render markers when filtered restaurants change
+	// Re-render markers when filtered restaurants change. Debounce so typing
+	// search does not rebuild markercluster on every keystroke.
 	$effect(() => {
 		void mappedRestaurants;
-		if (leafletMap && L) {
+		if (!(leafletMap && L)) return;
+		return scheduleDebounced(() => {
 			untrack(() => syncMarkers());
-		}
+		}, SEARCH_DEBOUNCE_MS);
 	});
 
 	// Fit map bounds when fitBoundsTarget is set
