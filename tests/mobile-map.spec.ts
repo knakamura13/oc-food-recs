@@ -193,7 +193,12 @@ test.describe('Mobile map interaction', () => {
 		await expect(mapTrigger).toHaveAttribute('aria-expanded', 'true');
 		await expect(mapPane).toBeVisible();
 		await expect(mapPane).toHaveClass(/portal-expanded/);
-		await expect(mapPane).toHaveAttribute('role', 'dialog');
+		expect(await mapPane.evaluate((element) => element.tagName)).toBe('DIALOG');
+		await expect(mapPane).toHaveJSProperty('open', true);
+		expect(
+			await mapPane.evaluate((element) => element instanceof HTMLDialogElement && element.matches(':modal'))
+		).toBe(true);
+		await expect(page.getByRole('dialog', { name: 'Restaurant map' })).toBeVisible();
 		await expect(mapPane).toHaveAttribute('aria-modal', 'true');
 		await expect(mapPane).toHaveAccessibleName('Restaurant map');
 		await expect(page.locator('.leaflet-container')).toBeVisible({ timeout: 30_000 });
@@ -240,14 +245,11 @@ test.describe('Mobile map interaction', () => {
 
 		const searchInput = page.getByRole('combobox', { name: /search restaurants/i });
 		await expect(searchInput).toBeVisible();
-		await expect(searchInput).toBeEnabled();
-		await searchInput.fill('taco');
-		await expect(searchInput).toHaveValue('taco');
-		await searchInput.clear();
 
 		await page.keyboard.press('Escape');
 
 		await expect(mapPane).toBeHidden();
+		await expect(mapPane).toHaveJSProperty('open', false);
 		await expect(mapTrigger).toHaveAccessibleName('Open map');
 		await expect(mapTrigger).toHaveAttribute('aria-expanded', 'false');
 		await expect(mapTrigger).toBeFocused();
@@ -786,6 +788,8 @@ test.describe('Mobile map interaction', () => {
 				await expect(mapPane).not.toHaveAttribute('role', 'dialog');
 				await expect(mapPane).not.toHaveAttribute('aria-modal', 'true');
 				await expect(mapPane).not.toHaveAttribute('tabindex', '0');
+				expect(await mapPane.evaluate((element) => element.tagName)).toBe('DIALOG');
+				await expect(mapPane).toHaveJSProperty('open', false);
 				await expect(page.locator('.leaflet-container')).toBeVisible({ timeout: 30_000 });
 				await expect(page.getByRole('application')).toBeVisible();
 

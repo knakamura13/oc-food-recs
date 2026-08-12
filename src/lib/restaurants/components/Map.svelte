@@ -877,6 +877,10 @@
 		border-color: rgba(0, 0, 0, 0.3);
 	}
 
+	.locate-me-btn:active:not(:disabled) {
+		transform: scale(0.96);
+	}
+
 	.locate-me-btn:disabled {
 		cursor: default;
 		opacity: 0.75;
