@@ -374,6 +374,31 @@ describe("SearchBar", () => {
     expect(searchBarSource).toContain("padding-right: 0.75rem");
   });
 
+  it("nests the typeahead in the field wrapper and uses 44px rows on phones", () => {
+    const markup = searchBarSource.slice(
+      searchBarSource.indexOf('<div class="search-container">'),
+      searchBarSource.indexOf("<style>"),
+    );
+    const wrapperStart = markup.indexOf('<div class="search-wrapper">');
+    const dropdownStart = markup.indexOf('class="dropdown"');
+    const wrapperClose = markup.lastIndexOf("</div>", markup.lastIndexOf("</div>") - 1);
+    expect(wrapperStart).toBeGreaterThan(-1);
+    expect(dropdownStart).toBeGreaterThan(wrapperStart);
+    expect(dropdownStart).toBeLessThan(wrapperClose);
+    expect(searchBarSource).toMatch(
+      /@media \(max-width: 1023px\)[\s\S]*li \{[\s\S]*min-height: 44px/,
+    );
+    const dropdownRuleStart = searchBarSource.indexOf(".dropdown {");
+    const dropdownLiStart = searchBarSource.indexOf("li {", dropdownRuleStart);
+    const dropdownBlock = searchBarSource.slice(dropdownRuleStart, dropdownLiStart);
+    expect(dropdownRuleStart).toBeGreaterThan(-1);
+    expect(dropdownLiStart).toBeGreaterThan(dropdownRuleStart);
+    expect(dropdownBlock).not.toContain("max-width");
+    expect(dropdownBlock).toContain("margin: 4px 0 0");
+    expect(searchBarSource).toContain("text-overflow: ellipsis");
+    expect(searchBarSource).toMatch(/\.result-meta \{[\s\S]*flex-shrink: 0/);
+  });
+
   it("applies the city filter when the filter option is clicked", async () => {
     const user = userEvent.setup();
     render(SearchBar, { restaurants, cuisineNames, cityNames });
