@@ -45,12 +45,16 @@
 				</div>
 			</div>
 			<nav class="filter-bar" aria-hidden="true">
-				<div class="filter-controls">
-					<span class="dropdown-trigger">Cuisine</span>
-					<span class="dropdown-trigger">City</span>
-					<span class="dropdown-trigger">Recency</span>
-					<span class="dropdown-trigger mobile-map-trigger">Map</span>
-					<span class="dropdown-trigger">Share</span>
+				<div class="filter-row">
+					<div class="filter-controls">
+						<span class="dropdown-trigger">Cuisine</span>
+						<span class="dropdown-trigger">City</span>
+						<span class="dropdown-trigger">Recency</span>
+					</div>
+					<div class="filter-actions">
+						<span class="dropdown-trigger mobile-map-trigger">Map</span>
+						<span class="dropdown-trigger">Share</span>
+					</div>
 				</div>
 			</nav>
 		</div>
@@ -216,6 +220,7 @@
 		padding: 0.5rem 1rem;
 		border-bottom: 1px solid rgba(232, 224, 214, 0.5);
 		background: transparent;
+		max-width: 100%;
 	}
 
 	.filter-controls {
@@ -223,6 +228,23 @@
 		flex-wrap: wrap;
 		align-items: center;
 		gap: 0.5rem;
+		min-width: 0;
+	}
+
+	.filter-row {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.5rem;
+		min-width: 0;
+	}
+
+	.filter-actions {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.5rem;
+		flex-shrink: 0;
 	}
 
 	.dropdown-trigger {
@@ -511,16 +533,79 @@
 			flex-direction: column;
 			min-height: 0;
 		}
-	}
 
-	@media (max-width: 768px) {
 		.hero {
-			padding: 1rem 1rem 0.5rem;
+			padding: 0.65rem 1rem 0.35rem;
 		}
 
 		h1 {
-			font-size: 1.25rem;
-			margin: 0 0 0.3rem;
+			font-size: 1.2rem;
+			margin: 0 0 0.2rem;
+		}
+
+		.summary {
+			font-size: 0.78rem;
+			line-height: 1.4;
+			margin: 0 0 0.15rem;
+		}
+
+		.attribution {
+			display: none;
+		}
+
+		.search-field {
+			font-size: 16px;
+		}
+
+		.filter-row {
+			flex-wrap: nowrap;
+		}
+
+		.filter-controls {
+			flex: 1;
+			flex-wrap: nowrap;
+			overflow-x: auto;
+			overscroll-behavior-x: contain;
+			scrollbar-width: none;
+			min-width: 0;
+		}
+
+		.filter-controls::-webkit-scrollbar {
+			display: none;
+		}
+
+		.filter-actions {
+			flex-shrink: 0;
+			flex-wrap: nowrap;
+			min-width: min-content;
+			position: relative;
+			z-index: 1;
+			background: #faf7f2;
+			box-shadow: -12px 0 10px -6px #faf7f2;
+		}
+
+		.dropdown-trigger {
+			flex-shrink: 0;
+			min-height: 44px;
+			padding-top: 0;
+			padding-bottom: 0;
+		}
+
+		.sort-bar {
+			flex-wrap: nowrap;
+			overflow-x: auto;
+			scrollbar-width: none;
+		}
+
+		.sort-label {
+			display: none;
+		}
+
+		.sort-btn {
+			flex-shrink: 0;
+			min-height: 44px;
+			padding-top: 0;
+			padding-bottom: 0;
 		}
 	}
 
