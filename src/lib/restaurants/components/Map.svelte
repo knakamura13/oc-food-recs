@@ -385,8 +385,7 @@
 		}
 	});
 
-	// Invalidate map size when the pane actually resizes (pin expand / mobile sheet).
-	// Do not reintroduce hover-driven flex-basis: hover highlight is pin-only.
+	// Invalidate map size when the pane actually resizes (pin/hover widen / mobile sheet).
 	$effect(() => {
 		if (!mapContainer || !leafletMap) return;
 
