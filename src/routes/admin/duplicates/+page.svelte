@@ -245,6 +245,16 @@
 		font: inherit;
 	}
 
+	select:user-invalid {
+		border-color: #b5543a;
+	}
+
+	select:user-invalid:focus-visible {
+		outline: none;
+		border-color: #b5543a;
+		box-shadow: 0 0 0 3px rgba(181, 84, 58, 0.2);
+	}
+
 	button {
 		padding: 0.5rem 0.9rem;
 		border-radius: 8px;
