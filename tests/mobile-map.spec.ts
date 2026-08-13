@@ -940,6 +940,51 @@ test.describe('Mobile map interaction', () => {
 		await expect(mapPane).not.toHaveClass(/desktop-expanded/);
 	});
 
+	test('desktop collapsed map keeps locate in the visible strip', async ({
+		page
+	}, testInfo) => {
+		test.skip(testInfo.project.name !== 'Desktop Chrome', 'Desktop viewport only');
+		await page.setViewportSize({ width: 1280, height: 800 });
+		await page.goto('/');
+		await firstRenderedRow(page);
+		await expect(page.locator('.leaflet-container')).toBeVisible({ timeout: 30_000 });
+
+		const locateButton = page.getByRole('button', { name: 'Jump to my current location' });
+		await expect(locateButton).toBeVisible();
+		const mapPane = page.locator('#restaurant-map-panel');
+
+		const assertLocateClearOfList = async () => {
+			await expect.poll(async () => {
+				return page.evaluate(() => {
+					const locate = document.querySelector('.locate-me-btn');
+					const list = document.querySelector('.list-pane');
+					if (!(locate instanceof HTMLElement) || !(list instanceof HTMLElement)) {
+						return { overlapArea: -1, hitsLocate: false };
+					}
+					const a = locate.getBoundingClientRect();
+					const b = list.getBoundingClientRect();
+					const overlapW = Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left));
+					const overlapH = Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
+					const top = document.elementFromPoint(a.x + a.width / 2, a.y + a.height / 2);
+					return {
+						overlapArea: overlapW * overlapH,
+						hitsLocate: !!(top && (top === locate || locate.contains(top)))
+					};
+				});
+			}).toEqual({ overlapArea: 0, hitsLocate: true });
+		};
+
+		await assertLocateClearOfList();
+
+		await page.locator('.map-expand-toggle').click();
+		await expect(mapPane).toHaveClass(/desktop-expanded/);
+		await assertLocateClearOfList();
+
+		await page.keyboard.press('Escape');
+		await expect(mapPane).not.toHaveClass(/desktop-expanded/);
+		await assertLocateClearOfList();
+	});
+
 	test('desktop Tab leaves the in-flow map pane and reaches sort and rows', async ({
 		page
 	}, testInfo) => {

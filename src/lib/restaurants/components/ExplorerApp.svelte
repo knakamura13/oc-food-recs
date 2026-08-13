@@ -794,7 +794,10 @@
 	/* While the window is resizing, suppress the map-pane transition so crossing the
 	   desktop/mobile breakpoint switches instantly (no jump / full-height / circle morph).
 	   Two classes outrank the single-class `.map-pane` rules in both media queries. */
-	.map-pane.no-map-transition {
+	.map-pane.no-map-transition,
+	.map-pane.no-map-transition :global(.locate-me-btn),
+	.map-pane.no-map-transition :global(.location-error),
+	.map-pane.no-map-transition :global(.leaflet-right) {
 		transition: none !important;
 	}
 
@@ -859,6 +862,7 @@
 
 		.content-area {
 			align-items: stretch;
+			--map-list-overlap: 48px;
 		}
 
 		.map-pane {
@@ -883,7 +887,7 @@
 			position: relative;
 			z-index: 2;
 			isolation: isolate;
-			margin-left: -48px; /* overlap the map — gives a layered depth effect */
+			margin-left: calc(-1 * var(--map-list-overlap)); /* overlap the map — layered depth */
 			box-shadow: -8px 0 32px rgba(0, 0, 0, 0.18);
 			overflow: hidden;
 			overscroll-behavior: contain;
@@ -902,6 +906,21 @@
 			flex-basis: 66.67%;
 			margin-left: 0;
 			box-shadow: none;
+		}
+
+		/* Collapsed list overlaps the map; keep locate (and right-edge Leaflet chrome)
+		   in the visible strip so widen is more map, not a hunt for buried buttons. */
+		.map-pane:not(.desktop-expanded) :global(.locate-me-btn),
+		.map-pane:not(.desktop-expanded) :global(.location-error) {
+			right: calc(var(--map-list-overlap) + 10px);
+		}
+
+		.map-pane:not(.desktop-expanded) :global(.leaflet-right) {
+			right: var(--map-list-overlap);
+		}
+
+		.map-pane :global(.leaflet-right) {
+			transition: right 0.25s ease;
 		}
 
 		.map-interactive-layer {
@@ -949,7 +968,8 @@
 		@media (prefers-reduced-motion: reduce) {
 			.map-pane,
 			.list-pane,
-			.map-expand-toggle {
+			.map-expand-toggle,
+			.map-pane :global(.leaflet-right) {
 				transition: none;
 			}
 		}
