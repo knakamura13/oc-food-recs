@@ -11,7 +11,6 @@
 
 <svelte:head>
 	<title>{DEFAULT_TITLE}</title>
-	<meta name="theme-color" content="#ff4500" />
 </svelte:head>
 
 <main

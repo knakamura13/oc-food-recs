@@ -639,11 +639,14 @@
 	<meta property="og:type" content="website" />
 	<meta property="og:url" content={shareUrl} />
 	<meta property="og:image" content={ogImageUrl} />
+	<meta property="og:image:width" content="1200" />
+	<meta property="og:image:height" content="630" />
+	<meta property="og:image:alt" content="Screenshot of the OC Food Recs explorer showing a cream restaurant list beside an Orange County map" />
 	<meta name="twitter:card" content="summary_large_image" />
 	<meta name="twitter:title" content={pageTitle} />
 	<meta name="twitter:description" content={pageDescription} />
 	<meta name="twitter:image" content={ogImageUrl} />
-	<meta name="theme-color" content="#ff4500" />
+	<meta name="twitter:image:alt" content="Screenshot of the OC Food Recs explorer showing a cream restaurant list beside an Orange County map" />
 	<link rel="dns-prefetch" href="https://a.tile.openstreetmap.org" />
 	<link rel="dns-prefetch" href="https://b.tile.openstreetmap.org" />
 	<link rel="dns-prefetch" href="https://c.tile.openstreetmap.org" />
