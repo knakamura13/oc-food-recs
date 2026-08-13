@@ -388,6 +388,12 @@ describe("SearchBar", () => {
     expect(searchBarSource).toMatch(
       /@media \(max-width: 1023px\)[\s\S]*li \{[\s\S]*min-height: 44px/,
     );
+    expect(searchBarSource).toMatch(
+      /@media \(max-width: 1023px\)[\s\S]*\.clear-btn \{[\s\S]*width: 44px[\s\S]*height: 44px/,
+    );
+    expect(searchBarSource).toMatch(
+      /@media \(max-width: 1023px\)[\s\S]*\.search-wrapper:has\(\.clear-btn\) input \{[\s\S]*padding-right: 44px/,
+    );
     const dropdownRuleStart = searchBarSource.indexOf(".dropdown {");
     const dropdownLiStart = searchBarSource.indexOf("li {", dropdownRuleStart);
     const dropdownBlock = searchBarSource.slice(dropdownRuleStart, dropdownLiStart);
