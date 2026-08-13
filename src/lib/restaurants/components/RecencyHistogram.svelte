@@ -118,7 +118,7 @@
 
 		<div class="chart">
 			<div class="bars" aria-hidden="true">
-				{#each bins as count, i}
+				{#each bins as count, i (i)}
 					<div class="bar" class:dimmed={binMidMs(i) < handleMs} style="height: {barHeight(count)}%"></div>
 				{/each}
 			</div>
@@ -185,7 +185,7 @@
 
 	.bars {
 		position: absolute;
-		inset: 0 0 11px 0;
+		inset: 0 0 14px 0;
 		display: flex;
 		align-items: flex-end;
 		gap: 2px;
@@ -209,7 +209,7 @@
 		right: 0;
 		bottom: 0;
 		width: 100%;
-		height: 22px;
+		height: 28px;
 		margin: 0;
 		padding: 0;
 		appearance: none;
@@ -233,19 +233,19 @@
 	.slider::-webkit-slider-thumb {
 		-webkit-appearance: none;
 		appearance: none;
-		width: 22px;
-		height: 22px;
+		width: 28px;
+		height: 28px;
 		border-radius: 50%;
 		background: #fff;
 		border: 2px solid #ff4500;
 		box-shadow: 0 1px 4px rgba(62, 44, 35, 0.3);
-		margin-top: -10px;
+		margin-top: -13px;
 		cursor: grab;
 	}
 
 	.slider::-moz-range-thumb {
-		width: 22px;
-		height: 22px;
+		width: 28px;
+		height: 28px;
 		border-radius: 50%;
 		background: #fff;
 		border: 2px solid #ff4500;
@@ -294,7 +294,7 @@
 
 	.reset:hover:not(:disabled) {
 		border-color: #ff4500;
-		color: #ff4500;
+		color: #c43700;
 	}
 
 	.reset:disabled {

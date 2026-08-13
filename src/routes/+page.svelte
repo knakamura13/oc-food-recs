@@ -48,7 +48,7 @@
 		font-weight: 600;
 		letter-spacing: 0.08em;
 		text-transform: uppercase;
-		color: #ff4500;
+		color: #c43700;
 	}
 
 	.load-error h1 {
@@ -69,7 +69,7 @@
 		align-items: center;
 		padding: 0.625rem 1.25rem;
 		border-radius: 8px;
-		background: #ff4500;
+		background: #c43700;
 		color: #fffdf9;
 		font-weight: 600;
 		text-decoration: none;
@@ -77,11 +77,11 @@
 	}
 
 	.home-link:hover {
-		background: #c43700;
+		background: #a82f00;
 	}
 
 	.home-link:active {
-		background: #c43700;
+		background: #a82f00;
 		transform: scale(0.97);
 	}
 

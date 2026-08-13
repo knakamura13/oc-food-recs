@@ -119,11 +119,11 @@
 		--normal-border: #e8e0d6;
 		--normal-text: #3e2c23;
 		--success-bg: #faf7f2;
-		--success-border: #ff4500;
-		--success-text: #ff4500;
+		--success-border: #c43700;
+		--success-text: #c43700;
 		--error-bg: #fce8e0;
-		--error-border: #b5543a;
-		--error-text: #b5543a;
+		--error-border: #a04430;
+		--error-text: #a04430;
 		--info-bg: #fffcf8;
 		--info-border: #d4c8bb;
 		--info-text: #5d4e37;

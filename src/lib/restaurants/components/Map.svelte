@@ -799,7 +799,7 @@
 	}
 	:global(.rec-tip-score) {
 		display: block;
-		color: #ff4500;
+		color: #c43700;
 		font-weight: 600;
 		font-size: 0.78rem;
 		margin-top: 2px;
@@ -829,7 +829,7 @@
 		color: #3e2c23;
 	}
 	:global(.rec-clist-score) {
-		color: #ff4500;
+		color: #c43700;
 		font-weight: 600;
 	}
 	:global(.rec-clist-more) {
@@ -875,7 +875,7 @@
 
 	.locate-me-btn:hover:not(:disabled) {
 		background: #fff0eb;
-		color: #ff4500;
+		color: #c43700;
 		border-color: rgba(0, 0, 0, 0.3);
 	}
 

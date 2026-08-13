@@ -259,8 +259,8 @@
 		padding: 0.5rem 0.9rem;
 		border-radius: 8px;
 		border: none;
-		background: #ff4500;
-		color: #fff;
+		background: #c43700;
+		color: #fffdf9;
 		font: inherit;
 		font-weight: 600;
 		cursor: pointer;
