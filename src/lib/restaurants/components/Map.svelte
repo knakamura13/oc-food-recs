@@ -870,7 +870,7 @@
 		align-items: center;
 		justify-content: center;
 		box-shadow: 0 1px 5px rgba(0, 0, 0, 0.15);
-		transition: background 0.15s, color 0.15s, border-color 0.15s;
+		transition: background 0.15s, color 0.15s, border-color 0.15s, right 0.25s ease;
 	}
 
 	.locate-me-btn:hover:not(:disabled) {
@@ -901,6 +901,7 @@
 		top: 62px;
 		right: 10px;
 		z-index: 600;
+		transition: right 0.25s ease;
 		background: #3e2c23;
 		color: #fffcf8;
 		font-size: 0.75rem;
@@ -939,6 +940,11 @@
 	@media (prefers-reduced-motion: reduce) {
 		.spinner {
 			animation: none;
+		}
+
+		.locate-me-btn,
+		.location-error {
+			transition: none;
 		}
 	}
 </style>
