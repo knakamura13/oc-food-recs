@@ -89,7 +89,9 @@
 	let prevSavedOnly = $state(false);
 
 	let mapExpanded = $state(false);
-	let mapDesktopExpanded = $state(false);
+	let mapDesktopPinned = $state(false);
+	let mapDesktopHovered = $state(false);
+	const mapDesktopExpanded = $derived(mapDesktopPinned || mapDesktopHovered);
 	let mapOpener = $state<HTMLButtonElement | null>(null);
 	let mapCloseButton = $state<HTMLButtonElement | undefined>(undefined);
 	let mapPaneEl = $state<HTMLDialogElement | undefined>(undefined);
@@ -103,6 +105,11 @@
 	let resizeSettleTimer: ReturnType<typeof setTimeout> | undefined;
 
 	const MOBILE_MAX_PX = 1023;
+	const DESKTOP_MAP_HOVER_OPEN_MS = 300;
+	const DESKTOP_MAP_HOVER_CLOSE_MS = 400;
+	const FINE_HOVER_POINTER_QUERY = '(hover: hover) and (pointer: fine)';
+	let desktopMapHoverOpenTimer: ReturnType<typeof setTimeout> | undefined;
+	let desktopMapHoverCloseTimer: ReturnType<typeof setTimeout> | undefined;
 
 	let clientHydrated = $state(false);
 
@@ -293,9 +300,74 @@
 		}
 	}
 
+	function clearDesktopMapHoverTimers() {
+		clearTimeout(desktopMapHoverOpenTimer);
+		clearTimeout(desktopMapHoverCloseTimer);
+		desktopMapHoverOpenTimer = undefined;
+		desktopMapHoverCloseTimer = undefined;
+	}
+
+	function collapseDesktopMap() {
+		clearDesktopMapHoverTimers();
+		mapDesktopPinned = false;
+		mapDesktopHovered = false;
+	}
+
+	function hasFineHoverPointer() {
+		return typeof window !== 'undefined' && window.matchMedia(FINE_HOVER_POINTER_QUERY).matches;
+	}
+
+	function canHoverWidenDesktopMap(event: PointerEvent) {
+		if (isMobileViewport()) return false;
+		if (event.pointerType === 'touch') return false;
+		return hasFineHoverPointer();
+	}
+
+	function handleDesktopMapPointerEnter(event: PointerEvent) {
+		if (!canHoverWidenDesktopMap(event)) return;
+		clearTimeout(desktopMapHoverCloseTimer);
+		desktopMapHoverCloseTimer = undefined;
+		if (mapDesktopHovered) return;
+		clearTimeout(desktopMapHoverOpenTimer);
+		desktopMapHoverOpenTimer = setTimeout(() => {
+			mapDesktopHovered = true;
+			desktopMapHoverOpenTimer = undefined;
+		}, DESKTOP_MAP_HOVER_OPEN_MS);
+	}
+
+	function handleDesktopMapPointerLeave() {
+		if (isMobileViewport()) return;
+		clearTimeout(desktopMapHoverOpenTimer);
+		desktopMapHoverOpenTimer = undefined;
+		clearTimeout(desktopMapHoverCloseTimer);
+		desktopMapHoverCloseTimer = setTimeout(() => {
+			mapDesktopHovered = false;
+			desktopMapHoverCloseTimer = undefined;
+		}, DESKTOP_MAP_HOVER_CLOSE_MS);
+	}
+
 	function toggleDesktopMapExpanded() {
 		if (isMobileViewport()) return;
-		mapDesktopExpanded = !mapDesktopExpanded;
+		mapDesktopPinned = !mapDesktopPinned;
+		if (mapDesktopPinned) {
+			clearTimeout(desktopMapHoverCloseTimer);
+			desktopMapHoverCloseTimer = undefined;
+		}
+	}
+
+	function handleDesktopMapEscape(event: KeyboardEvent) {
+		if (event.key !== 'Escape') return;
+		if (isMobileViewport()) return;
+		if (!mapDesktopPinned && !mapDesktopHovered) return;
+		const target = event.target;
+		if (target instanceof HTMLElement) {
+			if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+				return;
+			}
+		}
+		if (document.querySelector('.dropdown-trigger[aria-expanded="true"]')) return;
+		event.preventDefault();
+		collapseDesktopMap();
 	}
 
 	// Keep the native <dialog> modal state in sync with mapExpanded + viewport.
@@ -507,7 +579,7 @@
 				closeMobileMap({ focusDesktopMap: true });
 			}
 			if (nextIsMobile) {
-				mapDesktopExpanded = false;
+				collapseDesktopMap();
 			}
 			// Kill the map-pane transition for the duration of the resize so crossing the
 			// 1024px breakpoint switches layouts instantly; re-enable once the drag settles.
@@ -523,6 +595,7 @@
 			window.removeEventListener('beforeunload', setLastVisitNow);
 			document.removeEventListener('visibilitychange', onVisChange);
 			clearTimeout(resizeSettleTimer);
+			clearDesktopMapHoverTimers();
 		};
 	});
 
@@ -576,6 +649,8 @@
 	<link rel="dns-prefetch" href="https://c.tile.openstreetmap.org" />
 </svelte:head>
 
+<svelte:window onkeydown={handleDesktopMapEscape} />
+
 <main>
 	<section class="hero-section">
 		<Hero meta={data.dataset.meta} />
@@ -608,6 +683,8 @@
 				inert={isMobileViewport() && !mapExpanded ? true : undefined}
 				onclose={handleMapDialogClose}
 				onkeydown={handleMapDialogKeydown}
+				onpointerenter={handleDesktopMapPointerEnter}
+				onpointerleave={handleDesktopMapPointerLeave}
 			>
 				<div class="map-interactive-layer">
 					<Map restaurants={filteredRestaurants} {mapExpanded} />
@@ -630,12 +707,12 @@
 				<button
 					type="button"
 					class="map-expand-toggle"
-					aria-pressed={mapDesktopExpanded}
-					aria-label={mapDesktopExpanded ? 'Collapse map pane' : 'Expand map pane'}
-					title={mapDesktopExpanded ? 'Collapse map pane' : 'Expand map pane'}
+					aria-pressed={mapDesktopPinned}
+					aria-label={mapDesktopPinned ? 'Narrow map' : 'Widen map'}
+					title={mapDesktopPinned ? 'Narrow map' : 'Widen map'}
 					onclick={toggleDesktopMapExpanded}
 				>
-					{#if mapDesktopExpanded}
+					{#if mapDesktopPinned}
 						<Minimize2 size={16} aria-hidden="true" />
 					{:else}
 						<Maximize2 size={16} aria-hidden="true" />
@@ -741,7 +818,7 @@
 		pointer-events: none;
 	}
 
-	/* ── Desktop: expand via pin only (≥ 1024px) ─────────────────────────── */
+	/* ── Desktop: pin toggle + hover enhancement (≥ 1024px) ─────────────── */
 	@media (min-width: 1024px) {
 		:global(html) {
 			height: 100%;
@@ -816,7 +893,7 @@
 			transition: flex-basis 0.25s ease, margin-left 0.25s ease;
 		}
 
-		/* Pinned expand: map grows, list retreats, layered depth collapses */
+		/* Expanded: map grows over the list (pinned click/keyboard or hover) */
 		.content-area:has(.map-pane.desktop-expanded) .map-pane {
 			flex-basis: 33.33%;
 		}
@@ -871,7 +948,8 @@
 
 		@media (prefers-reduced-motion: reduce) {
 			.map-pane,
-			.list-pane {
+			.list-pane,
+			.map-expand-toggle {
 				transition: none;
 			}
 		}
