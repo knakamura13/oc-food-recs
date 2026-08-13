@@ -1730,6 +1730,16 @@
 			padding-bottom: 0;
 			box-sizing: border-box;
 		}
+
+		.empty-action {
+			min-height: 44px;
+			padding-top: 0;
+			padding-bottom: 0;
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			box-sizing: border-box;
+		}
 	}
 
 	.empty-state {

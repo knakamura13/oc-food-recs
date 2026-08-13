@@ -667,6 +667,7 @@ describe("RestaurantList drawer actions", () => {
     expect(block).toContain("order: -1");
     expect(block).toContain("min-height: 44px");
     expect(block).toContain(".drawer-actions");
+    expect(block).toMatch(/\.empty-action \{[\s\S]*min-height: 44px/);
     expect(block.indexOf("order: -1")).toBeLessThan(
       block.indexOf("@media (max-width: 600px)"),
     );

@@ -542,6 +542,18 @@
 			padding-right: 0.75rem;
 		}
 
+		.search-wrapper:has(.clear-btn) input {
+			padding-right: 44px;
+		}
+
+		.clear-btn {
+			width: 44px;
+			height: 44px;
+			padding: 0;
+			right: 0;
+			box-sizing: border-box;
+		}
+
 		li {
 			min-height: 44px;
 			padding-top: 0;
