@@ -46,9 +46,9 @@
 		min-width: 44px;
 		min-height: 44px;
 		border-radius: 50%;
-		border: 2px solid #ff4500;
+		border: 2px solid #c43700;
 		background: #fffcf8;
-		color: #ff4500;
+		color: #c43700;
 		cursor: pointer;
 		display: flex;
 		align-items: center;
@@ -60,8 +60,8 @@
 	}
 
 	.back-to-top:hover {
-		background: #ff4500;
-		color: #fff;
+		background: #c43700;
+		color: #fffdf9;
 		transform: translateY(-2px);
 		box-shadow: 0 4px 14px rgba(255, 69, 0, 0.3);
 	}

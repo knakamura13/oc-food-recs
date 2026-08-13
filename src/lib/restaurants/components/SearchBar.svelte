@@ -328,7 +328,7 @@
 	}
 
 	input::placeholder {
-		color: #b5a99a;
+		color: #7a6e63;
 	}
 
 	input[type='search']::-webkit-search-cancel-button {
@@ -455,7 +455,7 @@
 
 	.city-chip {
 		background: #fce8e0;
-		color: #b5543a;
+		color: #a04430;
 	}
 
 	.result-name {

@@ -694,7 +694,7 @@
 
 	.city-pill {
 		background: #fce8e0;
-		color: #b5543a;
+		color: #a04430;
 	}
 
 	.subreddit-pill {

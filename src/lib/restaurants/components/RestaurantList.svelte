@@ -1167,7 +1167,7 @@
 
 	.location-tag {
 		background: #fce8e0;
-		color: #b5543a;
+		color: #a04430;
 	}
 
 	.popular-tag {
@@ -1487,7 +1487,7 @@
 		text-transform: none;
 		letter-spacing: normal;
 		font-weight: 400;
-		color: #b5a99a;
+		color: #7a6e63;
 	}
 
 	.comment-score {
