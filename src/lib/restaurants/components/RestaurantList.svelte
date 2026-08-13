@@ -452,12 +452,13 @@
 			>
 				{opt.label}
 				{#if opt.sort.isActive}
-					<span class="sort-dir">{sortDirectionShort(opt.key, opt.sort.direction)}</span>
+					<span class="sort-dir" aria-hidden="true">{sortDirectionShort(opt.key, opt.sort.direction)}</span>
 				{/if}
 			</button>
 		{/each}
 		<span class="result-count" aria-live="polite">
-			{restaurants.length} {restaurants.length === 1 ? 'restaurant' : 'restaurants'}
+			{restaurants.length}
+			<span class="result-count-noun">{restaurants.length === 1 ? 'restaurant' : 'restaurants'}</span>
 		</span>
 	</div>
 
@@ -791,9 +792,9 @@
 											</p>
 										{/if}
 
-										<div class="drawer-actions">
+										<div class="drawer-actions" role="group" aria-label="Restaurant actions">
 											{#if restaurant.lat && restaurant.lng}
-												<button class="map-link" onclick={(e) => showOnMap(restaurant, e)}>
+												<button type="button" class="map-link" onclick={(e) => showOnMap(restaurant, e)}>
 													Show on map
 												</button>
 											{/if}
@@ -902,11 +903,11 @@
 	}
 
 	.sort-dir {
-		font-size: 0.68rem;
+		font-size: 0.8rem;
 		font-weight: 600;
-		letter-spacing: 0.01em;
-		margin-left: 0.2rem;
+		margin-left: 0.15rem;
 		opacity: 0.92;
+		white-space: nowrap;
 	}
 
 	@media (max-width: 1023px) {
@@ -943,7 +944,10 @@
 			transition: none;
 		}
 
-		.sort-btn:active {
+		.sort-btn:active,
+		.map-link:active,
+		.share-link:active,
+		.maps-link:active {
 			transform: none;
 		}
 	}
@@ -953,6 +957,12 @@
 		font-size: 0.78rem;
 		color: #7a6e63;
 		font-variant-numeric: tabular-nums;
+	}
+
+	@media (max-width: 360px) {
+		.result-count-noun {
+			display: none;
+		}
 	}
 
 	.list-scroll {
@@ -1621,6 +1631,8 @@
 	}
 
 	.map-link {
+		display: inline-flex;
+		align-items: center;
 		font-family: inherit;
 		font-size: 0.8rem;
 		padding: 5px 14px;
@@ -1675,10 +1687,49 @@
 		transform: scale(0.97);
 	}
 
+	.map-link:focus-visible,
+	.share-link:focus-visible,
+	.maps-link:focus-visible {
+		outline: 2px solid #ff4500;
+		outline-offset: 2px;
+	}
+
 	.maps-icon {
 		width: 14px;
 		height: 14px;
 		flex-shrink: 0;
+	}
+
+	@media (max-width: 1023px) {
+		.drawer {
+			display: flex;
+			flex-direction: column;
+		}
+
+		.unmapped-drawer-hint,
+		.drawer-actions {
+			order: -1;
+		}
+
+		.unmapped-drawer-hint {
+			margin-top: 0;
+			margin-bottom: 0.5rem;
+		}
+
+		.drawer-actions {
+			margin-top: 0;
+			margin-bottom: 0.75rem;
+		}
+
+		.map-link,
+		.share-link,
+		.maps-link {
+			min-height: 44px;
+			min-width: 44px;
+			padding-top: 0;
+			padding-bottom: 0;
+			box-sizing: border-box;
+		}
 	}
 
 	.empty-state {
