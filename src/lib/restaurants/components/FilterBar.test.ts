@@ -170,6 +170,8 @@ describe("FilterBar", () => {
     const toggle = screen.getByRole("button", {
       name: /include 4 unmapped restaurants in the list/i,
     });
+    expect(toggle).toHaveTextContent("Unmapped");
+    expect(toggle).not.toHaveTextContent("Include unmapped");
     await user.click(toggle);
     expect(appState.showUnmapped).toBe(true);
     expect(
@@ -735,6 +737,10 @@ describe("FilterBar", () => {
   it("adds pressed feedback on filter triggers but not the map control or pills", () => {
     expect(filterBarSource).toContain("ChevronDown");
     expect(filterBarSource).not.toContain("&#9662;");
+    expect(filterBarSource).toContain("overflow-x: auto");
+    expect(filterBarSource).toContain("min(300px, calc(100vw - 2rem))");
+    expect(filterBarSource).toContain("filter-actions");
+    expect(filterBarSource).toContain("box-shadow: -12px 0 10px -6px #faf7f2");
     expect(filterBarSource).toContain(
       ".dropdown-trigger:active:not(.mobile-map-trigger)",
     );

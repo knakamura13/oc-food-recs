@@ -12,6 +12,7 @@
 	import { savedState } from '$lib/restaurants/saved-restaurants.svelte';
 	import { getPriorVisitMs } from '$lib/restaurants/visit-tracker';
 	import { onMount } from 'svelte';
+	import type { Attachment } from 'svelte/attachments';
 	import { toast } from '$lib/toast';
 	import RecencyHistogram from './RecencyHistogram.svelte';
 
@@ -211,9 +212,43 @@
 	function clearSearchFilter() {
 		appState.searchQuery = '';
 	}
+
+	/** Pin menus to the viewport so a horizontally scrolling filter row cannot clip them. */
+	const pinDropdownPanel: Attachment<HTMLElement> = (node) => {
+		const place = () => {
+			const trigger = node.parentElement?.querySelector<HTMLElement>('.dropdown-trigger');
+			if (!trigger) return;
+			const rect = trigger.getBoundingClientRect();
+			const gutter = 16;
+			const vw = window.innerWidth;
+			const maxWidth = Math.max(160, vw - gutter * 2);
+			node.style.position = 'fixed';
+			node.style.top = `${Math.round(rect.bottom + 4)}px`;
+			node.style.right = 'auto';
+			node.style.maxWidth = `${maxWidth}px`;
+			node.style.zIndex = '2000';
+			const panelWidth = Math.min(node.getBoundingClientRect().width || 220, maxWidth);
+			let left = rect.left;
+			if (left + panelWidth > vw - gutter) {
+				left = Math.max(gutter, vw - gutter - panelWidth);
+			}
+			if (left < gutter) left = gutter;
+			node.style.left = `${Math.round(left)}px`;
+		};
+		place();
+		const frame = requestAnimationFrame(place);
+		window.addEventListener('resize', place);
+		window.addEventListener('scroll', place, true);
+		return () => {
+			cancelAnimationFrame(frame);
+			window.removeEventListener('resize', place);
+			window.removeEventListener('scroll', place, true);
+		};
+	};
 </script>
 
 <nav class="filter-bar" aria-label="Restaurant filters">
+	<div class="filter-row">
 	<div class="filter-controls">
 		<!-- Cuisine dropdown -->
 		<div class="dropdown-wrapper" onfocusout={handleDropdownFocusOut}>
@@ -235,7 +270,13 @@
 			</button>
 
 			{#if showCuisineDropdown}
-				<div class="dropdown-panel" id="cuisine-listbox" role="listbox" aria-label="Filter by cuisine">
+				<div
+					class="dropdown-panel"
+					id="cuisine-listbox"
+					role="listbox"
+					aria-label="Filter by cuisine"
+					{@attach pinDropdownPanel}
+				>
 					{#each cuisineCounts as { name, count } (name)}
 						<button
 							class="dropdown-item"
@@ -273,7 +314,13 @@
 			</button>
 
 			{#if showCityDropdown}
-				<div class="dropdown-panel" id="city-listbox" role="listbox" aria-label="Filter by city">
+				<div
+					class="dropdown-panel"
+					id="city-listbox"
+					role="listbox"
+					aria-label="Filter by city"
+					{@attach pinDropdownPanel}
+				>
 					{#each cityCounts as { name, count } (name)}
 						<button
 							class="dropdown-item"
@@ -313,6 +360,7 @@
 					id="recency-panel"
 					role="group"
 					aria-label="Filter by comment recency"
+					{@attach pinDropdownPanel}
 				>
 					<RecencyHistogram mentions={histogramMentions} extent={dateExtent} />
 				</div>
@@ -340,7 +388,13 @@
 				</button>
 
 				{#if showSubredditDropdown}
-					<div class="dropdown-panel" id="subreddit-listbox" role="listbox" aria-label="Filter by subreddit">
+					<div
+						class="dropdown-panel"
+						id="subreddit-listbox"
+						role="listbox"
+						aria-label="Filter by subreddit"
+						{@attach pinDropdownPanel}
+					>
 						{#each subredditCounts as { name, count } (name)}
 							<button
 								class="dropdown-item"
@@ -403,13 +457,15 @@
 				{#if appState.showUnmapped}
 					<span aria-hidden="true">✓</span>
 				{/if}
-				Include unmapped
+				Unmapped
 				{#if unmappedCount > 0}
 					<span class="badge">{unmappedCount}</span>
 				{/if}
 			</button>
 		{/if}
+	</div>
 
+	<div class="filter-actions">
 		{#if onMapToggle}
 			<button
 				type="button"
@@ -438,6 +494,7 @@
 		{#if hasActiveFilters}
 			<button class="clear-filters" onclick={clearAllFilters}>Clear all</button>
 		{/if}
+	</div>
 	</div>
 
 	<!-- Active filter pills — one dismissible chip per active constraint -->
@@ -539,6 +596,15 @@
 		padding: 0.5rem 1rem;
 		border-bottom: 1px solid rgba(232, 224, 214, 0.5);
 		background: transparent;
+		max-width: 100%;
+	}
+
+	.filter-row {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.5rem;
+		min-width: 0;
 	}
 
 	.filter-controls {
@@ -546,6 +612,19 @@
 		flex-wrap: wrap;
 		align-items: center;
 		gap: 0.5rem;
+		min-width: 0;
+	}
+
+	.filter-controls > * {
+		flex-shrink: 0;
+	}
+
+	.filter-actions {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.5rem;
+		flex-shrink: 0;
 	}
 
 	.dropdown-wrapper {
@@ -751,7 +830,10 @@
 	}
 
 	.recency-panel {
-		min-width: 300px;
+		min-width: min(300px, calc(100vw - 2rem));
+		width: min(300px, calc(100vw - 2rem));
+		max-width: calc(100vw - 2rem);
+		box-sizing: border-box;
 	}
 
 	.pill:hover {
@@ -778,6 +860,34 @@
 	@media (max-width: 1023px) {
 		.mobile-map-trigger {
 			display: inline-flex;
+		}
+
+		.filter-row {
+			flex-wrap: nowrap;
+		}
+
+		.filter-controls {
+			flex: 1;
+			flex-wrap: nowrap;
+			overflow-x: auto;
+			overscroll-behavior-x: contain;
+			-webkit-overflow-scrolling: touch;
+			scrollbar-width: none;
+			min-width: 0;
+		}
+
+		.filter-controls::-webkit-scrollbar {
+			display: none;
+		}
+
+		.filter-actions {
+			flex-shrink: 0;
+			flex-wrap: nowrap;
+			min-width: min-content;
+			position: relative;
+			z-index: 1;
+			background: #faf7f2;
+			box-shadow: -12px 0 10px -6px #faf7f2;
 		}
 
 		.dropdown-trigger {

@@ -500,4 +500,20 @@
 			transition: none;
 		}
 	}
+
+	@media (max-width: 1023px) {
+		input {
+			font-size: 16px;
+		}
+
+		.search-shortcut {
+			display: none;
+		}
+	}
+
+	@media (hover: none) and (pointer: coarse) {
+		.search-shortcut {
+			display: none;
+		}
+	}
 </style>

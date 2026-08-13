@@ -155,7 +155,9 @@
 <style>
 	.recency {
 		padding: 12px 14px;
-		min-width: 280px;
+		min-width: 0;
+		width: 100%;
+		box-sizing: border-box;
 	}
 
 	.recency-title {
