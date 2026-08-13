@@ -21,7 +21,13 @@
 	<link rel="icon" href={favicon} />
 </svelte:head>
 
-<Toaster position="bottom-center" richColors duration={2500} closeButton />
+<Toaster
+	position="bottom-center"
+	richColors
+	duration={2500}
+	closeButton
+	mobileOffset="max(16px, env(safe-area-inset-bottom, 0px))"
+/>
 
 <a href="#main-content" class="skip-link" onclick={focusRestaurantList}>Skip to restaurant list</a>
 
@@ -139,6 +145,32 @@
 	}
 	:global([data-sonner-toast][data-styled='true'] [data-title]) {
 		font-weight: 600;
+	}
+
+	/* Sonner ships a 20×20 close — below the 24px WCAG 2.5.8 floor. */
+	:global([data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-close-button]) {
+		width: 24px;
+		height: 24px;
+		min-width: 24px;
+		min-height: 24px;
+		box-sizing: border-box;
+	}
+
+	@media (max-width: 1023px) {
+		:global([data-sonner-toast][data-styled='true']) {
+			padding-right: 3rem;
+		}
+
+		:global([data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-close-button]) {
+			top: 50%;
+			left: auto;
+			right: 4px;
+			width: 44px;
+			height: 44px;
+			min-width: 44px;
+			min-height: 44px;
+			transform: translateY(-50%);
+		}
 	}
 
 	:global(.skip-link) {
