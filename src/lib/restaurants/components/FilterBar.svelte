@@ -979,6 +979,12 @@
 			padding-top: 0;
 			padding-bottom: 0;
 		}
+
+		.dropdown-item {
+			min-height: 44px;
+			padding-top: 0;
+			padding-bottom: 0;
+		}
 	}
 
 	@media (max-width: 480px) {
