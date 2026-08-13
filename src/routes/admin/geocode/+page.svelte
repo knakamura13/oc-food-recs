@@ -406,7 +406,7 @@
 	.panel th,
 	.panel td {
 		padding: 0.4rem 0.35rem;
-		text-align: left;
+		text-align: start;
 		border-bottom: 1px solid #efe8df;
 	}
 
@@ -452,7 +452,7 @@
 	.data-table th,
 	.data-table td {
 		padding: 0.65rem 0.75rem;
-		text-align: left;
+		text-align: start;
 		vertical-align: top;
 		border-bottom: 1px solid #efe8df;
 	}

@@ -905,7 +905,7 @@
 		font-size: 0.68rem;
 		font-weight: 600;
 		letter-spacing: 0.01em;
-		margin-left: 0.2rem;
+		margin-inline-start: 0.2rem;
 		opacity: 0.92;
 	}
 
@@ -927,13 +927,22 @@
 			transition: none;
 		}
 
-		.sort-btn:active {
+		.sort-btn:active,
+		.permalink:active,
+		.endorsement-permalink:active,
+		.drawer-retry:active {
 			transform: none;
+		}
+
+		.permalink,
+		.endorsement-permalink,
+		.drawer-retry {
+			transition: none;
 		}
 	}
 
 	.result-count {
-		margin-left: auto;
+		margin-inline-start: auto;
 		font-size: 0.78rem;
 		color: #7a6e63;
 		font-variant-numeric: tabular-nums;
@@ -945,6 +954,8 @@
 		overflow-y: auto;
 		overscroll-behavior: contain;
 		scrollbar-gutter: stable;
+		scrollbar-width: thin;
+		scrollbar-color: #d4c8bb #faf7f2;
 		container-type: inline-size;
 		container-name: list-pane;
 	}
@@ -966,7 +977,7 @@
 	.virtual-row {
 		position: absolute;
 		top: 0;
-		left: 0;
+		inset-inline-start: 0;
 		width: 100%;
 	}
 
@@ -1001,14 +1012,14 @@
 
 	.row {
 		border-bottom: 1px solid #efe8e0;
-		border-left: 3px solid transparent;
-		transition: background-color 0.15s ease, border-left-color 0.18s ease-in-out, transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.2s ease;
+		border-inline-start: 3px solid transparent;
+		transition: background-color 0.15s ease, border-inline-start-color 0.18s ease-in-out, transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.2s ease;
 		background: #fff;
 	}
 
 	.row.expanded {
 		background: #faf7f2;
-		border-left-color: #ff4500;
+		border-inline-start-color: #ff4500;
 		position: relative;
 		z-index: 1;
 	}
@@ -1032,7 +1043,7 @@
 		background: none;
 		cursor: pointer;
 		padding: 0;
-		text-align: left;
+		text-align: start;
 	}
 
 	.row-heading {
@@ -1099,7 +1110,7 @@
 	}
 
 	.row:hover {
-		border-left-color: #ff4500;
+		border-inline-start-color: #ff4500;
 		transform: translateY(-1px);
 		box-shadow: 0 4px 12px rgba(62, 44, 35, 0.04);
 		z-index: 2;
@@ -1108,7 +1119,7 @@
 
 	/* Reverse highlight: pin hover/focus on the map lights up the matching row */
 	.row.hovered {
-		border-left-color: #ff4500;
+		border-inline-start-color: #ff4500;
 		background: rgba(255, 69, 0, 0.04);
 	}
 
@@ -1209,7 +1220,7 @@
 
 	.stat.score small {
 		color: rgba(255, 255, 255, 0.9);
-		margin-left: 2px;
+		margin-inline-start: 2px;
 	}
 
 	.info-tip {
@@ -1243,7 +1254,7 @@
 		display: none;
 		position: absolute;
 		top: calc(100% + 6px);
-		right: -8px;
+		inset-inline-end: -8px;
 		width: 200px;
 		padding: 6px 8px;
 		background: #333;
@@ -1309,7 +1320,7 @@
 
 	.drawer-status {
 		padding: 0.85rem 0.15rem 0.35rem;
-		text-align: left;
+		text-align: start;
 	}
 
 	.drawer-status-title {
@@ -1337,10 +1348,16 @@
 		font-size: 0.82rem;
 		font-weight: 600;
 		cursor: pointer;
+		transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
 	}
 
 	.drawer-retry:hover {
 		border-color: #ff4500;
+		background: #fff5f0;
+	}
+
+	.drawer-retry:active {
+		transform: scale(0.97);
 		background: #fff5f0;
 	}
 
@@ -1379,9 +1396,10 @@
 
 	.skeleton-primary {
 		background: #fffcf8;
-		border-left: 3px solid #e8d5cc;
+		border-inline-start: 3px solid #e8d5cc;
 		border-radius: 0 8px 8px 0;
-		padding: 0.75rem 0.75rem 0.75rem 1rem;
+		padding-block: 0.75rem;
+		padding-inline: 1rem 0.75rem;
 		margin-bottom: 0.75rem;
 		box-shadow: 0 1px 3px rgba(62, 44, 35, 0.04);
 	}
@@ -1461,9 +1479,10 @@
 	.primary-comment {
 		background: #fffcf8;
 		border: none;
-		border-left: 3px solid #ff4500;
+		border-inline-start: 3px solid #ff4500;
 		border-radius: 0 8px 8px 0;
-		padding: 0.75rem 0.75rem 0.75rem 1rem;
+		padding-block: 0.75rem;
+		padding-inline: 1rem 0.75rem;
 		margin-bottom: 0.75rem;
 		box-shadow: 0 1px 3px rgba(62, 44, 35, 0.04);
 	}
@@ -1516,11 +1535,15 @@
 		text-decoration: underline;
 		text-decoration-thickness: 1px;
 		text-underline-offset: 2px;
-		transition: text-decoration-thickness 0.15s ease;
+		transition: text-decoration-thickness 0.15s ease, transform 0.15s ease;
 	}
 
 	.permalink:hover {
 		text-decoration-thickness: 2px;
+	}
+
+	.permalink:active {
+		transform: scale(0.97);
 	}
 
 	.endorsement-section {
@@ -1583,11 +1606,15 @@
 		text-decoration: underline;
 		text-decoration-thickness: 1px;
 		text-underline-offset: 2px;
-		transition: text-decoration-thickness 0.15s ease;
+		transition: text-decoration-thickness 0.15s ease, transform 0.15s ease;
 	}
 
 	.endorsement-permalink:hover {
 		text-decoration-thickness: 2px;
+	}
+
+	.endorsement-permalink:active {
+		transform: scale(0.97);
 	}
 
 	.unmapped-drawer-hint {
@@ -1764,7 +1791,7 @@
 		}
 
 		.row-name-line {
-			padding-right: 3.25rem;
+			padding-inline-end: 3.25rem;
 		}
 
 		.row-save-btn {

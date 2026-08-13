@@ -40,7 +40,7 @@
 	.back-to-top {
 		position: fixed;
 		bottom: 1.5rem;
-		right: 1.5rem;
+		inset-inline-end: 1.5rem;
 		width: 44px;
 		height: 44px;
 		min-width: 44px;

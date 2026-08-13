@@ -31,7 +31,7 @@
 
 <style>
 	.load-error {
-		min-height: 60vh;
+		min-height: 60dvh;
 		display: flex;
 		flex-direction: column;
 		align-items: center;
@@ -55,6 +55,7 @@
 		margin: 0 0 0.75rem;
 		font-size: 1.75rem;
 		font-weight: 700;
+		text-wrap: balance;
 	}
 
 	.error-message {

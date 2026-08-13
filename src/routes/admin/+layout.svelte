@@ -49,6 +49,7 @@
 		border: 1px solid transparent;
 		border-bottom: none;
 		margin-bottom: -1px;
+		transition: color 0.15s ease, background 0.15s ease, transform 0.15s ease;
 	}
 
 	.admin-nav a:hover {
@@ -56,10 +57,26 @@
 		background: rgba(255, 69, 0, 0.06);
 	}
 
+	.admin-nav a:active {
+		transform: scale(0.97);
+		background: rgba(255, 69, 0, 0.12);
+		color: #3e2c23;
+	}
+
 	.admin-nav a.active {
 		color: #3e2c23;
 		background: #fffdf9;
 		border-color: #e2d9ce;
 		font-weight: 600;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.admin-nav a {
+			transition: color 0.15s ease, background 0.15s ease;
+		}
+
+		.admin-nav a:active {
+			transform: none;
+		}
 	}
 </style>
