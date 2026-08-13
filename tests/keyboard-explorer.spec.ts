@@ -52,7 +52,7 @@ test("map markers and clusters are not sequential tab stops", async ({
   expect(tabbableMarkers).toBe(0);
 });
 
-test("desktop map widen toggle is keyboard operable and Escape collapses", async ({
+test("desktop map Escape collapses a hover-widened pane", async ({
   page,
 }, testInfo) => {
   test.skip(
@@ -66,27 +66,12 @@ test("desktop map widen toggle is keyboard operable and Escape collapses", async
   });
 
   const mapPane = page.locator("#restaurant-map-panel");
-  const expandToggle = page.locator(".map-expand-toggle");
-  await expect(expandToggle).toBeVisible();
-  await expect(expandToggle).toHaveAccessibleName("Widen map");
-  await expect(expandToggle).toHaveAttribute("aria-pressed", "false");
+  await expect(page.locator(".map-expand-toggle")).toHaveCount(0);
   await expect(mapPane).not.toHaveClass(/desktop-expanded/);
 
-  await expandToggle.focus();
-  await expect(expandToggle).toBeFocused();
-  await page.keyboard.press("Enter");
-  await expect(expandToggle).toHaveAccessibleName("Narrow map");
-  await expect(expandToggle).toHaveAttribute("aria-pressed", "true");
+  await page.locator(".leaflet-container").hover({ position: { x: 80, y: 200 } });
   await expect(mapPane).toHaveClass(/desktop-expanded/);
 
-  await page.keyboard.press("Escape");
-  await expect(expandToggle).toHaveAccessibleName("Widen map");
-  await expect(expandToggle).toHaveAttribute("aria-pressed", "false");
-  await expect(mapPane).not.toHaveClass(/desktop-expanded/);
-
-  await expandToggle.focus();
-  await page.keyboard.press("Space");
-  await expect(mapPane).toHaveClass(/desktop-expanded/);
   await page.keyboard.press("Escape");
   await expect(mapPane).not.toHaveClass(/desktop-expanded/);
 });
