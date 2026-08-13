@@ -733,6 +733,8 @@ describe("FilterBar", () => {
   });
 
   it("adds pressed feedback on filter triggers but not the map control or pills", () => {
+    expect(filterBarSource).toContain("ChevronDown");
+    expect(filterBarSource).not.toContain("&#9662;");
     expect(filterBarSource).toContain(
       ".dropdown-trigger:active:not(.mobile-map-trigger)",
     );
