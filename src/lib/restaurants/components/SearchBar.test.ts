@@ -47,8 +47,30 @@ const restaurants = [
 const cuisineNames = ["Mexican", "Japanese", "Burgers", "Latin American"];
 const cityNames = ["Santa Ana", "Irvine", "Fullerton"];
 
+function stubMatchMedia(narrow: boolean) {
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    writable: true,
+    value: (query: string) => ({
+      matches: query.includes("max-width: 369px") ? narrow : false,
+      media: query,
+      onchange: null,
+      addListener() {},
+      removeListener() {},
+      addEventListener() {},
+      removeEventListener() {},
+      dispatchEvent() {
+        return false;
+      },
+    }),
+  });
+}
+
 describe("SearchBar", () => {
-  beforeEach(() => resetAppState());
+  beforeEach(() => {
+    resetAppState();
+    stubMatchMedia(false);
+  });
 
   it("shows fuzzy search results as the user types", async () => {
     const user = userEvent.setup();
@@ -314,6 +336,42 @@ describe("SearchBar", () => {
     expect(searchBarSource).toMatch(
       /@media \(max-width: 1023px\)[\s\S]*\.search-shortcut \{[\s\S]*display: none/,
     );
+  });
+
+  it("keeps the full placeholder on wide viewports", async () => {
+    render(SearchBar, { restaurants, cuisineNames, cityNames });
+    const input = screen.getByRole("combobox", {
+      name: /search restaurants, cuisines, or cities/i,
+    });
+    await waitFor(() => {
+      expect(input).toHaveAttribute(
+        "placeholder",
+        "Search restaurants, cuisines, or cities...",
+      );
+    });
+  });
+
+  it("uses a compact placeholder on narrow viewports after mount", async () => {
+    stubMatchMedia(true);
+    render(SearchBar, { restaurants, cuisineNames, cityNames });
+    const input = screen.getByRole("combobox", {
+      name: /search restaurants, cuisines, or cities/i,
+    });
+    await waitFor(() => {
+      expect(input).toHaveAttribute(
+        "placeholder",
+        "Search restaurants or cities...",
+      );
+    });
+  });
+
+  it("reclaims empty-field padding when the keyboard shortcut is hidden", () => {
+    expect(searchBarSource).toContain("Search restaurants or cities...");
+    expect(searchBarSource).toContain("(max-width: 369px)");
+    expect(searchBarSource).toMatch(
+      /\.search-wrapper:not\(:has\(\.clear-btn\)\) input/,
+    );
+    expect(searchBarSource).toContain("padding-right: 0.75rem");
   });
 
   it("applies the city filter when the filter option is clicked", async () => {
