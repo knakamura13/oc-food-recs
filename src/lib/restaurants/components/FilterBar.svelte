@@ -213,6 +213,9 @@
 		appState.searchQuery = '';
 	}
 
+	let overflowStart = $state(false);
+	let overflowEnd = $state(false);
+
 	/** Pin menus to the viewport so a horizontally scrolling filter row cannot clip them. */
 	const pinDropdownPanel: Attachment<HTMLElement> = (node) => {
 		const place = () => {
@@ -221,12 +224,27 @@
 			const rect = trigger.getBoundingClientRect();
 			const gutter = 16;
 			const vw = window.innerWidth;
+			const vh = window.innerHeight;
 			const maxWidth = Math.max(160, vw - gutter * 2);
+			const panelCap = 320;
+			const spaceBelow = vh - rect.bottom - gutter;
+			const spaceAbove = rect.top - gutter;
+			const flipUp = spaceBelow < 180 && spaceAbove > spaceBelow;
 			node.style.position = 'fixed';
-			node.style.top = `${Math.round(rect.bottom + 4)}px`;
 			node.style.right = 'auto';
 			node.style.maxWidth = `${maxWidth}px`;
 			node.style.zIndex = '2000';
+			const available = flipUp ? spaceAbove : spaceBelow;
+			if (flipUp) {
+				node.style.top = 'auto';
+				node.style.bottom = `${Math.round(vh - rect.top + 4)}px`;
+			} else {
+				node.style.bottom = 'auto';
+				node.style.top = `${Math.round(rect.bottom + 4)}px`;
+			}
+			node.style.maxHeight = `${Math.round(Math.min(panelCap, Math.max(0, available)))}px`;
+			node.style.minHeight = '0';
+			node.style.overflowY = 'auto';
 			const panelWidth = Math.min(node.getBoundingClientRect().width || 220, maxWidth);
 			let left = rect.left;
 			if (left + panelWidth > vw - gutter) {
@@ -234,6 +252,22 @@
 			}
 			if (left < gutter) left = gutter;
 			node.style.left = `${Math.round(left)}px`;
+			const placed = node.getBoundingClientRect();
+			const overflowBottom = placed.bottom - (vh - gutter);
+			if (overflowBottom > 0) {
+				node.style.maxHeight = `${Math.round(Math.max(0, placed.height - overflowBottom))}px`;
+			}
+			const overflowTop = gutter - placed.top;
+			if (overflowTop > 0) {
+				const next = node.getBoundingClientRect();
+				node.style.maxHeight = `${Math.round(Math.max(0, next.height - overflowTop))}px`;
+			}
+			if (node.classList.contains('recency-panel')) {
+				node.style.overflowY = 'hidden';
+				node.style.display = 'flex';
+				node.style.flexDirection = 'column';
+				node.style.minHeight = '0';
+			}
 		};
 		place();
 		const frame = requestAnimationFrame(place);
@@ -245,11 +279,47 @@
 			window.removeEventListener('scroll', place, true);
 		};
 	};
+
+	/** Fade the ends of the filter chip row when more controls sit off-screen. */
+	const trackFilterOverflow: Attachment<HTMLElement> = (node) => {
+		const threshold = 4;
+		const update = () => {
+			const nextStart = node.scrollLeft > threshold;
+			const nextEnd = node.scrollWidth - node.clientWidth - node.scrollLeft > threshold;
+			if (nextStart !== overflowStart) overflowStart = nextStart;
+			if (nextEnd !== overflowEnd) overflowEnd = nextEnd;
+		};
+		const resizeObserver = new ResizeObserver(update);
+		resizeObserver.observe(node);
+		const mutationObserver = new MutationObserver(update);
+		mutationObserver.observe(node, { childList: true });
+		node.addEventListener('scroll', update, { passive: true });
+		window.addEventListener('resize', update);
+		const frame = requestAnimationFrame(update);
+		return () => {
+			cancelAnimationFrame(frame);
+			resizeObserver.disconnect();
+			mutationObserver.disconnect();
+			node.removeEventListener('scroll', update);
+			window.removeEventListener('resize', update);
+		};
+	};
 </script>
 
 <nav class="filter-bar" aria-label="Restaurant filters">
 	<div class="filter-row">
-	<div class="filter-controls">
+	<div
+		class="filter-controls"
+		class:overflow-start={overflowStart}
+		class:overflow-end={overflowEnd}
+		{@attach trackFilterOverflow}
+		onfocusin={(event) => {
+			const target = event.target;
+			if (target instanceof HTMLElement) {
+				target.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+			}
+		}}
+	>
 		<!-- Cuisine dropdown -->
 		<div class="dropdown-wrapper" onfocusout={handleDropdownFocusOut}>
 			<button
@@ -477,7 +547,7 @@
 				onclick={(event) => onMapToggle?.(event.currentTarget)}
 			>
 				<MapIcon size={13} aria-hidden="true" />
-				Map
+				<span class="action-label">Map</span>
 			</button>
 		{/if}
 
@@ -488,12 +558,8 @@
 			onclick={copyShareUrl}
 		>
 			<Share2 size={13} aria-hidden="true" />
-			Share
+			<span class="action-label">Share</span>
 		</button>
-
-		{#if hasActiveFilters}
-			<button class="clear-filters" onclick={clearAllFilters}>Clear all</button>
-		{/if}
 	</div>
 	</div>
 
@@ -553,6 +619,7 @@
 					Unmapped &times;
 				</button>
 			{/if}
+			<button class="clear-filters" onclick={clearAllFilters}>Clear all</button>
 		</div>
 	{/if}
 </nav>
@@ -834,6 +901,11 @@
 		width: min(300px, calc(100vw - 2rem));
 		max-width: calc(100vw - 2rem);
 		box-sizing: border-box;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		min-height: 0;
+		overflow: hidden;
 	}
 
 	.pill:hover {
@@ -880,6 +952,18 @@
 			display: none;
 		}
 
+		.filter-controls.overflow-end {
+			box-shadow: inset -24px 0 12px -8px #faf7f2;
+		}
+
+		.filter-controls.overflow-start {
+			box-shadow: inset 24px 0 12px -8px #faf7f2;
+		}
+
+		.filter-controls.overflow-start.overflow-end {
+			box-shadow: inset 24px 0 12px -8px #faf7f2, inset -24px 0 12px -8px #faf7f2;
+		}
+
 		.filter-actions {
 			flex-shrink: 0;
 			flex-wrap: nowrap;
@@ -894,6 +978,27 @@
 			min-height: 44px;
 			padding-top: 0;
 			padding-bottom: 0;
+		}
+	}
+
+	@media (max-width: 480px) {
+		.action-label {
+			display: none;
+		}
+
+		.filter-actions .dropdown-trigger {
+			min-width: 44px;
+			min-height: 44px;
+			width: 44px;
+			height: 44px;
+			padding: 0;
+			justify-content: center;
+			gap: 0;
+		}
+
+		.filter-actions .dropdown-trigger :global(svg) {
+			width: 18px;
+			height: 18px;
 		}
 	}
 </style>

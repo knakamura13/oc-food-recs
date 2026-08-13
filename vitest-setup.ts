@@ -8,6 +8,10 @@ class ResizeObserverMock {
 
 globalThis.ResizeObserver = ResizeObserverMock as typeof ResizeObserver;
 
+if (typeof HTMLElement !== "undefined") {
+  HTMLElement.prototype.scrollIntoView = function scrollIntoView() {};
+}
+
 const localStorageMock = (() => {
   let store: Record<string, string> = {};
   return {

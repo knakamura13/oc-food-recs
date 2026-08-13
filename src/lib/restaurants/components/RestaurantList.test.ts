@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { render, screen, waitFor } from "@testing-library/svelte";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -389,7 +391,8 @@ describe("RestaurantList sort cycle", () => {
       name: /sorted by score, highest first/i,
     });
     expect(score).toHaveAttribute("aria-pressed", "true");
-    expect(score).toHaveTextContent(/high-low/i);
+    expect(score).toHaveTextContent(/Score/);
+    expect(score).toHaveTextContent(/↓/);
     expect(
       screen.getByRole("button", { name: /^sort by name$/i }),
     ).toHaveAttribute("aria-pressed", "false");
@@ -515,7 +518,8 @@ describe("RestaurantList sort cycle", () => {
     const recent = await screen.findByRole("button", {
       name: /sorted by recent, newest first/i,
     });
-    expect(recent).toHaveTextContent(/new-old/i);
+    expect(recent).toHaveTextContent(/Recent/);
+    expect(recent).toHaveTextContent(/↓/);
     await waitFor(() => {
       expect(rowNames()).toEqual([
         "Bravo Kitchen",
@@ -589,6 +593,83 @@ describe("RestaurantList sort cycle", () => {
       ]);
     });
     expect(sortQuery()).toBe("sortdir=asc");
+  });
+});
+
+const restaurantListSource = readFileSync(
+  join(process.cwd(), "src/lib/restaurants/components/RestaurantList.svelte"),
+  "utf8",
+);
+
+describe("RestaurantList drawer actions", () => {
+  beforeEach(() => {
+    resetAppState();
+    consumeSkipToList();
+    mocks.toastError.mockReset();
+    stubListViewport();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => [
+          {
+            comment_id: "c1",
+            thread_id: "t1",
+            role: "primary",
+            author: "foodie",
+            body: "Best tacos in town",
+            score: 12,
+            comment_date: "2024-06-01",
+            permalink: "https://reddit.com/r/x/comments/1",
+            classification: null,
+          },
+        ],
+      }),
+    );
+  });
+
+  it("exposes map, copy, and Google Maps actions when a row is expanded", async () => {
+    render(RestaurantList, { restaurants });
+    appState.selectedRestaurantSlug = "la-taco-spot";
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("group", { name: /restaurant actions/i }),
+      ).toBeInTheDocument();
+    });
+    expect(
+      screen.getByRole("button", { name: /^show on map$/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /copy link to la taco spot/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", {
+        name: /open la taco spot in google maps/i,
+      }),
+    ).toHaveAttribute("href", expect.stringContaining("google.com/maps"));
+  });
+
+  it("reorders drawer actions above comments only under the mobile breakpoint", () => {
+    expect(restaurantListSource).toMatch(
+      /class="drawer-actions" role="group" aria-label="Restaurant actions"/,
+    );
+    expect(restaurantListSource).toMatch(
+      /<button type="button" class="map-link"/,
+    );
+    const orderMatches = restaurantListSource.match(/order:\s*-1/g) ?? [];
+    expect(orderMatches).toHaveLength(1);
+    const drawerMedia = restaurantListSource.lastIndexOf(
+      "@media (max-width: 1023px)",
+    );
+    expect(drawerMedia).toBeGreaterThan(-1);
+    const block = restaurantListSource.slice(drawerMedia);
+    expect(block).toContain("order: -1");
+    expect(block).toContain("min-height: 44px");
+    expect(block).toContain(".drawer-actions");
+    expect(block.indexOf("order: -1")).toBeLessThan(
+      block.indexOf("@media (max-width: 600px)"),
+    );
   });
 });
 

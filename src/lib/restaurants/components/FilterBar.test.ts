@@ -112,6 +112,22 @@ describe("FilterBar", () => {
     ).toBeInTheDocument();
   });
 
+  it("places Clear all inside active pills, not filter actions", () => {
+    appState.activeCuisines = ["Mexican"];
+    const { container } = render(FilterBar, {
+      restaurants,
+      threadSubreddit,
+      restaurantsForHistogram: restaurants,
+      dateExtent,
+    });
+    expect(
+      container.querySelector(".active-pills .clear-filters"),
+    ).toBeInTheDocument();
+    expect(
+      container.querySelector(".filter-actions .clear-filters"),
+    ).not.toBeInTheDocument();
+  });
+
   it("hides Clear all when search is whitespace-only", () => {
     appState.searchQuery = "   ";
     render(FilterBar, {
@@ -652,8 +668,9 @@ describe("FilterBar", () => {
     );
 
     expect(mapButton).toBeInTheDocument();
-    expect(mapButton).toHaveTextContent(/^Map$/);
     expect(mapButton).toHaveAccessibleName("Open map");
+    expect(mapButton?.querySelector(".action-label")).toHaveTextContent("Map");
+    expect(mapButton).toHaveTextContent(/^Map$/);
     expect(mapButton).toHaveAttribute("aria-controls", "restaurant-map-panel");
     expect(mapButton).toHaveAttribute("aria-expanded", "false");
 
@@ -740,6 +757,11 @@ describe("FilterBar", () => {
     expect(filterBarSource).toContain("overflow-x: auto");
     expect(filterBarSource).toContain("min(300px, calc(100vw - 2rem))");
     expect(filterBarSource).toContain("filter-actions");
+    expect(filterBarSource).toContain("action-label");
+    expect(filterBarSource).toContain("overflow-end");
+    expect(filterBarSource).toContain("trackFilterOverflow");
+    expect(filterBarSource).toContain("overflow-start");
+    expect(filterBarSource).toContain("@media (max-width: 480px)");
     expect(filterBarSource).toContain("box-shadow: -12px 0 10px -6px #faf7f2");
     expect(filterBarSource).toContain(
       ".dropdown-trigger:active:not(.mobile-map-trigger)",
@@ -748,6 +770,18 @@ describe("FilterBar", () => {
     expect(filterBarSource).toMatch(/\.pill:active\s*\{/);
     expect(filterBarSource).not.toMatch(
       /\.mobile-map-trigger:active\s*\{/,
+    );
+    const pinStart = filterBarSource.indexOf("const pinDropdownPanel");
+    const pinEnd = filterBarSource.indexOf("const trackFilterOverflow");
+    expect(pinStart).toBeGreaterThan(-1);
+    expect(pinEnd).toBeGreaterThan(pinStart);
+    expect(filterBarSource.slice(pinStart, pinEnd)).toContain("maxHeight");
+    expect(filterBarSource.slice(pinStart, pinEnd)).toContain("recency-panel");
+    expect(filterBarSource.slice(pinStart, pinEnd)).toContain(
+      "overflowY = 'hidden'",
+    );
+    expect(filterBarSource).toMatch(
+      /\.recency-panel \{[\s\S]*overflow: hidden/,
     );
   });
 

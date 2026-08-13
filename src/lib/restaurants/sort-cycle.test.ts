@@ -63,7 +63,12 @@ describe("nextSortState", () => {
 describe("sort labels", () => {
   it("names the active order in full and short form", () => {
     expect(sortDirectionPhrase("score", "desc")).toBe("highest first");
-    expect(sortDirectionShort("score", "desc")).toBe("high-low");
+    expect(sortDirectionShort("score", "desc")).toBe("↓");
+    expect(sortDirectionShort("score", "asc")).toBe("↑");
+    expect(sortDirectionShort("recency", "desc")).toBe("↓");
+    expect(sortDirectionShort("recency", "asc")).toBe("↑");
+    expect(sortDirectionShort("name", "asc")).toBe("A-Z");
+    expect(sortDirectionShort("name", "desc")).toBe("Z-A");
     expect(
       sortButtonAccessibleName("score", "Score", true, "desc"),
     ).toBe("Sorted by Score, highest first");

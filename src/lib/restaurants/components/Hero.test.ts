@@ -75,4 +75,9 @@ describe("Hero", () => {
       /@media \(max-width: 1023px\)[\s\S]*\.attribution \{[\s\S]*display: none/,
     );
   });
+
+  it("lets the mobile summary wrap instead of clamping mid-sentence", () => {
+    expect(heroSource).not.toMatch(/-webkit-line-clamp\s*:/);
+    expect(heroSource).not.toMatch(/(?<![-a-z])line-clamp\s*:/);
+  });
 });

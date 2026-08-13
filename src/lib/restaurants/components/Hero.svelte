@@ -136,13 +136,7 @@
 			margin: 0 0 0.15rem;
 		}
 
-		.summary {
-			display: -webkit-box;
-			-webkit-box-orient: vertical;
-			-webkit-line-clamp: 2;
-			line-clamp: 2;
-			overflow: hidden;
-		}
+		/* Do not line-clamp .summary: 320px needs 3 lines; a 2-line clamp cuts mid-number. */
 
 		.attribution {
 			display: none;

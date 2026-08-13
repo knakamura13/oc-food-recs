@@ -52,8 +52,12 @@
 						<span class="dropdown-trigger">Recency</span>
 					</div>
 					<div class="filter-actions">
-						<span class="dropdown-trigger mobile-map-trigger">Map</span>
-						<span class="dropdown-trigger">Share</span>
+						<span class="dropdown-trigger mobile-map-trigger">
+							<span class="action-label">Map</span>
+						</span>
+						<span class="dropdown-trigger">
+							<span class="action-label">Share</span>
+						</span>
 					</div>
 				</div>
 			</nav>
@@ -223,6 +227,14 @@
 		max-width: 100%;
 	}
 
+	.filter-row {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.5rem;
+		min-width: 0;
+	}
+
 	.filter-controls {
 		display: flex;
 		flex-wrap: wrap;
@@ -231,12 +243,8 @@
 		min-width: 0;
 	}
 
-	.filter-row {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: center;
-		gap: 0.5rem;
-		min-width: 0;
+	.filter-controls > * {
+		flex-shrink: 0;
 	}
 
 	.filter-actions {
@@ -566,6 +574,7 @@
 			flex-wrap: nowrap;
 			overflow-x: auto;
 			overscroll-behavior-x: contain;
+			-webkit-overflow-scrolling: touch;
 			scrollbar-width: none;
 			min-width: 0;
 		}
@@ -585,7 +594,6 @@
 		}
 
 		.dropdown-trigger {
-			flex-shrink: 0;
 			min-height: 44px;
 			padding-top: 0;
 			padding-bottom: 0;
@@ -594,7 +602,13 @@
 		.sort-bar {
 			flex-wrap: nowrap;
 			overflow-x: auto;
+			overscroll-behavior-x: contain;
+			-webkit-overflow-scrolling: touch;
 			scrollbar-width: none;
+		}
+
+		.sort-bar::-webkit-scrollbar {
+			display: none;
 		}
 
 		.sort-label {
@@ -602,10 +616,30 @@
 		}
 
 		.sort-btn {
-			flex-shrink: 0;
 			min-height: 44px;
 			padding-top: 0;
 			padding-bottom: 0;
+			flex-shrink: 0;
+		}
+
+		.result-count {
+			flex-shrink: 0;
+		}
+
+		@media (max-width: 480px) {
+			.action-label {
+				display: none;
+			}
+
+			.filter-actions .dropdown-trigger {
+				min-width: 44px;
+				min-height: 44px;
+				width: 44px;
+				height: 44px;
+				padding: 0;
+				justify-content: center;
+				gap: 0;
+			}
 		}
 	}
 
