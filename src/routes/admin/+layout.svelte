@@ -25,7 +25,7 @@
 
 <style>
 	.admin-shell {
-		min-height: 100vh;
+		min-height: 100dvh;
 		background: #faf7f2;
 	}
 
