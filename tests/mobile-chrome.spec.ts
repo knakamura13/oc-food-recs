@@ -193,13 +193,17 @@ test('320px cuisine list stays inside the viewport', async ({ page }, testInfo) 
 
 	const box = await panel.evaluate((el) => {
 		const rect = el.getBoundingClientRect();
+		const items = [...el.querySelectorAll<HTMLElement>('.dropdown-item')].slice(0, 8).map((item) =>
+			Math.round(item.getBoundingClientRect().height)
+		);
 		return {
 			left: rect.left,
 			right: rect.right,
 			top: rect.top,
 			bottom: rect.bottom,
 			vw: window.innerWidth,
-			vh: window.innerHeight
+			vh: window.innerHeight,
+			itemHeights: items
 		};
 	});
 
@@ -207,6 +211,10 @@ test('320px cuisine list stays inside the viewport', async ({ page }, testInfo) 
 	expect(box.right).toBeLessThanOrEqual(box.vw + 1);
 	expect(box.top).toBeGreaterThanOrEqual(-1);
 	expect(box.bottom).toBeLessThanOrEqual(box.vh + 1);
+	expect(box.itemHeights.length).toBeGreaterThan(0);
+	for (const height of box.itemHeights) {
+		expect(height).toBeGreaterThanOrEqual(44);
+	}
 });
 
 test('320px drawer actions stay visible above comments', async ({ page }, testInfo) => {
