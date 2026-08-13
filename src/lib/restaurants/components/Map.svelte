@@ -385,7 +385,7 @@
 		}
 	});
 
-	// Invalidate map size when the pane actually resizes (pin/hover widen / mobile sheet).
+	// Invalidate map size when the pane actually resizes (hover widen / mobile sheet).
 	$effect(() => {
 		if (!mapContainer || !leafletMap) return;
 

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Maximize2, Minimize2, X } from 'lucide-svelte';
+	import { X } from 'lucide-svelte';
 	import { onMount, tick } from 'svelte';
 	import { replaceState } from '$app/navigation';
 	import type { Restaurant } from '$lib/restaurants/types';
@@ -89,9 +89,7 @@
 	let prevSavedOnly = $state(false);
 
 	let mapExpanded = $state(false);
-	let mapDesktopPinned = $state(false);
 	let mapDesktopHovered = $state(false);
-	const mapDesktopExpanded = $derived(mapDesktopPinned || mapDesktopHovered);
 	let mapOpener = $state<HTMLButtonElement | null>(null);
 	let mapCloseButton = $state<HTMLButtonElement | undefined>(undefined);
 	let mapPaneEl = $state<HTMLDialogElement | undefined>(undefined);
@@ -105,7 +103,7 @@
 	let resizeSettleTimer: ReturnType<typeof setTimeout> | undefined;
 
 	const MOBILE_MAX_PX = 1023;
-	const DESKTOP_MAP_HOVER_OPEN_MS = 300;
+	const DESKTOP_MAP_HOVER_OPEN_MS = 0;
 	const DESKTOP_MAP_HOVER_CLOSE_MS = 400;
 	const FINE_HOVER_POINTER_QUERY = '(hover: hover) and (pointer: fine)';
 	let desktopMapHoverOpenTimer: ReturnType<typeof setTimeout> | undefined;
@@ -257,7 +255,7 @@
 	function isMapDialogTabTrapActive() {
 		// Desktop reuses this <dialog> in-flow while it stays closed (`open` is false).
 		// Only wrap Tab when the sheet is actually modal so sequential focus can leave
-		// the map for the expand pin, sort bar, and rows (WCAG 2.1.2).
+		// the map for the sort bar and rows (WCAG 2.1.2).
 		return Boolean(mapPaneEl?.open) || (mapExpanded && isMobileViewport());
 	}
 
@@ -309,7 +307,6 @@
 
 	function collapseDesktopMap() {
 		clearDesktopMapHoverTimers();
-		mapDesktopPinned = false;
 		mapDesktopHovered = false;
 	}
 
@@ -329,6 +326,11 @@
 		desktopMapHoverCloseTimer = undefined;
 		if (mapDesktopHovered) return;
 		clearTimeout(desktopMapHoverOpenTimer);
+		desktopMapHoverOpenTimer = undefined;
+		if (DESKTOP_MAP_HOVER_OPEN_MS <= 0) {
+			mapDesktopHovered = true;
+			return;
+		}
 		desktopMapHoverOpenTimer = setTimeout(() => {
 			mapDesktopHovered = true;
 			desktopMapHoverOpenTimer = undefined;
@@ -346,19 +348,10 @@
 		}, DESKTOP_MAP_HOVER_CLOSE_MS);
 	}
 
-	function toggleDesktopMapExpanded() {
-		if (isMobileViewport()) return;
-		mapDesktopPinned = !mapDesktopPinned;
-		if (mapDesktopPinned) {
-			clearTimeout(desktopMapHoverCloseTimer);
-			desktopMapHoverCloseTimer = undefined;
-		}
-	}
-
 	function handleDesktopMapEscape(event: KeyboardEvent) {
 		if (event.key !== 'Escape') return;
 		if (isMobileViewport()) return;
-		if (!mapDesktopPinned && !mapDesktopHovered) return;
+		if (!mapDesktopHovered) return;
 		const target = event.target;
 		if (target instanceof HTMLElement) {
 			if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
@@ -676,7 +669,7 @@
 			<dialog
 				class="map-pane"
 				class:portal-expanded={mapExpanded}
-				class:desktop-expanded={mapDesktopExpanded}
+				class:desktop-expanded={mapDesktopHovered}
 				class:no-map-transition={suppressMapTransition}
 				id="restaurant-map-panel"
 				bind:this={mapPaneEl}
@@ -706,22 +699,6 @@
 					</button>
 				{/if}
 			</dialog>
-			{#if !isMobileViewport()}
-				<button
-					type="button"
-					class="map-expand-toggle"
-					aria-pressed={mapDesktopPinned}
-					aria-label={mapDesktopPinned ? 'Narrow map' : 'Widen map'}
-					title={mapDesktopPinned ? 'Narrow map' : 'Widen map'}
-					onclick={toggleDesktopMapExpanded}
-				>
-					{#if mapDesktopPinned}
-						<Minimize2 size={16} aria-hidden="true" />
-					{:else}
-						<Maximize2 size={16} aria-hidden="true" />
-					{/if}
-				</button>
-			{/if}
 			<div class="list-pane" inert={mapExpanded && isMobileViewport() ? true : undefined}>
 				<RestaurantList
 					restaurants={filteredRestaurants}
@@ -824,7 +801,7 @@
 		pointer-events: none;
 	}
 
-	/* ── Desktop: pin toggle + hover enhancement (≥ 1024px) ─────────────── */
+	/* ── Desktop: hover-expand map pane (≥ 1024px) ─────────────── */
 	@media (min-width: 1024px) {
 		:global(html) {
 			height: 100%;
@@ -900,7 +877,7 @@
 			transition: flex-basis 0.25s ease, margin-left 0.25s ease;
 		}
 
-		/* Expanded: map grows over the list (pinned click/keyboard or hover) */
+		/* Expanded: map grows over the list on hover */
 		.content-area:has(.map-pane.desktop-expanded) .map-pane {
 			flex-basis: 33.33%;
 		}
@@ -935,43 +912,9 @@
 			z-index: 0;
 		}
 
-		.map-expand-toggle {
-			position: absolute;
-			bottom: 12px;
-			left: 12px;
-			z-index: 3;
-			width: 44px;
-			height: 44px;
-			min-width: 44px;
-			min-height: 44px;
-			padding: 0;
-			border: 2px solid rgba(0, 0, 0, 0.2);
-			border-radius: 6px;
-			background: #fffcf8;
-			color: #3e2c23;
-			cursor: pointer;
-			display: flex;
-			align-items: center;
-			justify-content: center;
-			box-shadow: 0 1px 5px rgba(0, 0, 0, 0.15);
-			transition: background 0.15s, color 0.15s, border-color 0.15s;
-		}
-
-		.map-expand-toggle:hover,
-		.map-expand-toggle[aria-pressed='true'] {
-			background: #fff0eb;
-			color: #ff4500;
-			border-color: rgba(0, 0, 0, 0.3);
-		}
-
-		.map-expand-toggle:active {
-			transform: scale(0.96);
-		}
-
 		@media (prefers-reduced-motion: reduce) {
 			.map-pane,
 			.list-pane,
-			.map-expand-toggle,
 			.map-pane :global(.leaflet-right) {
 				transition: none;
 			}
@@ -1086,12 +1029,6 @@
 	/* Hide mobile-only elements on desktop */
 	@media (min-width: 1024px) {
 		.map-close-btn {
-			display: none;
-		}
-	}
-
-	@media (max-width: 1023px) {
-		.map-expand-toggle {
 			display: none;
 		}
 	}
