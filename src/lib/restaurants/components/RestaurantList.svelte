@@ -1731,6 +1731,15 @@
 			box-sizing: border-box;
 		}
 
+		.permalink,
+		.endorsement-permalink {
+			min-height: 44px;
+			min-width: 44px;
+			display: inline-flex;
+			align-items: center;
+			box-sizing: border-box;
+		}
+
 		.empty-action {
 			min-height: 44px;
 			padding-top: 0;

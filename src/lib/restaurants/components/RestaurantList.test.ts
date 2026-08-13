@@ -648,6 +648,9 @@ describe("RestaurantList drawer actions", () => {
         name: /open la taco spot in google maps/i,
       }),
     ).toHaveAttribute("href", expect.stringContaining("google.com/maps"));
+    expect(
+      await screen.findByRole("link", { name: /view on reddit/i }),
+    ).toHaveAttribute("href", "https://reddit.com/r/x/comments/1");
   });
 
   it("reorders drawer actions above comments only under the mobile breakpoint", () => {
@@ -670,6 +673,20 @@ describe("RestaurantList drawer actions", () => {
     expect(block).toMatch(/\.empty-action \{[\s\S]*min-height: 44px/);
     expect(block.indexOf("order: -1")).toBeLessThan(
       block.indexOf("@media (max-width: 600px)"),
+    );
+  });
+
+  it("enlarges comment permalink tap targets under the mobile breakpoint", () => {
+    const drawerMedia = restaurantListSource.lastIndexOf(
+      "@media (max-width: 1023px)",
+    );
+    expect(drawerMedia).toBeGreaterThan(-1);
+    const block = restaurantListSource.slice(drawerMedia);
+    expect(block).toMatch(
+      /\.permalink,[\s\S]*\.endorsement-permalink \{[\s\S]*min-height: 44px/,
+    );
+    expect(block).toMatch(
+      /\.permalink,[\s\S]*\.endorsement-permalink \{[\s\S]*min-width: 44px/,
     );
   });
 });
