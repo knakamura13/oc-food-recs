@@ -252,58 +252,58 @@
 		{:else if !isFocused}
 			<kbd class="search-shortcut" aria-label="Keyboard shortcut {shortcutLabel} or /">{shortcutLabel}</kbd>
 		{/if}
-	</div>
 
-	{#if showResultsDropdown}
-		<ul class="dropdown" id="search-listbox" role="listbox" aria-label="Search results">
-			{#each options as option, i (option.id)}
-				{#if option.kind === 'filter'}
-					<li
-						id={option.id}
-						class="filter-option"
-						class:highlighted={i === highlightIndex}
-						onmousedown={() => activateOption(i)}
-						onmouseenter={() => (highlightIndex = i)}
-						role="option"
-						aria-selected={i === highlightIndex}
-					>
-						<span class="filter-label">{filterOptionLabel(option.match)}</span>
-						<span
-							class="filter-chip"
-							class:city-chip={option.match.type === 'city'}
-							class:cuisine-chip={option.match.type === 'cuisine'}
-							aria-hidden="true"
+		{#if showResultsDropdown}
+			<ul class="dropdown" id="search-listbox" role="listbox" aria-label="Search results">
+				{#each options as option, i (option.id)}
+					{#if option.kind === 'filter'}
+						<li
+							id={option.id}
+							class="filter-option"
+							class:highlighted={i === highlightIndex}
+							onmousedown={() => activateOption(i)}
+							onmouseenter={() => (highlightIndex = i)}
+							role="option"
+							aria-selected={i === highlightIndex}
 						>
-							{option.match.value}
-						</span>
-					</li>
-				{:else}
-					<li
-						id={option.id}
-						class:highlighted={i === highlightIndex}
-						onmousedown={() => activateOption(i)}
-						onmouseenter={() => (highlightIndex = i)}
-						role="option"
-						aria-selected={i === highlightIndex}
-					>
-						<span class="result-name">{option.restaurant.name}</span>
-						<span class="result-meta">
-							{#if option.restaurant.cuisine}
-								<span class="result-cuisine">{option.restaurant.cuisine}</span>
-							{/if}
-							{#if option.restaurant.location}
-								<span class="result-location">{option.restaurant.location}</span>
-							{/if}
-						</span>
-					</li>
-				{/if}
-			{/each}
-		</ul>
-	{:else if showNoResults}
-		<div class="dropdown no-results" id="search-listbox" role="status" aria-live="polite">
-			No matches for &ldquo;{queryTrimmed}&rdquo;
-		</div>
-	{/if}
+							<span class="filter-label">{filterOptionLabel(option.match)}</span>
+							<span
+								class="filter-chip"
+								class:city-chip={option.match.type === 'city'}
+								class:cuisine-chip={option.match.type === 'cuisine'}
+								aria-hidden="true"
+							>
+								{option.match.value}
+							</span>
+						</li>
+					{:else}
+						<li
+							id={option.id}
+							class:highlighted={i === highlightIndex}
+							onmousedown={() => activateOption(i)}
+							onmouseenter={() => (highlightIndex = i)}
+							role="option"
+							aria-selected={i === highlightIndex}
+						>
+							<span class="result-name">{option.restaurant.name}</span>
+							<span class="result-meta">
+								{#if option.restaurant.cuisine}
+									<span class="result-cuisine">{option.restaurant.cuisine}</span>
+								{/if}
+								{#if option.restaurant.location}
+									<span class="result-location">{option.restaurant.location}</span>
+								{/if}
+							</span>
+						</li>
+					{/if}
+				{/each}
+			</ul>
+		{:else if showNoResults}
+			<div class="dropdown no-results" id="search-listbox" role="status" aria-live="polite">
+				No matches for &ldquo;{queryTrimmed}&rdquo;
+			</div>
+		{/if}
+	</div>
 </div>
 
 <style>
@@ -416,8 +416,7 @@
 		top: 100%;
 		left: 0;
 		right: 0;
-		max-width: 640px;
-		margin: 4px auto 0;
+		margin: 4px 0 0;
 		background: #fffcf8;
 		border: 1px solid #e0d6cc;
 		border-radius: 8px;
@@ -454,6 +453,10 @@
 	}
 
 	.filter-label {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 		font-family: 'DM Sans', sans-serif;
 		font-size: 0.875rem;
 		font-weight: 500;
@@ -479,6 +482,10 @@
 	}
 
 	.result-name {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 		font-family: 'DM Serif Display', Georgia, serif;
 		font-weight: 400;
 		font-size: 0.95rem;
@@ -486,6 +493,7 @@
 	}
 
 	.result-meta {
+		flex-shrink: 0;
 		display: flex;
 		gap: 0.5rem;
 		font-size: 0.8rem;
@@ -532,6 +540,12 @@
 
 		.search-wrapper:not(:has(.clear-btn)) input {
 			padding-right: 0.75rem;
+		}
+
+		li {
+			min-height: 44px;
+			padding-top: 0;
+			padding-bottom: 0;
 		}
 	}
 
