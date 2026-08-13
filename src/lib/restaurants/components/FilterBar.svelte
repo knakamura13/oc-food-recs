@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Bookmark, Map as MapIcon, Share2 } from 'lucide-svelte';
+	import { Bookmark, ChevronDown, Map as MapIcon, Share2 } from 'lucide-svelte';
 	import type { Restaurant } from '$lib/restaurants/types';
 	import {
 		appState,
@@ -229,7 +229,9 @@
 				{#if appState.activeCuisines.length > 0}
 					<span class="badge">{appState.activeCuisines.length}</span>
 				{/if}
-				<span class="arrow" aria-hidden="true" class:open={showCuisineDropdown}>&#9662;</span>
+				<span class="arrow" aria-hidden="true" class:open={showCuisineDropdown}>
+					<ChevronDown size={16} aria-hidden="true" />
+				</span>
 			</button>
 
 			{#if showCuisineDropdown}
@@ -265,7 +267,9 @@
 				{#if appState.activeCities.length > 0}
 					<span class="badge">{appState.activeCities.length}</span>
 				{/if}
-				<span class="arrow" aria-hidden="true" class:open={showCityDropdown}>&#9662;</span>
+				<span class="arrow" aria-hidden="true" class:open={showCityDropdown}>
+					<ChevronDown size={16} aria-hidden="true" />
+				</span>
 			</button>
 
 			{#if showCityDropdown}
@@ -298,7 +302,9 @@
 				onclick={() => toggleDropdown('recency')}
 			>
 				Recency
-				<span class="arrow" aria-hidden="true" class:open={showRecencyDropdown}>&#9662;</span>
+				<span class="arrow" aria-hidden="true" class:open={showRecencyDropdown}>
+					<ChevronDown size={16} aria-hidden="true" />
+				</span>
 			</button>
 
 			{#if showRecencyDropdown}
@@ -328,7 +334,9 @@
 					{#if appState.activeSubreddits.length > 0}
 						<span class="badge">{appState.activeSubreddits.length}</span>
 					{/if}
-					<span class="arrow" aria-hidden="true" class:open={showSubredditDropdown}>&#9662;</span>
+					<span class="arrow" aria-hidden="true" class:open={showSubredditDropdown}>
+						<ChevronDown size={16} aria-hidden="true" />
+					</span>
 				</button>
 
 				{#if showSubredditDropdown}
@@ -585,8 +593,15 @@
 	}
 
 	.arrow {
-		font-size: 0.7rem;
+		display: inline-flex;
+		align-items: center;
+		flex-shrink: 0;
 		transition: transform 0.2s;
+	}
+
+	.arrow :global(svg) {
+		width: 1.25em;
+		height: 1.25em;
 	}
 
 	.arrow.open {
