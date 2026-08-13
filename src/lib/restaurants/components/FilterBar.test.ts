@@ -783,6 +783,9 @@ describe("FilterBar", () => {
     expect(filterBarSource).toMatch(
       /\.recency-panel \{[\s\S]*overflow: hidden/,
     );
+    expect(filterBarSource).toMatch(
+      /@media \(max-width: 1023px\)[\s\S]*\.dropdown-item \{[\s\S]*min-height: 44px/,
+    );
   });
 
   it("exposes recency as a labelled popup, not a dialog", async () => {
