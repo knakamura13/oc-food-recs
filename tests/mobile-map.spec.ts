@@ -806,7 +806,7 @@ test.describe('Mobile map interaction', () => {
 		}
 	});
 
-	test('desktop map pane expands only via pin control, not hover or focus-within', async ({
+	test('desktop map pane widens via click and keyboard without hover', async ({
 		page
 	}, testInfo) => {
 		test.skip(testInfo.project.name !== 'Desktop Chrome', 'Desktop viewport only');
@@ -819,7 +819,7 @@ test.describe('Mobile map interaction', () => {
 		const listPane = page.locator('.list-pane');
 		const expandToggle = page.locator('.map-expand-toggle');
 		await expect(expandToggle).toBeVisible();
-		await expect(expandToggle).toHaveAccessibleName('Expand map pane');
+		await expect(expandToggle).toHaveAccessibleName('Widen map');
 		await expect(expandToggle).toHaveAttribute('aria-pressed', 'false');
 		const expandBox = await expandToggle.boundingBox();
 		expect(expandBox).toBeTruthy();
@@ -831,16 +831,6 @@ test.describe('Mobile map interaction', () => {
 		const collapsedMapWidth = await paneWidth(mapPane);
 		const collapsedListWidth = await paneWidth(listPane);
 
-		// Hovering the map (including pins) must not reflow the list.
-		await page.locator('.leaflet-container').hover({ position: { x: 80, y: 200 } });
-		const hoveredPin = page.locator('.leaflet-marker-icon, .rec-marker, .rec-pin').first();
-		if ((await hoveredPin.count()) > 0) {
-			await hoveredPin.hover({ force: true });
-		}
-		expect(await paneWidth(mapPane)).toBeLessThanOrEqual(collapsedMapWidth + 8);
-		expect(await paneWidth(listPane)).toBeLessThanOrEqual(collapsedListWidth + 8);
-		expect(await paneWidth(listPane)).toBeGreaterThanOrEqual(collapsedListWidth - 8);
-
 		// Focusing Leaflet chrome must not expand via :focus-within
 		await page.getByRole('button', { name: 'Zoom in' }).focus();
 		expect(await paneWidth(mapPane)).toBeLessThanOrEqual(collapsedMapWidth + 8);
@@ -849,11 +839,9 @@ test.describe('Mobile map interaction', () => {
 		await listPane.click({ position: { x: 40, y: 40 } });
 		expect(await paneWidth(mapPane)).toBeLessThanOrEqual(collapsedMapWidth + 8);
 
-		// Keyboard access to the pin control still expands/collapses
-		await expandToggle.focus();
-		await expect(expandToggle).toBeFocused();
-		await page.keyboard.press('Enter');
-		await expect(expandToggle).toHaveAccessibleName('Collapse map pane');
+		// Click/keyboard is the required path — hover is not needed to widen
+		await expandToggle.click();
+		await expect(expandToggle).toHaveAccessibleName('Narrow map');
 		await expect(expandToggle).toHaveAttribute('aria-pressed', 'true');
 		await expect(mapPane).toHaveClass(/desktop-expanded/);
 		await expect.poll(() => paneWidth(mapPane)).toBeGreaterThan(collapsedMapWidth + 20);
@@ -863,10 +851,28 @@ test.describe('Mobile map interaction', () => {
 		await expect.poll(() => paneWidth(mapPane)).toBeGreaterThan(collapsedMapWidth + 20);
 
 		await expandToggle.click();
-		await expect(expandToggle).toHaveAccessibleName('Expand map pane');
+		await expect(expandToggle).toHaveAccessibleName('Widen map');
 		await expect(expandToggle).toHaveAttribute('aria-pressed', 'false');
 		await expect(mapPane).not.toHaveClass(/desktop-expanded/);
 		await expect.poll(() => paneWidth(mapPane)).toBeLessThanOrEqual(collapsedMapWidth + 8);
+
+		await expandToggle.focus();
+		await expect(expandToggle).toBeFocused();
+		await page.keyboard.press('Enter');
+		await expect(expandToggle).toHaveAttribute('aria-pressed', 'true');
+		await expect(mapPane).toHaveClass(/desktop-expanded/);
+		await expect.poll(() => paneWidth(mapPane)).toBeGreaterThan(collapsedMapWidth + 20);
+
+		await page.keyboard.press('Escape');
+		await expect(expandToggle).toHaveAttribute('aria-pressed', 'false');
+		await expect(mapPane).not.toHaveClass(/desktop-expanded/);
+		await expect.poll(() => paneWidth(mapPane)).toBeLessThanOrEqual(collapsedMapWidth + 8);
+
+		await expandToggle.focus();
+		await page.keyboard.press('Space');
+		await expect(mapPane).toHaveClass(/desktop-expanded/);
+		await page.keyboard.press('Escape');
+		await expect(mapPane).not.toHaveClass(/desktop-expanded/);
 
 		// Pin still works when motion is reduced (no transition required)
 		await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -880,6 +886,58 @@ test.describe('Mobile map interaction', () => {
 		await page.setViewportSize({ width: 390, height: 844 });
 		await expect(expandToggle).toHaveCount(0);
 		await expect(page.locator('.mobile-map-trigger')).toBeVisible();
+	});
+
+	test('desktop map hover widens as a delayed enhancement, not the only path', async ({
+		page
+	}, testInfo) => {
+		test.skip(testInfo.project.name !== 'Desktop Chrome', 'Desktop viewport only');
+		await page.setViewportSize({ width: 1280, height: 800 });
+		await page.goto('/');
+		await firstRenderedRow(page);
+		await expect(page.locator('.leaflet-container')).toBeVisible({ timeout: 30_000 });
+
+		const mapPane = page.locator('#restaurant-map-panel');
+		const listPane = page.locator('.list-pane');
+		const expandToggle = page.locator('.map-expand-toggle');
+		const paneWidth = (locator: Locator) =>
+			locator.evaluate((pane) => pane.getBoundingClientRect().width);
+		const collapsedMapWidth = await paneWidth(mapPane);
+
+		await expect(expandToggle).toHaveAttribute('aria-pressed', 'false');
+		await expect(mapPane).not.toHaveClass(/desktop-expanded/);
+
+		await page.locator('.leaflet-container').hover({ position: { x: 80, y: 200 } });
+		expect(await paneWidth(mapPane)).toBeLessThanOrEqual(collapsedMapWidth + 8);
+		await expect(mapPane).not.toHaveClass(/desktop-expanded/);
+
+		await expect(mapPane).toHaveClass(/desktop-expanded/, { timeout: 1500 });
+		await expect.poll(() => paneWidth(mapPane)).toBeGreaterThan(collapsedMapWidth + 20);
+		await expect(expandToggle).toHaveAttribute('aria-pressed', 'false');
+		await expect(expandToggle).toHaveAccessibleName('Widen map');
+
+		await listPane.hover({ position: { x: 40, y: 40 } });
+		await expect(mapPane).toHaveClass(/desktop-expanded/);
+		await expect(mapPane).not.toHaveClass(/desktop-expanded/, { timeout: 1500 });
+		await expect.poll(() => paneWidth(mapPane)).toBeLessThanOrEqual(collapsedMapWidth + 8);
+
+		await page.locator('.leaflet-container').hover({ position: { x: 80, y: 200 } });
+		await expect(mapPane).toHaveClass(/desktop-expanded/, { timeout: 1500 });
+		await page.keyboard.press('Escape');
+		await expect(mapPane).not.toHaveClass(/desktop-expanded/);
+		await expect(expandToggle).toHaveAttribute('aria-pressed', 'false');
+
+		await expandToggle.click();
+		await expect(expandToggle).toHaveAttribute('aria-pressed', 'true');
+		await expect(mapPane).toHaveClass(/desktop-expanded/);
+		await listPane.hover({ position: { x: 40, y: 40 } });
+		await page.waitForTimeout(500);
+		await expect(mapPane).toHaveClass(/desktop-expanded/);
+		await expect.poll(() => paneWidth(mapPane)).toBeGreaterThan(collapsedMapWidth + 20);
+
+		await page.keyboard.press('Escape');
+		await expect(expandToggle).toHaveAttribute('aria-pressed', 'false');
+		await expect(mapPane).not.toHaveClass(/desktop-expanded/);
 	});
 
 	test('desktop Tab leaves the in-flow map pane and reaches sort and rows', async ({
