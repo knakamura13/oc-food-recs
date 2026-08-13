@@ -120,19 +120,32 @@
 		}
 	}
 
-	@media (max-width: 768px) {
+	@media (max-width: 1023px) {
 		.hero {
-			padding: 1rem 1rem 0.5rem;
+			padding: 0.65rem 1rem 0.35rem;
 		}
 
 		h1 {
-			margin: 0 0 0.3rem;
+			font-size: 1.2rem;
+			margin: 0 0 0.2rem;
 		}
 
 		p {
-			font-size: 0.82rem;
-			line-height: 1.45;
-			margin: 0 0 0.3rem;
+			font-size: 0.78rem;
+			line-height: 1.4;
+			margin: 0 0 0.15rem;
+		}
+
+		.summary {
+			display: -webkit-box;
+			-webkit-box-orient: vertical;
+			-webkit-line-clamp: 2;
+			line-clamp: 2;
+			overflow: hidden;
+		}
+
+		.attribution {
+			display: none;
 		}
 	}
 </style>

@@ -911,14 +911,30 @@
 
 	@media (max-width: 1023px) {
 		.sort-bar {
-			flex-wrap: wrap;
-			row-gap: 0.35rem;
+			flex-wrap: nowrap;
+			overflow-x: auto;
+			overscroll-behavior-x: contain;
+			-webkit-overflow-scrolling: touch;
+			scrollbar-width: none;
+		}
+
+		.sort-bar::-webkit-scrollbar {
+			display: none;
+		}
+
+		.sort-label {
+			display: none;
 		}
 
 		.sort-btn {
 			min-height: 44px;
 			padding-top: 0;
 			padding-bottom: 0;
+			flex-shrink: 0;
+		}
+
+		.result-count {
+			flex-shrink: 0;
 		}
 	}
 

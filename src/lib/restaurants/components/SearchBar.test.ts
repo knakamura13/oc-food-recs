@@ -309,6 +309,13 @@ describe("SearchBar", () => {
     expect(highlightedHoverIdx).toBeGreaterThan(hoverIdx);
   });
 
+  it("hides the keyboard shortcut and uses a 16px search field on small viewports", () => {
+    expect(searchBarSource).toContain("font-size: 16px");
+    expect(searchBarSource).toMatch(
+      /@media \(max-width: 1023px\)[\s\S]*\.search-shortcut \{[\s\S]*display: none/,
+    );
+  });
+
   it("applies the city filter when the filter option is clicked", async () => {
     const user = userEvent.setup();
     render(SearchBar, { restaurants, cuisineNames, cityNames });
