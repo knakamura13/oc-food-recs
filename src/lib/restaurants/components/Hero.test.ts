@@ -71,5 +71,8 @@ describe("Hero", () => {
     expect(heroSource).toMatch(/\.attribution a:active\s*\{/);
     expect(heroSource).toContain("#fff0eb");
     expect(heroSource).toContain("#c43700");
+    expect(heroSource).toMatch(
+      /@media \(max-width: 1023px\)[\s\S]*\.attribution \{[\s\S]*display: none/,
+    );
   });
 });
