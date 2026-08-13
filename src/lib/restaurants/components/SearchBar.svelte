@@ -304,7 +304,7 @@
 
 	.search-icon {
 		position: absolute;
-		left: 12px;
+		inset-inline-start: 12px;
 		top: 50%;
 		transform: translateY(-50%);
 		width: 18px;
@@ -315,7 +315,8 @@
 
 	input {
 		width: 100%;
-		padding: 0.65rem 2.5rem 0.65rem 2.5rem;
+		padding-block: 0.65rem;
+		padding-inline: 2.5rem;
 		border: 1.5px solid #e0d6cc;
 		border-radius: 10px;
 		font-size: 0.95rem;
@@ -347,7 +348,7 @@
 
 	.clear-btn {
 		position: absolute;
-		right: 4px;
+		inset-inline-end: 4px;
 		top: 50%;
 		transform: translateY(-50%);
 		display: flex;
@@ -376,7 +377,7 @@
 
 	.search-shortcut {
 		position: absolute;
-		right: 12px;
+		inset-inline-end: 12px;
 		top: 50%;
 		transform: translateY(-50%);
 		font-family: 'DM Sans', system-ui, sans-serif;
@@ -394,8 +395,7 @@
 	.dropdown {
 		position: absolute;
 		top: 100%;
-		left: 0;
-		right: 0;
+		inset-inline: 0;
 		max-width: 640px;
 		margin: 4px auto 0;
 		background: #fffcf8;
@@ -424,9 +424,17 @@
 		background: #faf7f2;
 	}
 
+	li:active {
+		background: #f0ebe3;
+	}
+
 	li.highlighted,
 	li.highlighted:hover {
 		background: #fff0eb;
+	}
+
+	li.highlighted:active {
+		background: #fce8e0;
 	}
 
 	.filter-option {

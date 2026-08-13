@@ -47,6 +47,7 @@
 		margin: 0 0 0.75rem;
 		font-size: 1.75rem;
 		font-weight: 700;
+		text-wrap: balance;
 	}
 
 	.error-message {

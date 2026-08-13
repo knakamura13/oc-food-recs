@@ -301,6 +301,7 @@ describe("SearchBar", () => {
     expect(searchBarSource).toMatch(/\.clear-btn:hover\s*\{/);
     expect(searchBarSource).toMatch(/\.clear-btn:active\s*\{/);
     expect(searchBarSource).toMatch(/li:hover\s*\{/);
+    expect(searchBarSource).toMatch(/li:active\s*\{/);
     expect(searchBarSource).toMatch(/li\.highlighted:hover\s*\{/);
     expect(searchBarSource).toContain("prefers-reduced-motion");
     const hoverIdx = searchBarSource.indexOf("li:hover");

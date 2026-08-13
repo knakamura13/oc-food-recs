@@ -44,6 +44,7 @@
 		-webkit-font-smoothing: antialiased;
 		-moz-osx-font-smoothing: grayscale;
 		line-height: 1.55;
+		text-wrap: pretty;
 	}
 
 	:global(*) {
@@ -143,7 +144,7 @@
 
 	:global(.skip-link) {
 		position: absolute;
-		left: -9999px;
+		inset-inline-start: -9999px;
 		top: 0;
 		z-index: 9999;
 		padding: 0.75rem 1rem;
@@ -156,6 +157,6 @@
 	}
 
 	:global(.skip-link:focus) {
-		left: 0;
+		inset-inline-start: 0;
 	}
 </style>

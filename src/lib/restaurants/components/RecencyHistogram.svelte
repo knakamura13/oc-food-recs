@@ -155,7 +155,7 @@
 <style>
 	.recency {
 		padding: 12px 14px;
-		min-width: 280px;
+		min-width: min(280px, calc(100vw - 2rem));
 	}
 
 	.recency-title {
@@ -185,7 +185,8 @@
 
 	.bars {
 		position: absolute;
-		inset: 0 0 14px 0;
+		inset-block: 0 14px;
+		inset-inline: 0;
 		display: flex;
 		align-items: flex-end;
 		gap: 2px;
@@ -205,8 +206,7 @@
 
 	.slider {
 		position: absolute;
-		left: 0;
-		right: 0;
+		inset-inline: 0;
 		bottom: 0;
 		width: 100%;
 		height: 28px;
@@ -290,6 +290,7 @@
 		color: #5d4e37;
 		cursor: pointer;
 		font-weight: 500;
+		transition: border-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
 	}
 
 	.reset:hover:not(:disabled) {
@@ -297,8 +298,22 @@
 		color: #c43700;
 	}
 
+	.reset:active:not(:disabled) {
+		transform: scale(0.97);
+	}
+
 	.reset:disabled {
 		opacity: 0.5;
 		cursor: default;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.reset {
+			transition: border-color 0.15s ease, color 0.15s ease;
+		}
+
+		.reset:active:not(:disabled) {
+			transform: none;
+		}
 	}
 </style>

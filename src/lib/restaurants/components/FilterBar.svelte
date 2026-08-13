@@ -596,7 +596,7 @@
 	.dropdown-panel {
 		position: absolute;
 		top: calc(100% + 4px);
-		left: 0;
+		inset-inline-start: 0;
 		min-width: min(220px, calc(100vw - 2rem));
 		max-height: 320px;
 		overflow-y: auto;
@@ -621,13 +621,19 @@
 		cursor: pointer;
 		font-family: inherit;
 		font-size: 0.84rem;
-		text-align: left;
+		text-align: start;
 		gap: 6px;
 		color: #3e2c23;
+		transition: background 0.15s ease, transform 0.15s ease;
 	}
 
 	.dropdown-item:hover {
 		background: #faf7f2;
+	}
+
+	.dropdown-item:active {
+		background: #f0ebe3;
+		transform: scale(0.97);
 	}
 
 	.dropdown-item.active {
@@ -660,10 +666,15 @@
 		color: #c43700;
 		cursor: pointer;
 		font-weight: 500;
+		transition: transform 0.15s ease;
 	}
 
 	.clear-filters:hover {
 		text-decoration: underline;
+	}
+
+	.clear-filters:active {
+		transform: scale(0.97);
 	}
 
 	.active-pills {
@@ -736,7 +747,7 @@
 	}
 
 	.recency-panel {
-		min-width: 300px;
+		min-width: min(300px, calc(100vw - 2rem));
 	}
 
 	.pill:hover {
@@ -755,8 +766,15 @@
 			transition: none;
 		}
 
-		.dropdown-trigger:active:not(.mobile-map-trigger) {
+		.dropdown-trigger:active:not(.mobile-map-trigger),
+		.dropdown-item:active,
+		.clear-filters:active {
 			transform: none;
+		}
+
+		.dropdown-item,
+		.clear-filters {
+			transition: none;
 		}
 	}
 

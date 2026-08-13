@@ -632,9 +632,15 @@
 		font: inherit;
 		cursor: pointer;
 		pointer-events: auto;
+		transition: background 0.15s ease, transform 0.15s ease;
 	}
 
 	.map-load-retry:hover {
+		background: #fff0eb;
+	}
+
+	.map-load-retry:active {
+		transform: scale(0.97);
 		background: #fff0eb;
 	}
 
@@ -943,8 +949,13 @@
 		}
 
 		.locate-me-btn,
-		.location-error {
+		.location-error,
+		.map-load-retry {
 			transition: none;
+		}
+
+		.map-load-retry:active {
+			transform: none;
 		}
 	}
 </style>

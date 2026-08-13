@@ -318,7 +318,7 @@
 	.data-table th,
 	.data-table td {
 		padding: 0.65rem 0.75rem;
-		text-align: left;
+		text-align: start;
 		vertical-align: top;
 		border-bottom: 1px solid #efe8df;
 	}

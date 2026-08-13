@@ -736,6 +736,8 @@ describe("FilterBar", () => {
     expect(filterBarSource).toContain(
       ".dropdown-trigger:active:not(.mobile-map-trigger)",
     );
+    expect(filterBarSource).toMatch(/\.dropdown-item:active\s*\{/);
+    expect(filterBarSource).toMatch(/\.clear-filters:active\s*\{/);
     expect(filterBarSource).toContain("prefers-reduced-motion");
     expect(filterBarSource).toMatch(/\.pill:active\s*\{/);
     expect(filterBarSource).not.toMatch(
@@ -758,6 +760,7 @@ describe("FilterBar", () => {
     expect(
       screen.getByRole("group", { name: /filter by comment recency/i }),
     ).toBeInTheDocument();
+    expect(filterBarSource).toContain("min(300px, calc(100vw - 2rem))");
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 });
