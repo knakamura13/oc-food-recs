@@ -518,11 +518,21 @@
 		transition: border-color 0.15s ease, box-shadow 0.15s ease;
 	}
 
-	input[type='text']:focus,
-	input[type='url']:focus {
+	input[type='text']:focus-visible,
+	input[type='url']:focus-visible {
 		outline: none;
 		border-color: #ff4500;
 		box-shadow: 0 0 0 3px rgba(255, 69, 0, 0.15);
+	}
+
+	input:user-invalid {
+		border-color: #b5543a;
+	}
+
+	input:user-invalid:focus-visible {
+		outline: none;
+		border-color: #b5543a;
+		box-shadow: 0 0 0 3px rgba(181, 84, 58, 0.2);
 	}
 
 	button {
