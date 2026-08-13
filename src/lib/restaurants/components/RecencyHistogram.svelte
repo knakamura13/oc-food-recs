@@ -154,13 +154,18 @@
 
 <style>
 	.recency {
-		padding: 12px 14px;
+		display: flex;
+		flex-direction: column;
+		flex: 1;
+		min-height: 0;
 		min-width: 0;
 		width: 100%;
+		padding: 12px 14px;
 		box-sizing: border-box;
 	}
 
 	.recency-title {
+		flex-shrink: 0;
 		font-weight: 700;
 		font-size: 0.95rem;
 		color: #3e2c23;
@@ -168,12 +173,14 @@
 	}
 
 	.recency-empty {
+		flex-shrink: 0;
 		font-size: 0.85rem;
 		color: #7a6e63;
 		margin: 0;
 	}
 
 	.readout {
+		flex-shrink: 0;
 		font-size: 0.85rem;
 		font-weight: 600;
 		color: #5d4e37;
@@ -182,6 +189,9 @@
 
 	.chart {
 		position: relative;
+		flex: 1 1 auto;
+		min-height: 64px;
+		max-height: 110px;
 		height: 110px;
 	}
 
@@ -272,6 +282,7 @@
 	.axis {
 		display: flex;
 		justify-content: space-between;
+		flex-shrink: 0;
 		font-size: 0.75rem;
 		color: #7a6e63;
 		margin-top: 6px;
@@ -280,7 +291,11 @@
 	.recency-actions {
 		display: flex;
 		justify-content: flex-end;
+		flex-shrink: 0;
 		margin-top: 10px;
+		position: sticky;
+		bottom: 0;
+		background: rgba(255, 252, 248, 0.98);
 	}
 
 	.reset {
@@ -292,6 +307,11 @@
 		color: #5d4e37;
 		cursor: pointer;
 		font-weight: 500;
+	}
+
+	.reset:focus-visible {
+		outline: 2px solid #ff4500;
+		outline-offset: 2px;
 	}
 
 	.reset:hover:not(:disabled) {

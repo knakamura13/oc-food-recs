@@ -46,10 +46,12 @@ export function sortDirectionShort(
   direction: SortDirection,
 ): string {
   switch (key) {
+    // Compact arrows keep the default Score chip from crowding Recent/Name
+    // on 320px. Full order stays on the button's accessible name.
     case "score":
-      return direction === "desc" ? "high-low" : "low-high";
+      return direction === "desc" ? "↓" : "↑";
     case "recency":
-      return direction === "desc" ? "new-old" : "old-new";
+      return direction === "desc" ? "↓" : "↑";
     case "name":
       return direction === "asc" ? "A-Z" : "Z-A";
     default: {
