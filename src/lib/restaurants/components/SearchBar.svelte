@@ -81,6 +81,25 @@
 			: 'Ctrl+K'
 	);
 
+	const SEARCH_PLACEHOLDER_FULL = 'Search restaurants, cuisines, or cities...';
+	const SEARCH_PLACEHOLDER_NARROW = 'Search restaurants or cities...';
+	const NARROW_SEARCH_MQ = '(max-width: 369px)';
+
+	let narrowSearch = $state(false);
+	let searchPlaceholder = $derived(
+		narrowSearch ? SEARCH_PLACEHOLDER_NARROW : SEARCH_PLACEHOLDER_FULL
+	);
+
+	$effect(() => {
+		const mq = window.matchMedia(NARROW_SEARCH_MQ);
+		const sync = () => {
+			narrowSearch = mq.matches;
+		};
+		sync();
+		mq.addEventListener('change', sync);
+		return () => mq.removeEventListener('change', sync);
+	});
+
 	function filterOptionLabel(match: FilterMatch): string {
 		return match.type === 'city'
 			? `Filter by city: ${match.value}`
@@ -205,7 +224,7 @@
 			autocorrect="off"
 			autocomplete="off"
 			spellcheck="false"
-			placeholder="Search restaurants, cuisines, or cities..."
+			placeholder={searchPlaceholder}
 			bind:value={appState.searchQuery}
 			oninput={handleInput}
 			onkeydown={handleKeydown}
@@ -329,6 +348,7 @@
 
 	input::placeholder {
 		color: #7a6e63;
+		text-overflow: ellipsis;
 	}
 
 	input[type='search']::-webkit-search-cancel-button {
@@ -509,11 +529,19 @@
 		.search-shortcut {
 			display: none;
 		}
+
+		.search-wrapper:not(:has(.clear-btn)) input {
+			padding-right: 0.75rem;
+		}
 	}
 
 	@media (hover: none) and (pointer: coarse) {
 		.search-shortcut {
 			display: none;
+		}
+
+		.search-wrapper:not(:has(.clear-btn)) input {
+			padding-right: 0.75rem;
 		}
 	}
 </style>
