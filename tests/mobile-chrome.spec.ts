@@ -260,6 +260,44 @@ test('320px drawer actions stay visible above comments', async ({ page }, testIn
 	}
 });
 
+test('320px search placeholder fits without clipping', async ({ page }, testInfo) => {
+	test.skip(testInfo.project.name !== 'Mobile Chrome', 'Mobile viewport only');
+	test.setTimeout(60_000);
+	await page.setViewportSize({ width: 320, height: 568 });
+	await page.goto('/');
+
+	await expect(page.locator('.row-toggle').first()).toBeVisible({ timeout: 30_000 });
+
+	const metrics = await page.evaluate(() => {
+		const search = document.querySelector<HTMLInputElement>('input[type="search"]');
+		if (!search) throw new Error('Missing search input');
+		const style = getComputedStyle(search);
+		const box = search.getBoundingClientRect();
+		const padL = Number.parseFloat(style.paddingLeft);
+		const padR = Number.parseFloat(style.paddingRight);
+		const available = box.width - padL - padR;
+		const placeholder = search.getAttribute('placeholder') ?? '';
+		const canvas = document.createElement('canvas');
+		const ctx = canvas.getContext('2d');
+		if (!ctx) throw new Error('No canvas context');
+		ctx.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+		const textW = ctx.measureText(placeholder).width;
+		return {
+			placeholder,
+			available: Math.round(available),
+			textW: Math.round(textW),
+			overflowPx: Math.round(textW - available),
+			clips: textW > available + 1,
+			ariaLabel: search.getAttribute('aria-label')
+		};
+	});
+
+	expect(metrics.placeholder).toBe('Search restaurants or cities...');
+	expect(metrics.ariaLabel).toBe('Search restaurants, cuisines, or cities');
+	expect(metrics.clips).toBe(false);
+	expect(metrics.overflowPx).toBeLessThanOrEqual(0);
+});
+
 test('desktop drawer keeps comments above conversion actions', async ({ page }, testInfo) => {
 	test.skip(testInfo.project.name !== 'Desktop Chrome', 'Desktop viewport only');
 	test.setTimeout(60_000);

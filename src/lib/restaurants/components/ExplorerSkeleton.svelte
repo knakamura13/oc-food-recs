@@ -41,7 +41,10 @@
 			<div class="search-container">
 				<div class="search-wrapper">
 					<span class="search-icon" aria-hidden="true"></span>
-					<div class="search-field">Search restaurants, cuisines, or cities...</div>
+					<div class="search-field">
+						<span class="search-ph-full">Search restaurants, cuisines, or cities...</span>
+						<span class="search-ph-narrow">Search restaurants or cities...</span>
+					</div>
 				</div>
 			</div>
 			<nav class="filter-bar" aria-hidden="true">
@@ -218,6 +221,23 @@
 		box-sizing: border-box;
 		background: #fff;
 		color: #b5a99a;
+		overflow: hidden;
+		white-space: nowrap;
+		text-overflow: ellipsis;
+	}
+
+	.search-ph-narrow {
+		display: none;
+	}
+
+	@media (max-width: 369px) {
+		.search-ph-full {
+			display: none;
+		}
+
+		.search-ph-narrow {
+			display: inline;
+		}
 	}
 
 	.filter-bar {
@@ -563,6 +583,7 @@
 
 		.search-field {
 			font-size: 16px;
+			padding-right: 0.75rem;
 		}
 
 		.filter-row {

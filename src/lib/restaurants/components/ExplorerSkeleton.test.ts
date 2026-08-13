@@ -42,6 +42,12 @@ describe("ExplorerSkeleton", () => {
     expect(document.querySelector(".filter-row")).toBeTruthy();
     expect(document.querySelector(".filter-actions")).toBeTruthy();
     expect(document.querySelector(".action-label")).toBeTruthy();
+    expect(
+      screen.getByText("Search restaurants, cuisines, or cities..."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Search restaurants or cities..."),
+    ).toBeInTheDocument();
     expect(screen.getByText("Sort by:")).toBeInTheDocument();
     expect(document.querySelector(".map-pane")).toBeTruthy();
     expect(document.querySelector("main.explorer-skeleton")).toBeTruthy();
