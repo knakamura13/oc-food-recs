@@ -408,7 +408,7 @@
 		font-weight: 600;
 		border: none;
 		border-radius: 6px;
-		background: #ff4500;
+		background: #c43700;
 		color: #fffdf9;
 		cursor: pointer;
 		transition: background-color 0.15s ease, transform 0.05s ease;
@@ -416,7 +416,7 @@
 	}
 
 	button:hover:not(:disabled) {
-		background: #e63e00;
+		background: #a82f00;
 	}
 
 	button:active:not(:disabled) {
