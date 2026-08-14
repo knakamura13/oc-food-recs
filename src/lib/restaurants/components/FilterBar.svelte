@@ -76,6 +76,24 @@
 		showRecencyDropdown = false;
 	}
 
+	const COMPACT_FILTER_MQ = '(max-width: 1023px)';
+
+	function isCompactFilterViewport() {
+		if (typeof window === 'undefined') return false;
+		if (typeof window.matchMedia === 'function') {
+			return window.matchMedia(COMPACT_FILTER_MQ).matches;
+		}
+		return window.innerWidth <= 1023;
+	}
+
+	function dismissOpenFilter() {
+		const openTrigger = document.querySelector<HTMLElement>(
+			'.dropdown-trigger[aria-expanded="true"]'
+		);
+		closeAllDropdowns();
+		openTrigger?.focus();
+	}
+
 	function handleDropdownFocusOut(event: FocusEvent) {
 		const wrapper = event.currentTarget as HTMLElement;
 		const next = event.relatedTarget as Node | null;
@@ -161,6 +179,7 @@
 		} else {
 			appState.activeCuisines = [...appState.activeCuisines, cuisine];
 		}
+		if (isCompactFilterViewport()) dismissOpenFilter();
 	}
 
 	function toggleCity(city: string) {
@@ -170,6 +189,7 @@
 		} else {
 			appState.activeCities = [...appState.activeCities, city];
 		}
+		if (isCompactFilterViewport()) dismissOpenFilter();
 	}
 
 	function toggleSubreddit(subreddit: string) {
@@ -179,6 +199,7 @@
 		} else {
 			appState.activeSubreddits = [...appState.activeSubreddits, subreddit];
 		}
+		if (isCompactFilterViewport()) dismissOpenFilter();
 	}
 
 	function clearAllFilters() {
@@ -216,19 +237,46 @@
 	let overflowStart = $state(false);
 	let overflowEnd = $state(false);
 
+	/** `position: fixed` is relative to a transform/filter/backdrop ancestor, not the viewport. */
+	function getFixedContainingOrigin(el: HTMLElement): { top: number; left: number; bottom: number } {
+		let parent = el.parentElement;
+		while (parent && parent !== document.documentElement) {
+			const cs = getComputedStyle(parent);
+			const webkitBackdropFilter =
+				(cs as CSSStyleDeclaration & { webkitBackdropFilter?: string }).webkitBackdropFilter ??
+				'none';
+			const backdrop = cs.backdropFilter !== 'none' || webkitBackdropFilter !== 'none';
+			if (
+				cs.transform !== 'none' ||
+				cs.filter !== 'none' ||
+				backdrop ||
+				cs.contain === 'paint' ||
+				cs.willChange.includes('transform')
+			) {
+				const r = parent.getBoundingClientRect();
+				return { top: r.top, left: r.left, bottom: r.bottom };
+			}
+			parent = parent.parentElement;
+		}
+		return { top: 0, left: 0, bottom: window.innerHeight };
+	}
+
 	/** Pin menus to the viewport so a horizontally scrolling filter row cannot clip them. */
 	const pinDropdownPanel: Attachment<HTMLElement> = (node) => {
 		const place = () => {
 			const trigger = node.parentElement?.querySelector<HTMLElement>('.dropdown-trigger');
 			if (!trigger) return;
 			const rect = trigger.getBoundingClientRect();
-			const gutter = 16;
+			const origin = getFixedContainingOrigin(node);
+			const edgeGutter = 16;
+			const compact = isCompactFilterViewport();
+			const listPeek = compact ? 112 : edgeGutter;
 			const vw = window.innerWidth;
 			const vh = window.innerHeight;
-			const maxWidth = Math.max(160, vw - gutter * 2);
+			const maxWidth = Math.max(160, vw - edgeGutter * 2);
 			const panelCap = 320;
-			const spaceBelow = vh - rect.bottom - gutter;
-			const spaceAbove = rect.top - gutter;
+			const spaceBelow = vh - rect.bottom - listPeek;
+			const spaceAbove = rect.top - edgeGutter;
 			const flipUp = spaceBelow < 180 && spaceAbove > spaceBelow;
 			node.style.position = 'fixed';
 			node.style.right = 'auto';
@@ -237,27 +285,27 @@
 			const available = flipUp ? spaceAbove : spaceBelow;
 			if (flipUp) {
 				node.style.top = 'auto';
-				node.style.bottom = `${Math.round(vh - rect.top + 4)}px`;
+				node.style.bottom = `${Math.round(origin.bottom - rect.top + 4)}px`;
 			} else {
 				node.style.bottom = 'auto';
-				node.style.top = `${Math.round(rect.bottom + 4)}px`;
+				node.style.top = `${Math.round(rect.bottom + 4 - origin.top)}px`;
 			}
 			node.style.maxHeight = `${Math.round(Math.min(panelCap, Math.max(0, available)))}px`;
 			node.style.minHeight = '0';
 			node.style.overflowY = 'auto';
 			const panelWidth = Math.min(node.getBoundingClientRect().width || 220, maxWidth);
 			let left = rect.left;
-			if (left + panelWidth > vw - gutter) {
-				left = Math.max(gutter, vw - gutter - panelWidth);
+			if (left + panelWidth > vw - edgeGutter) {
+				left = Math.max(edgeGutter, vw - edgeGutter - panelWidth);
 			}
-			if (left < gutter) left = gutter;
-			node.style.left = `${Math.round(left)}px`;
+			if (left < edgeGutter) left = edgeGutter;
+			node.style.left = `${Math.round(left - origin.left)}px`;
 			const placed = node.getBoundingClientRect();
-			const overflowBottom = placed.bottom - (vh - gutter);
+			const overflowBottom = placed.bottom - (vh - listPeek);
 			if (overflowBottom > 0) {
 				node.style.maxHeight = `${Math.round(Math.max(0, placed.height - overflowBottom))}px`;
 			}
-			const overflowTop = gutter - placed.top;
+			const overflowTop = edgeGutter - placed.top;
 			if (overflowTop > 0) {
 				const next = node.getBoundingClientRect();
 				node.style.maxHeight = `${Math.round(Math.max(0, next.height - overflowTop))}px`;
@@ -432,7 +480,7 @@
 					aria-label="Filter by comment recency"
 					{@attach pinDropdownPanel}
 				>
-					<RecencyHistogram mentions={histogramMentions} extent={dateExtent} />
+					<RecencyHistogram mentions={histogramMentions} extent={dateExtent} onDone={dismissOpenFilter} />
 				</div>
 			{/if}
 		</div>
