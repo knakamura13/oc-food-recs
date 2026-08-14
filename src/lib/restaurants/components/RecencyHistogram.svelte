@@ -14,9 +14,11 @@
 		mentions: ListMention[];
 		/** Full-dataset comment-date range in epoch ms; the fixed slider/axis extent. */
 		extent: { min: number; max: number };
+		/** Closes the recency panel (used on compact viewports). */
+		onDone?: () => void;
 	}
 
-	let { mentions, extent }: Props = $props();
+	let { mentions, extent, onDone }: Props = $props();
 
 	const BIN_COUNT = 30;
 	const DAY_MS = 86_400_000;
@@ -113,6 +115,11 @@
 
 	{#if disabled}
 		<p class="recency-empty">Not enough dated comments for this selection.</p>
+		{#if onDone}
+			<div class="recency-actions">
+				<button type="button" class="done" onclick={onDone}>Done</button>
+			</div>
+		{/if}
 	{:else}
 		<div class="readout" aria-live="polite">{readout}</div>
 
@@ -148,6 +155,9 @@
 
 		<div class="recency-actions">
 			<button class="reset" onclick={reset} disabled={atAllTime}>Reset</button>
+			{#if onDone}
+				<button type="button" class="done" onclick={onDone}>Done</button>
+			{/if}
 		</div>
 	{/if}
 </div>
@@ -192,7 +202,6 @@
 		flex: 1 1 auto;
 		min-height: 64px;
 		max-height: 110px;
-		height: 110px;
 	}
 
 	.bars {
@@ -291,6 +300,7 @@
 	.recency-actions {
 		display: flex;
 		justify-content: flex-end;
+		gap: 0.5rem;
 		flex-shrink: 0;
 		margin-top: 10px;
 		position: sticky;
@@ -298,23 +308,33 @@
 		background: rgba(255, 252, 248, 0.98);
 	}
 
-	.reset {
+	.reset,
+	.done {
 		font-size: 0.8rem;
 		padding: 4px 12px;
 		border: 1px solid #d4c8bb;
 		border-radius: 6px;
 		background: #fffcf8;
-		color: #5d4e37;
 		cursor: pointer;
 		font-weight: 500;
 	}
 
-	.reset:focus-visible {
+	.reset {
+		color: #5d4e37;
+	}
+
+	.done {
+		color: #c43700;
+	}
+
+	.reset:focus-visible,
+	.done:focus-visible {
 		outline: 2px solid #ff4500;
 		outline-offset: 2px;
 	}
 
-	.reset:hover:not(:disabled) {
+	.reset:hover:not(:disabled),
+	.done:hover {
 		border-color: #ff4500;
 		color: #c43700;
 	}
@@ -322,5 +342,15 @@
 	.reset:disabled {
 		opacity: 0.5;
 		cursor: default;
+	}
+
+	@media (max-width: 1023px) {
+		.reset,
+		.done {
+			min-height: 44px;
+			padding-top: 0;
+			padding-bottom: 0;
+			box-sizing: border-box;
+		}
 	}
 </style>
