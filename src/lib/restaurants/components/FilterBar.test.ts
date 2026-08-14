@@ -53,6 +53,11 @@ describe("FilterBar", () => {
     localStorage.clear();
     mocks.toastSuccess.mockReset();
     mocks.toastError.mockReset();
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      writable: true,
+      value: 1024,
+    });
   });
 
   it("toggles a cuisine filter from the dropdown", async () => {
@@ -72,6 +77,35 @@ describe("FilterBar", () => {
     ).toBeInTheDocument();
     await user.click(mexicanOption);
     expect(appState.activeCuisines).toEqual([]);
+    expect(
+      screen.getByRole("listbox", { name: /filter by cuisine/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("closes the cuisine menu after a selection on compact viewports", async () => {
+    const user = userEvent.setup();
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      writable: true,
+      value: 390,
+    });
+    render(FilterBar, {
+      restaurants,
+      threadSubreddit,
+      restaurantsForHistogram: restaurants,
+      dateExtent,
+    });
+    const trigger = screen.getByRole("button", { name: /^cuisine$/i });
+    await user.click(trigger);
+    await user.click(screen.getByRole("option", { name: /mexican/i }));
+    expect(appState.activeCuisines).toEqual(["Mexican"]);
+    expect(
+      screen.queryByRole("listbox", { name: /filter by cuisine/i }),
+    ).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+    expect(
+      screen.getByRole("button", { name: /remove mexican filter/i }),
+    ).toBeInTheDocument();
   });
 
   it("clears all active filters", async () => {
@@ -776,6 +810,8 @@ describe("FilterBar", () => {
     expect(pinStart).toBeGreaterThan(-1);
     expect(pinEnd).toBeGreaterThan(pinStart);
     expect(filterBarSource.slice(pinStart, pinEnd)).toContain("maxHeight");
+    expect(filterBarSource.slice(pinStart, pinEnd)).toContain("listPeek");
+    expect(filterBarSource.slice(pinStart, pinEnd)).toContain("getFixedContainingOrigin");
     expect(filterBarSource.slice(pinStart, pinEnd)).toContain("recency-panel");
     expect(filterBarSource.slice(pinStart, pinEnd)).toContain(
       "overflowY = 'hidden'",
@@ -804,5 +840,11 @@ describe("FilterBar", () => {
       screen.getByRole("group", { name: /filter by comment recency/i }),
     ).toBeInTheDocument();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    const done = screen.getByRole("button", { name: /^done$/i });
+    await user.click(done);
+    expect(
+      screen.queryByRole("group", { name: /filter by comment recency/i }),
+    ).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
   });
 });

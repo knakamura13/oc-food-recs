@@ -341,3 +341,24 @@ test('desktop drawer keeps comments above conversion actions', async ({ page }, 
 		expect(height).toBeLessThan(44);
 	}
 });
+
+test('320px cuisine selection closes the menu so a result row is tappable', async ({
+	page
+}, testInfo) => {
+	test.skip(testInfo.project.name !== 'Mobile Chrome', 'Mobile viewport only');
+	test.setTimeout(60_000);
+	await page.setViewportSize({ width: 320, height: 568 });
+	await page.goto('/');
+
+	const trigger = page.getByRole('button', { name: 'Cuisine', exact: true });
+	await expect(trigger).toBeVisible({ timeout: 30_000 });
+	await trigger.click();
+	await expect(page.locator('#cuisine-listbox')).toBeVisible();
+	await page.locator('#cuisine-listbox .dropdown-item').first().click();
+	await expect(page.locator('#cuisine-listbox')).toHaveCount(0);
+
+	const row = page.locator('.row-toggle').first();
+	await expect(row).toBeVisible();
+	await row.click();
+	await expect(row).toHaveAttribute('aria-expanded', 'true');
+});

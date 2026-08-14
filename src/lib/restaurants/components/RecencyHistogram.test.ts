@@ -1,7 +1,8 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { render, screen } from "@testing-library/svelte";
-import { beforeEach, describe, expect, it } from "vitest";
+import userEvent from "@testing-library/user-event";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import RecencyHistogram from "./RecencyHistogram.svelte";
 import { resetAppState } from "$lib/restaurants/test-utils";
 import type { ListMention } from "$lib/restaurants/types";
@@ -37,6 +38,15 @@ describe("RecencyHistogram", () => {
       screen.getByRole("slider", { name: /show comments no older than/i }),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^reset$/i })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: /^done$/i })).not.toBeInTheDocument();
+  });
+
+  it("calls onDone from the Done control", async () => {
+    const user = userEvent.setup();
+    const onDone = vi.fn();
+    render(RecencyHistogram, { mentions, extent: dateExtent, onDone });
+    await user.click(screen.getByRole("button", { name: /^done$/i }));
+    expect(onDone).toHaveBeenCalledTimes(1);
   });
 
   it("shrinks the chart inside a clamped flex panel instead of scrolling Reset away", () => {
@@ -45,5 +55,8 @@ describe("RecencyHistogram", () => {
     expect(histogramSource).toContain("max-height: 110px");
     expect(histogramSource).toContain("position: sticky");
     expect(histogramSource).toContain(".reset:focus-visible");
+    expect(histogramSource).toMatch(
+      /@media \(max-width: 1023px\)[\s\S]*min-height: 44px/,
+    );
   });
 });
