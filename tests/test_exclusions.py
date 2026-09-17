@@ -1,4 +1,5 @@
 import unittest
+import json
 import sys
 from pathlib import Path
 
@@ -112,6 +113,40 @@ class TestRegistryMatching(unittest.TestCase):
         # The extracted name is a full word-boundary prefix of the registry brand.
         self.assertEqual(rp.match_excluded_brand("Broken Yolk", REG), ("chain", None))
 
+    def test_policy_v1_alias_rows_catch_short_extracted_names(self):
+        # Single-token extracts of multi-word brands need an explicit alias row.
+        aliases = _registry(
+            ("Panera Bread", "chain", None),
+            ("Panera", "chain", None),
+            ("Blaze Pizza", "chain", None),
+            ("Blaze", "chain", None),
+        )
+        self.assertEqual(rp.match_excluded_brand("Panera", aliases), ("chain", None))
+        self.assertEqual(rp.match_excluded_brand("Panera Irvine", aliases), ("chain", None))
+        self.assertEqual(rp.match_excluded_brand("Blaze", aliases), ("chain", None))
+        self.assertEqual(rp.match_excluded_brand("Blaze Pizza Tustin", aliases), ("chain", None))
+
+    def test_seed_file_includes_policy_v1_examples(self):
+        seed_path = (
+            Path(__file__).resolve().parent.parent / "scripts" / "exclusions_seed.json"
+        )
+        brands = {
+            row["brand_name"]
+            for row in json.loads(seed_path.read_text())["brands"]
+        }
+        for name in (
+            "In-N-Out",
+            "The Habit Burger Grill",
+            "El Pollo Loco",
+            "Blaze",
+            "Blaze Pizza",
+            "Raising Cane's",
+            "Panera",
+            "Panera Bread",
+        ):
+            with self.subTest(name=name):
+                self.assertIn(name, brands)
+
     def test_empty_registry_is_noop(self):
         self.assertIsNone(rp.match_excluded_brand("Din Tai Fung", []))
 
@@ -141,13 +176,20 @@ class TestClassifyStatus(unittest.TestCase):
         )
         self.assertEqual((status, reason), ("pending_review", "many_locations"))
 
-    def test_location_count_at_threshold_is_active(self):
-        # Strictly greater-than threshold; exactly at threshold stays active.
-        status, _ = rp.classify_restaurant_status(
+    def test_location_count_at_threshold_is_pending(self):
+        # Policy v1: 4+ locations fails Mom & pop (threshold is inclusive).
+        status, reason = rp.classify_restaurant_status(
             {"name": "Edge Spot", "chain_location_count": rp.CHAIN_LOCATION_THRESHOLD},
             registry=REG,
         )
-        self.assertEqual(status, "active")
+        self.assertEqual((status, reason), ("pending_review", "many_locations"))
+
+    def test_location_count_below_threshold_is_active(self):
+        status, reason = rp.classify_restaurant_status(
+            {"name": "Trio Spot", "chain_location_count": rp.CHAIN_LOCATION_THRESHOLD - 1},
+            registry=REG,
+        )
+        self.assertEqual((status, reason), ("active", None))
 
     def test_density_pending_review(self):
         name = "Generic Tacos"
@@ -172,6 +214,24 @@ class TestClassifyStatus(unittest.TestCase):
             {"name": "Mo Ran Gak", "chain_suspect": False}, registry=REG
         )
         self.assertEqual((status, reason), ("active", None))
+
+    def test_chain_confidence_maps_status(self):
+        self.assertEqual(
+            rp.chain_confidence_for("excluded", "chain"),
+            rp.CHAIN_CONFIDENCE_LIKELY_CHAIN,
+        )
+        self.assertEqual(
+            rp.chain_confidence_for("pending_review", "llm_suspected_chain"),
+            rp.CHAIN_CONFIDENCE_LIKELY_CHAIN,
+        )
+        self.assertEqual(
+            rp.chain_confidence_for("active", None),
+            rp.CHAIN_CONFIDENCE_INDEPENDENT,
+        )
+
+    def test_policy_threshold_defaults(self):
+        self.assertEqual(rp.CHAIN_LOCATION_THRESHOLD, 4)
+        self.assertEqual(rp.DENSITY_CITY_THRESHOLD, 4)
 
 
 class TestChainSuspectThreading(unittest.TestCase):

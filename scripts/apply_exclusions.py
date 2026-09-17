@@ -3,12 +3,13 @@
 
 For every restaurant WHERE ``reviewed_at IS NULL`` (i.e. not human-locked in the admin UI),
 recompute the publish status from the registry + multi-city density and update
-``status`` / ``exclusion_reason``. Human-reviewed rows are never touched.
+``status`` / ``exclusion_reason`` / ``chain_confidence``. Human-reviewed rows are never touched.
 
 Run this:
   * once after the first seed, to classify the pre-existing corpus, and
-  * whenever you add brands to ``excluded_brands`` (re-ingest alone won't retro-apply,
-    because the ingest ON CONFLICT path intentionally leaves existing statuses alone).
+  * whenever you add brands to ``excluded_brands``.
+
+Prefer ``scripts/backfill_chain_policy.py`` for the full seed + classify pass.
 
 Note: the LLM ``chain_suspect`` and optional Google location-count signals are ingest-time
 only and not stored, so this sweep applies the registry + density signals (the deterministic
@@ -38,6 +39,22 @@ def main() -> int:
         return 0
     cur = conn.cursor()
 
+    cur.execute(
+        """
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'restaurants'
+          AND column_name = 'chain_confidence'
+        """
+    )
+    if cur.fetchone() is None:
+        print(
+            "restaurants.chain_confidence is missing. Run `npm run db:migrate` "
+            "before the chain-policy backfill."
+        )
+        conn.close()
+        return 0
+
     registry = rp._load_excluded_brands(cur)
     if not registry:
         print(
@@ -47,7 +64,7 @@ def main() -> int:
     print(f"Loaded {len(registry)} registry brands.")
 
     cur.execute(
-        "SELECT id, name, location, status, exclusion_reason "
+        "SELECT id, name, location, status, exclusion_reason, chain_confidence "
         "FROM restaurants WHERE reviewed_at IS NULL ORDER BY id"
     )
     cols = [d[0] for d in cur.description]
@@ -62,19 +79,28 @@ def main() -> int:
         new_status, new_reason = rp.classify_restaurant_status(
             r, registry=registry, city_counts=city_counts
         )
+        new_confidence = rp.chain_confidence_for(new_status, new_reason)
         cur_status = r["status"] or "active"
-        if new_status != cur_status or new_reason != r.get("exclusion_reason"):
-            changes.append((r, new_status, new_reason))
+        cur_confidence = r.get("chain_confidence") or rp.CHAIN_CONFIDENCE_UNKNOWN
+        if (
+            new_status != cur_status
+            or new_reason != r.get("exclusion_reason")
+            or new_confidence != cur_confidence
+        ):
+            changes.append((r, new_status, new_reason, new_confidence))
 
-    excluded = sum(1 for _, s, _ in changes if s == "excluded")
-    review = sum(1 for _, s, _ in changes if s == "pending_review")
-    active = sum(1 for _, s, _ in changes if s == "active")
+    excluded = sum(1 for _, s, _, _ in changes if s == "excluded")
+    review = sum(1 for _, s, _, _ in changes if s == "pending_review")
+    active = sum(1 for _, s, _, _ in changes if s == "active")
     print(
         f"{len(changes)} rows would change "
         f"({excluded} -> excluded, {review} -> pending_review, {active} -> active)."
     )
-    for r, s, reason in changes[:50]:
-        print(f"  {(r['status'] or 'active'):14} -> {s:14} {(reason or ''):22} {r['name']}")
+    for r, s, reason, confidence in changes[:50]:
+        print(
+            f"  {(r['status'] or 'active'):14} -> {s:14} {(reason or ''):22} "
+            f"{confidence:14} {r['name']}"
+        )
     if len(changes) > 50:
         print(f"  ... and {len(changes) - 50} more")
 
@@ -83,12 +109,13 @@ def main() -> int:
         conn.close()
         return 0
 
-    for r, s, reason in tqdm.tqdm(changes, desc="Updating", unit="restaurant"):
+    for r, s, reason, confidence in tqdm.tqdm(changes, desc="Updating", unit="restaurant"):
         # The `reviewed_at IS NULL` guard is repeated here to stay safe under concurrency.
         cur.execute(
-            "UPDATE restaurants SET status = %s, exclusion_reason = %s, updated_at = now() "
+            "UPDATE restaurants SET status = %s, exclusion_reason = %s, "
+            "chain_confidence = %s, updated_at = now() "
             "WHERE id = %s AND reviewed_at IS NULL",
-            (s, reason, r["id"]),
+            (s, reason, confidence, r["id"]),
         )
     conn.commit()
     conn.close()

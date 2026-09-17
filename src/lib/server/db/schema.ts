@@ -48,10 +48,15 @@ export const restaurants = pgTable('restaurants', {
 	//   'active'         — shown on the public site (default).
 	//   'excluded'       — hidden from the public site (chain / corporate group). Only the
 	//                      authoritative registry sweep/ingest sets this automatically.
-	//   'pending_review' — a fuzzy signal (LLM/density/location-count) flagged it; still
-	//                      PUBLIC (read paths only hide 'excluded'), but queued in /admin.
+	//   'pending_review' — a fuzzy signal (LLM/density/location-count/user report)
+	//                      flagged it. Still in the public payload so the Mom & pop
+	//                      chip can hide it (likely_chain); turning the chip off
+	//                      shows these. The denylist path uses 'excluded' instead.
 	status: text('status').default('active').notNull(),
-	exclusionReason: text('exclusion_reason'), // 'chain' | 'corporate_group' | 'llm_suspected_chain' | 'many_locations' | 'multi_city_density'
+	exclusionReason: text('exclusion_reason'), // 'chain' | 'corporate_group' | 'llm_suspected_chain' | 'many_locations' | 'multi_city_density' | 'user_reported_chain'
+	// Policy v1 confidence: 'independent' | 'likely_chain' | 'unknown'.
+	// Mom & pop chip shows independent + unknown; likely_chain stays public only with the chip off.
+	chainConfidence: text('chain_confidence').default('unknown').notNull(),
 	// Non-null once a human has confirmed/restored this row in the admin UI. Auto-logic
 	// (re-ingest ON CONFLICT, apply_exclusions sweep) NEVER touches a row where this is set.
 	reviewedAt: timestamp('reviewed_at', { withTimezone: true }),

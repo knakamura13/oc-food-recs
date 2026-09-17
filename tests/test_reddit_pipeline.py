@@ -435,10 +435,12 @@ class WriteToDbTest(unittest.TestCase):
         )
 
         # Restaurant 1: slug is "taqueria-de-anda" (no collision), lat/lng/etc carried through.
-        # Trailing params: status='active', exclusion_reason=None (not a chain / corporate group).
+        # Trailing params: status='active', exclusion_reason=None, chain_confidence='independent'.
         r1_sql, r1_params = executions[3]
         self.assertIn("INSERT INTO restaurants", r1_sql)
         self.assertIn("ON CONFLICT (slug) DO UPDATE", r1_sql)
+        self.assertIn("WHEN EXCLUDED.status = 'excluded' THEN 'excluded'", r1_sql)
+        self.assertIn("restaurants.reviewed_at IS NOT NULL", r1_sql)
         self.assertEqual(
             r1_params,
             (
@@ -451,6 +453,7 @@ class WriteToDbTest(unittest.TestCase):
                 -117.85,
                 "active",
                 None,
+                "independent",
             ),
         )
 
