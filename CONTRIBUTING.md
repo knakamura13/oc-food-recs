@@ -88,6 +88,8 @@ npm run pipeline:audit-comment-dates
 npm run pipeline:backfill-comment-dates [-- --dry-run]
 npm run pipeline:backfill-permalinks [-- --dry-run]
 python3 scripts/analyze_unmapped.py --csv unmapped.csv
+npm run pipeline:backfill-chain-policy [-- --dry-run]
+npm run pipeline:backfill-chain-policy -- --apply
 ```
 
 Run the audit/backfill sequence on production after deploying pipeline changes that populate `comment_date` / `permalink`:
@@ -98,6 +100,14 @@ npm run pipeline:backfill-comment-dates -- --dry-run   # review first
 npm run pipeline:backfill-comment-dates
 npm run pipeline:backfill-permalinks -- --dry-run
 npm run pipeline:backfill-permalinks
+```
+
+Chain / Mom & pop policy v1 backfill (idempotent; exits 0 if `DATABASE_URL` is unset):
+
+```sh
+npm run db:migrate
+npm run pipeline:backfill-chain-policy                 # dry run
+npm run pipeline:backfill-chain-policy -- --apply      # seed denylist + classify live rows
 ```
 
 ## Code style

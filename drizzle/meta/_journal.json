@@ -43,6 +43,13 @@
       "when": 1781027573195,
       "tag": "0005_condemned_felicia_hardy",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789668402843,
+      "tag": "0006_add_chain_confidence",
+      "breakpoints": true
     }
   ]
 }

@@ -12,9 +12,13 @@ export const appState = $state({
   // Distinguishes last-visit vs histogram date for URL/copy. One cutoff either way.
   freshnessSource: null as FreshnessSource | null,
   showUnmapped: false,
+  // Mom & pop policy v1 chip. Default ON: hide likely_chain rows. Off = show them.
+  showMomAndPop: true,
   // Device-local "Saved" filter (see saved-restaurants.svelte.ts). Session-only:
   // deliberately excluded from URL sync since saved lists don't travel with links.
   showSavedOnly: false,
+  // Slugs the current session reported as chains (hide immediately while Mom & pop is on).
+  reportedChainSlugs: [] as string[],
   sortKey: "score" as SortKey,
   sortDirection: "desc" as "asc" | "desc",
   selectedRestaurantSlug: null as string | null,
@@ -32,6 +36,7 @@ export function clearExplorerFilters(opts?: { includeSearch?: boolean }) {
   appState.freshnessCutoff = null;
   appState.freshnessSource = null;
   appState.showUnmapped = false;
+  appState.showMomAndPop = true;
   appState.showSavedOnly = false;
   if (opts?.includeSearch) appState.searchQuery = "";
 }

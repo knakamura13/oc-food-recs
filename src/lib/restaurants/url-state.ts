@@ -16,6 +16,7 @@ export interface UrlStateSnapshot {
   freshnessCutoff: number | null;
   freshnessSource: FreshnessSource | null;
   showUnmapped: boolean;
+  showMomAndPop: boolean;
   sortKey: SortKey;
   sortDirection: SortDirection;
   selectedRestaurantSlug: string | null;
@@ -69,6 +70,13 @@ export function parseSearchParams(
     result.showUnmapped = true;
   }
 
+  const mompop = params.get("mompop");
+  if (mompop === "0" || mompop === "false") {
+    result.showMomAndPop = false;
+  } else if (mompop === "1" || mompop === "true") {
+    result.showMomAndPop = true;
+  }
+
   return result;
 }
 
@@ -96,6 +104,7 @@ export function buildSearchParams(state: UrlStateSnapshot): URLSearchParams {
     );
   }
   if (state.showUnmapped) params.set("unmapped", "1");
+  if (!state.showMomAndPop) params.set("mompop", "0");
 
   return params;
 }

@@ -14,6 +14,7 @@ const defaults: UrlStateSnapshot = {
   freshnessCutoff: null,
   freshnessSource: null,
   showUnmapped: false,
+  showMomAndPop: true,
   sortKey: "score",
   sortDirection: "desc",
   selectedRestaurantSlug: null,
@@ -56,11 +57,24 @@ describe("parseSearchParams", () => {
       showUnmapped: true,
     });
   });
+
+  it("parses mompop=0 as Mom & pop chip off", () => {
+    expect(parseSearchParams(new URLSearchParams("mompop=0"))).toEqual({
+      showMomAndPop: false,
+    });
+  });
 });
 
 describe("buildSearchParams", () => {
   it("omits default sort and sortdir", () => {
     expect(buildSearchParams(defaults).toString()).toBe("");
+  });
+
+  it("serializes Mom & pop off as mompop=0 and omits the default on", () => {
+    expect(buildSearchParams(defaults).get("mompop")).toBeNull();
+    expect(
+      buildSearchParams({ ...defaults, showMomAndPop: false }).toString(),
+    ).toBe("mompop=0");
   });
 
   it("omits sort for score and includes sortdir only when not desc", () => {

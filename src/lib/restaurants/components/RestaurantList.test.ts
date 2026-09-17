@@ -15,12 +15,15 @@ import type { ListMention } from "$lib/restaurants/types";
 
 const mocks = vi.hoisted(() => ({
   toastError: vi.fn(),
+  toastSuccess: vi.fn(),
+  toastInfo: vi.fn(),
 }));
 
 vi.mock("$lib/toast", () => ({
   toast: {
-    success: vi.fn(),
+    success: mocks.toastSuccess,
     error: mocks.toastError,
+    info: mocks.toastInfo,
   },
 }));
 
@@ -367,6 +370,7 @@ function sortQuery() {
     freshnessCutoff: appState.freshnessCutoff,
     freshnessSource: appState.freshnessSource,
     showUnmapped: appState.showUnmapped,
+    showMomAndPop: appState.showMomAndPop,
     sortKey: appState.sortKey,
     sortDirection: appState.sortDirection,
     selectedRestaurantSlug: appState.selectedRestaurantSlug,
@@ -606,6 +610,8 @@ describe("RestaurantList drawer actions", () => {
     resetAppState();
     consumeSkipToList();
     mocks.toastError.mockReset();
+    mocks.toastSuccess.mockReset();
+    mocks.toastInfo.mockReset();
     stubListViewport();
     vi.stubGlobal(
       "fetch",
@@ -644,6 +650,9 @@ describe("RestaurantList drawer actions", () => {
       screen.getByRole("button", { name: /copy link to la taco spot/i }),
     ).toBeInTheDocument();
     expect(
+      screen.getByRole("button", { name: /report la taco spot as a chain/i }),
+    ).toBeInTheDocument();
+    expect(
       screen.getByRole("link", {
         name: /open la taco spot in google maps/i,
       }),
@@ -651,6 +660,46 @@ describe("RestaurantList drawer actions", () => {
     expect(
       await screen.findByRole("link", { name: /view on reddit/i }),
     ).toHaveAttribute("href", "https://reddit.com/r/x/comments/1");
+  });
+
+  it("reports a chain and queues the slug locally", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn(async (url: string) => {
+      if (String(url).includes("report-chain")) {
+        return { ok: true, json: async () => ({ result: "queued" }) };
+      }
+      return {
+        ok: true,
+        json: async () => [
+          {
+            comment_id: "c1",
+            thread_id: "t1",
+            role: "primary",
+            author: "foodie",
+            body: "Best tacos in town",
+            score: 12,
+            comment_date: "2024-06-01",
+            permalink: "https://reddit.com/r/x/comments/1",
+            classification: null,
+          },
+        ],
+      };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(RestaurantList, { restaurants });
+    appState.selectedRestaurantSlug = "la-taco-spot";
+    const report = await screen.findByRole("button", {
+      name: /report la taco spot as a chain/i,
+    });
+    await user.click(report);
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/r/la-taco-spot/report-chain",
+        { method: "POST" },
+      );
+    });
+    expect(mocks.toastSuccess).toHaveBeenCalledWith("Queued for review");
+    expect(appState.reportedChainSlugs).toEqual(["la-taco-spot"]);
   });
 
   it("reorders drawer actions above comments only under the mobile breakpoint", () => {

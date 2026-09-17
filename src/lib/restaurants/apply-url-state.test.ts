@@ -28,6 +28,15 @@ describe("applyUrlStateSnapshot", () => {
     expect(appState.sortDirection).toBe("asc");
   });
 
+  it("turns the Mom & pop chip off from parsed URL state", () => {
+    applyUrlStateSnapshot({
+      searchQuery: "tacos",
+      showMomAndPop: false,
+    });
+    expect(appState.showMomAndPop).toBe(false);
+    expect(appState.searchQuery).toBe("tacos");
+  });
+
   it("keeps default score sort when the URL omits sort", () => {
     applyUrlStateSnapshot({ sortDirection: "asc" });
     expect(appState.sortKey).toBe("score");

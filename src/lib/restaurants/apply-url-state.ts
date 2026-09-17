@@ -30,6 +30,8 @@ export function applyUrlStateSnapshot(
     appState.sortDirection = parsed.sortDirection;
   if (parsed.showUnmapped !== undefined)
     appState.showUnmapped = parsed.showUnmapped;
+  if (parsed.showMomAndPop !== undefined)
+    appState.showMomAndPop = parsed.showMomAndPop;
 
   const restaurant = parsed.selectedRestaurantSlug;
   if (restaurant) {
