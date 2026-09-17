@@ -2564,6 +2564,30 @@ def chain_confidence_for(status: str, _reason: str | None = None) -> str:
     return CHAIN_CONFIDENCE_INDEPENDENT
 
 
+def merge_unreviewed_classification(
+    current_status: str | None,
+    current_reason: str | None,
+    current_confidence: str | None,
+    new_status: str,
+    new_reason: str | None,
+    new_confidence: str,
+) -> tuple[str, str | None, str]:
+    """Merge a denylist/density reclassification onto an unreviewed row.
+
+    Denylist ``excluded`` always wins. ``pending_review`` (user reports, LLM,
+    density, location-count) stays queued — never cleared back to ``active``.
+    Existing unreviewed ``excluded`` can be recomputed so a registry removal
+    unhides the row.
+    """
+    status = current_status or "active"
+    confidence = current_confidence or CHAIN_CONFIDENCE_UNKNOWN
+    if new_status == "excluded":
+        return new_status, new_reason, new_confidence
+    if status == "pending_review":
+        return status, current_reason, confidence
+    return new_status, new_reason, new_confidence
+
+
 def classify_restaurant_status(
     restaurant: dict[str, Any],
     *,
@@ -2698,7 +2722,8 @@ def write_to_db(
             # Chain / corporate-group exclusion: the registry is authoritative ('excluded')
             # and is applied on INSERT *and* on unreviewed ON CONFLICT rows so a denylist
             # hit cannot re-enter the public map. Human-reviewed rows (reviewed_at set)
-            # are never overwritten. Fuzzy signals only ever -> 'pending_review'.
+            # and queued pending_review rows (user reports, LLM, density) are never
+            # overwritten by a weaker ingest classification (e.g. active).
             # Growing the registry retro-applies via scripts/backfill_chain_policy.py.
             registry = _load_excluded_brands(cur)
             city_counts = batch_city_counts(deduped_restaurants)
@@ -2723,19 +2748,19 @@ def write_to_db(
                         status = CASE
                             WHEN restaurants.reviewed_at IS NOT NULL THEN restaurants.status
                             WHEN EXCLUDED.status = 'excluded' THEN 'excluded'
-                            WHEN restaurants.status = 'excluded' THEN restaurants.status
+                            WHEN restaurants.status IN ('excluded', 'pending_review') THEN restaurants.status
                             ELSE EXCLUDED.status
                         END,
                         exclusion_reason = CASE
                             WHEN restaurants.reviewed_at IS NOT NULL THEN restaurants.exclusion_reason
                             WHEN EXCLUDED.status = 'excluded' THEN EXCLUDED.exclusion_reason
-                            WHEN restaurants.status = 'excluded' THEN restaurants.exclusion_reason
+                            WHEN restaurants.status IN ('excluded', 'pending_review') THEN restaurants.exclusion_reason
                             ELSE EXCLUDED.exclusion_reason
                         END,
                         chain_confidence = CASE
                             WHEN restaurants.reviewed_at IS NOT NULL THEN restaurants.chain_confidence
                             WHEN EXCLUDED.status = 'excluded' THEN EXCLUDED.chain_confidence
-                            WHEN restaurants.status = 'excluded' THEN restaurants.chain_confidence
+                            WHEN restaurants.status IN ('excluded', 'pending_review') THEN restaurants.chain_confidence
                             ELSE EXCLUDED.chain_confidence
                         END,
                         updated_at = now()

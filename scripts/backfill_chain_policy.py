@@ -13,7 +13,9 @@ What it does:
      ``active`` / ``independent``.
 
 Human-reviewed rows are never touched. LLM ``chain_suspect`` is ingest-time only
-and is not replayed here.
+and is not replayed here. Unreviewed ``pending_review`` rows (including
+``user_reported_chain``) stay in the admin queue unless the denylist upgrades
+them to ``excluded``.
 
 Usage:
   python3 scripts/backfill_chain_policy.py                 # dry run (default)

@@ -233,6 +233,63 @@ class TestClassifyStatus(unittest.TestCase):
         self.assertEqual(rp.CHAIN_LOCATION_THRESHOLD, 4)
         self.assertEqual(rp.DENSITY_CITY_THRESHOLD, 4)
 
+    def test_merge_preserves_user_reported_queue(self):
+        status, reason, confidence = rp.merge_unreviewed_classification(
+            "pending_review",
+            "user_reported_chain",
+            rp.CHAIN_CONFIDENCE_INDEPENDENT,
+            "active",
+            None,
+            rp.CHAIN_CONFIDENCE_INDEPENDENT,
+        )
+        self.assertEqual(
+            (status, reason, confidence),
+            (
+                "pending_review",
+                "user_reported_chain",
+                rp.CHAIN_CONFIDENCE_INDEPENDENT,
+            ),
+        )
+
+    def test_merge_preserves_llm_queue(self):
+        status, reason, confidence = rp.merge_unreviewed_classification(
+            "pending_review",
+            "llm_suspected_chain",
+            rp.CHAIN_CONFIDENCE_LIKELY_CHAIN,
+            "active",
+            None,
+            rp.CHAIN_CONFIDENCE_INDEPENDENT,
+        )
+        self.assertEqual(status, "pending_review")
+        self.assertEqual(reason, "llm_suspected_chain")
+        self.assertEqual(confidence, rp.CHAIN_CONFIDENCE_LIKELY_CHAIN)
+
+    def test_merge_denylist_upgrades_queued_row(self):
+        status, reason, confidence = rp.merge_unreviewed_classification(
+            "pending_review",
+            "user_reported_chain",
+            rp.CHAIN_CONFIDENCE_INDEPENDENT,
+            "excluded",
+            "chain",
+            rp.CHAIN_CONFIDENCE_LIKELY_CHAIN,
+        )
+        self.assertEqual(
+            (status, reason, confidence),
+            ("excluded", "chain", rp.CHAIN_CONFIDENCE_LIKELY_CHAIN),
+        )
+
+    def test_merge_active_stays_reclassified(self):
+        status, reason, confidence = rp.merge_unreviewed_classification(
+            "active",
+            None,
+            rp.CHAIN_CONFIDENCE_INDEPENDENT,
+            "pending_review",
+            "multi_city_density",
+            rp.CHAIN_CONFIDENCE_LIKELY_CHAIN,
+        )
+        self.assertEqual(status, "pending_review")
+        self.assertEqual(reason, "multi_city_density")
+
 
 class TestChainSuspectThreading(unittest.TestCase):
     def test_normalize_extractor_result_carries_flag(self):

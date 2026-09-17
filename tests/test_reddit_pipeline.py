@@ -441,6 +441,10 @@ class WriteToDbTest(unittest.TestCase):
         self.assertIn("ON CONFLICT (slug) DO UPDATE", r1_sql)
         self.assertIn("WHEN EXCLUDED.status = 'excluded' THEN 'excluded'", r1_sql)
         self.assertIn("restaurants.reviewed_at IS NOT NULL", r1_sql)
+        self.assertIn(
+            "WHEN restaurants.status IN ('excluded', 'pending_review') THEN restaurants.status",
+            r1_sql,
+        )
         self.assertEqual(
             r1_params,
             (

@@ -14,7 +14,8 @@ Prefer ``scripts/backfill_chain_policy.py`` for the full seed + classify pass.
 Note: the LLM ``chain_suspect`` and optional Google location-count signals are ingest-time
 only and not stored, so this sweep applies the registry + density signals (the deterministic
 ones). It only ever sets 'excluded' (registry) or 'pending_review' (density) -- never hides
-a row that a human has reviewed.
+a row that a human has reviewed. Queued ``pending_review`` rows (including
+``user_reported_chain``) stay queued unless the denylist upgrades them to ``excluded``.
 
 Usage:
   python3 scripts/apply_exclusions.py            # dry run (default)
@@ -76,10 +77,20 @@ def main() -> int:
 
     changes = []
     for r in restaurants:
-        new_status, new_reason = rp.classify_restaurant_status(
+        classified_status, classified_reason = rp.classify_restaurant_status(
             r, registry=registry, city_counts=city_counts
         )
-        new_confidence = rp.chain_confidence_for(new_status, new_reason)
+        classified_confidence = rp.chain_confidence_for(
+            classified_status, classified_reason
+        )
+        new_status, new_reason, new_confidence = rp.merge_unreviewed_classification(
+            r["status"] or "active",
+            r.get("exclusion_reason"),
+            r.get("chain_confidence") or rp.CHAIN_CONFIDENCE_UNKNOWN,
+            classified_status,
+            classified_reason,
+            classified_confidence,
+        )
         cur_status = r["status"] or "active"
         cur_confidence = r.get("chain_confidence") or rp.CHAIN_CONFIDENCE_UNKNOWN
         if (
