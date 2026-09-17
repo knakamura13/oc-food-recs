@@ -15,6 +15,7 @@
 	} from '$lib/restaurants/filter-restaurants';
 	import { SEARCH_DEBOUNCE_MS, scheduleDebounced } from '$lib/debounce';
 	import { filterPageRestaurantsWithSearch } from '$lib/restaurants/filter-page-restaurants';
+	import { coordsForFitBounds } from '$lib/restaurants/explorer-bounds';
 	import { buildPageTitle, buildPageDescription, buildCanonicalShareUrl } from '$lib/restaurants/page-meta';
 	import { applyUrlStateSnapshot } from '$lib/restaurants/apply-url-state';
 	import { buildSearchParams } from '$lib/restaurants/url-state';
@@ -456,7 +457,6 @@
 		activeCities: appState.activeCities,
 		showUnmapped: appState.showUnmapped,
 		showMomAndPop: appState.showMomAndPop,
-		reportedChainSlugs: appState.reportedChainSlugs,
 		freshnessCutoff: appState.freshnessCutoff,
 		searchQuery: debouncedSearchQuery
 	});
@@ -481,23 +481,8 @@
 	const restaurantsBeforeFreshness = $derived(pageFilterResult.beforeFreshness);
 	const filteredRestaurants = $derived(pageFilterResult.filtered);
 
-	function hasAnyExplorerFilter() {
-		return (
-			appState.searchQuery.trim().length > 0 ||
-			appState.activeCuisines.length > 0 ||
-			appState.activeCities.length > 0 ||
-			appState.activeSubreddits.length > 0 ||
-			appState.showSavedOnly ||
-			appState.freshnessCutoff !== null ||
-			!appState.showMomAndPop
-		);
-	}
-
-	function fitBoundsForPopulation(filtered: Restaurant[], all: Restaurant[]) {
-		const restaurants = hasAnyExplorerFilter() ? filtered : all;
-		return restaurants
-			.filter((r) => r.lat != null && r.lng != null)
-			.map((r) => ({ lat: r.lat as number, lng: r.lng as number }));
+	function fitBoundsForPopulation(filtered: Restaurant[], _all: Restaurant[]) {
+		return coordsForFitBounds(filtered);
 	}
 
 	// Trigger fitBounds when filters change

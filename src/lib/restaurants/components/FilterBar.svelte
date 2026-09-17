@@ -369,23 +369,6 @@
 			}
 		}}
 	>
-		<!-- Mom & pop — default ON; tooltip is locked policy v1 copy -->
-		<button
-			type="button"
-			class="dropdown-trigger mapped-only-toggle"
-			class:has-active={appState.showMomAndPop}
-			aria-pressed={appState.showMomAndPop}
-			title={MOM_AND_POP_HELP}
-			aria-label="Mom & pop. {MOM_AND_POP_HELP}"
-			onclick={() => (appState.showMomAndPop = !appState.showMomAndPop)}
-		>
-			{#if appState.showMomAndPop}
-				<span aria-hidden="true">✓</span>
-			{/if}
-			<Store size={13} aria-hidden="true" />
-			Mom & pop
-		</button>
-
 		<!-- Cuisine dropdown -->
 		<div class="dropdown-wrapper" onfocusout={handleDropdownFocusOut}>
 			<button
@@ -502,6 +485,23 @@
 				</div>
 			{/if}
 		</div>
+
+		<!-- After Recency so Cuisine/City stay fully visible at 320px. -->
+		<button
+			type="button"
+			class="dropdown-trigger mapped-only-toggle"
+			class:has-active={appState.showMomAndPop}
+			aria-pressed={appState.showMomAndPop}
+			title={MOM_AND_POP_HELP}
+			aria-label="Mom & pop. {MOM_AND_POP_HELP}"
+			onclick={() => (appState.showMomAndPop = !appState.showMomAndPop)}
+		>
+			{#if appState.showMomAndPop}
+				<span aria-hidden="true">✓</span>
+			{/if}
+			<Store size={13} aria-hidden="true" />
+			Mom & pop
+		</button>
 
 		<!-- Subreddit dropdown (only when data spans more than one subreddit) -->
 		{#if showSubredditFilter}
