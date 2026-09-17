@@ -227,8 +227,9 @@ export type ReportChainResult =
 
 /**
  * Public "Report a chain" action. Queues the restaurant for /admin/exclusions
- * without adding it to the denylist (admin confirms that). Human-reviewed rows
- * are not overwritten.
+ * without adding it to the denylist and without flipping chain_confidence to
+ * likely_chain (that would hide it from the default-on Mom & pop map).
+ * Human-reviewed rows are not overwritten.
  */
 export async function reportRestaurantAsChain(
   slug: string,
@@ -256,7 +257,6 @@ export async function reportRestaurantAsChain(
     .set({
       status: "pending_review",
       exclusionReason: "user_reported_chain",
-      chainConfidence: "likely_chain",
       updatedAt: sql`now()`,
     })
     .where(and(eq(restaurants.id, row.id), sql`reviewed_at IS NULL`))

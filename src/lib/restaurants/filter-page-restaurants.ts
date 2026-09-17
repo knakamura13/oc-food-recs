@@ -18,7 +18,6 @@ export interface PageFilterState {
   showUnmapped: boolean;
   /** Default ON. When true, hide likely_chain rows. */
   showMomAndPop?: boolean;
-  reportedChainSlugs?: string[];
   freshnessCutoff: number | null;
 }
 
@@ -39,7 +38,6 @@ export function filterBeforeFreshness(
     | "activeCities"
     | "showUnmapped"
     | "showMomAndPop"
-    | "reportedChainSlugs"
   >,
   ctx: Pick<PageFilterContext, "threadSubreddit" | "subredditSliceCache">,
 ): Restaurant[] {
@@ -82,9 +80,7 @@ export function filterBeforeFreshness(
   }
 
   if (state.showMomAndPop !== false) {
-    result = result.filter((r) =>
-      passesMomAndPopFilter(r, state.reportedChainSlugs ?? []),
-    );
+    result = result.filter((r) => passesMomAndPopFilter(r));
   }
 
   return result;

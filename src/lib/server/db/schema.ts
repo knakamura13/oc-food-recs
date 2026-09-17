@@ -49,9 +49,9 @@ export const restaurants = pgTable('restaurants', {
 	//   'excluded'       — hidden from the public site (chain / corporate group). Only the
 	//                      authoritative registry sweep/ingest sets this automatically.
 	//   'pending_review' — a fuzzy signal (LLM/density/location-count/user report)
-	//                      flagged it. Still in the public payload so the Mom & pop
-	//                      chip can hide it (likely_chain); turning the chip off
-	//                      shows these. The denylist path uses 'excluded' instead.
+	//                      flagged it. Still in the public payload. Ingest/LLM/density
+	//                      flags are likely_chain (Mom & pop hides them). Public user
+	//                      reports stay independent until an admin confirms.
 	status: text('status').default('active').notNull(),
 	exclusionReason: text('exclusion_reason'), // 'chain' | 'corporate_group' | 'llm_suspected_chain' | 'many_locations' | 'multi_city_density' | 'user_reported_chain'
 	// Policy v1 confidence: 'independent' | 'likely_chain' | 'unknown'.

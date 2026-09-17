@@ -387,6 +387,10 @@
 			const res = await fetch(`/api/r/${encodeURIComponent(restaurant.slug)}/report-chain`, {
 				method: 'POST'
 			});
+			if (res.status === 429) {
+				toast.error('Too many reports. Try again later');
+				return;
+			}
 			const data = (await res.json()) as { result?: string };
 			const result = data.result;
 			if (

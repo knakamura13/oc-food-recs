@@ -36,9 +36,10 @@
 		<p class="subtitle">
 			Keep chains and corporate restaurant groups off the public Mom & pop set. The curated
 			registry auto-excludes known brands from the map. Fuzzy signals (LLM, location count,
-			multi-city density) and public “Report a chain” flags land here as <code>likely_chain</code>
-			— they stay out of Mom & pop until you confirm or restore. Confirming or restoring a
-			restaurant locks that decision so re-ingests and the registry sweep won't undo it.
+			multi-city density) land here as <code>likely_chain</code> and stay out of Mom & pop
+			until you confirm or restore. Public “Report a chain” flags also land here, but they
+			do not hide the spot until you confirm. Confirming or restoring a restaurant locks
+			that decision so re-ingests and the registry sweep won't undo it.
 		</p>
 	</header>
 

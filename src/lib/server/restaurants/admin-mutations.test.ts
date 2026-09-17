@@ -86,9 +86,9 @@ describe("restaurants admin mutations", () => {
       expect.objectContaining({
         status: "pending_review",
         exclusionReason: "user_reported_chain",
-        chainConfidence: "likely_chain",
       }),
     );
+    expect(set.mock.calls[0][0]).not.toHaveProperty("chainConfidence");
   });
 
   it("reportRestaurantAsChain does not overwrite a human restore", async () => {

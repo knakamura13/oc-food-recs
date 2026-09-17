@@ -20,13 +20,8 @@ describe("passesMomAndPopFilter", () => {
     expect(passesMomAndPopFilter(spot("likely_chain", "in-n-out"))).toBe(false);
   });
 
-  it("hides locally reported chain slugs even if still independent in payload", () => {
-    expect(
-      passesMomAndPopFilter(spot("independent", "habit"), ["habit"]),
-    ).toBe(false);
-    expect(
-      passesMomAndPopFilter(spot("independent", "habit"), ["other"]),
-    ).toBe(true);
+	it("does not hide independent spots queued from a public report", () => {
+    expect(passesMomAndPopFilter(spot("independent", "habit"))).toBe(true);
   });
 
   it("keeps the locked site copy", () => {
