@@ -7,7 +7,7 @@
 
 A community-driven restaurant explorer for Orange County, CA — built from real Reddit recommendations.
 
-**Live site:** [oc-food-recs-production.up.railway.app](https://oc-food-recs-production.up.railway.app/)
+**Live site:** [oc-food.up.railway.app](https://oc-food.up.railway.app/)
 
 ---
 
