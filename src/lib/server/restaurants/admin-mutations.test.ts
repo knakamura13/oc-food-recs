@@ -2,11 +2,13 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 
 const updateMock = vi.fn();
 const insertMock = vi.fn();
+const selectMock = vi.fn();
 
 vi.mock("$lib/server/db", () => ({
   db: {
     update: updateMock,
     insert: insertMock,
+    select: selectMock,
   },
 }));
 
@@ -14,6 +16,7 @@ describe("restaurants admin mutations", () => {
   beforeEach(() => {
     updateMock.mockReset();
     insertMock.mockReset();
+    selectMock.mockReset();
   });
 
   it("markRestaurantExcluded updates status and throws when missing", async () => {
@@ -40,6 +43,7 @@ describe("restaurants admin mutations", () => {
       expect.objectContaining({
         status: "excluded",
         exclusionReason: "chain",
+        chainConfidence: "likely_chain",
       }),
     );
   });
@@ -61,5 +65,44 @@ describe("restaurants admin mutations", () => {
     await expect(addBrandToRegistry("!!!", "chain", null)).rejects.toThrow(
       "Brand name is empty after normalization.",
     );
+  });
+
+  it("reportRestaurantAsChain queues an unreviewed active restaurant", async () => {
+    const limit = vi.fn().mockResolvedValue([
+      { id: 9, status: "active", reviewedAt: null },
+    ]);
+    const where = vi.fn().mockReturnValue({ limit });
+    const from = vi.fn().mockReturnValue({ where });
+    selectMock.mockReturnValue({ from });
+
+    const returning = vi.fn().mockResolvedValue([{ id: 9 }]);
+    const updateWhere = vi.fn().mockReturnValue({ returning });
+    const set = vi.fn().mockReturnValue({ where: updateWhere });
+    updateMock.mockReturnValue({ set });
+
+    const { reportRestaurantAsChain } = await import("./admin");
+    await expect(reportRestaurantAsChain("in-n-out")).resolves.toBe("queued");
+    expect(set).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: "pending_review",
+        exclusionReason: "user_reported_chain",
+        chainConfidence: "likely_chain",
+      }),
+    );
+  });
+
+  it("reportRestaurantAsChain does not overwrite a human restore", async () => {
+    const limit = vi.fn().mockResolvedValue([
+      { id: 9, status: "active", reviewedAt: new Date() },
+    ]);
+    const where = vi.fn().mockReturnValue({ limit });
+    const from = vi.fn().mockReturnValue({ where });
+    selectMock.mockReturnValue({ from });
+
+    const { reportRestaurantAsChain } = await import("./admin");
+    await expect(reportRestaurantAsChain("pops")).resolves.toBe(
+      "reviewed_keep_active",
+    );
+    expect(updateMock).not.toHaveBeenCalled();
   });
 });

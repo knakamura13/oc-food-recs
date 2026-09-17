@@ -87,6 +87,7 @@
 	let prevCities = $state('');
 	let prevSubreddits = $state('');
 	let prevSavedOnly = $state(false);
+	let prevMomAndPop = $state(true);
 
 	let mapExpanded = $state(false);
 	let mapDesktopHovered = $state(false);
@@ -134,6 +135,7 @@
 				freshnessCutoff: appState.freshnessCutoff,
 				freshnessSource: appState.freshnessSource,
 				showUnmapped: appState.showUnmapped,
+				showMomAndPop: appState.showMomAndPop,
 				sortKey: appState.sortKey,
 				sortDirection: appState.sortDirection,
 				selectedRestaurantSlug: appState.selectedRestaurantSlug
@@ -153,6 +155,7 @@
 				activeCities: appState.activeCities,
 				activeSubreddits: appState.activeSubreddits,
 				showUnmapped: appState.showUnmapped,
+				showMomAndPop: appState.showMomAndPop,
 				freshnessCutoff: appState.freshnessCutoff
 			},
 			allRestaurants,
@@ -170,6 +173,7 @@
 			freshnessCutoff: appState.freshnessCutoff,
 			freshnessSource: appState.freshnessSource,
 			showUnmapped: appState.showUnmapped,
+			showMomAndPop: appState.showMomAndPop,
 			sortKey: appState.sortKey,
 			sortDirection: appState.sortDirection,
 			selectedRestaurantSlug: appState.selectedRestaurantSlug
@@ -451,6 +455,8 @@
 		activeCuisines: appState.activeCuisines,
 		activeCities: appState.activeCities,
 		showUnmapped: appState.showUnmapped,
+		showMomAndPop: appState.showMomAndPop,
+		reportedChainSlugs: appState.reportedChainSlugs,
 		freshnessCutoff: appState.freshnessCutoff,
 		searchQuery: debouncedSearchQuery
 	});
@@ -482,7 +488,8 @@
 			appState.activeCities.length > 0 ||
 			appState.activeSubreddits.length > 0 ||
 			appState.showSavedOnly ||
-			appState.freshnessCutoff !== null
+			appState.freshnessCutoff !== null ||
+			!appState.showMomAndPop
 		);
 	}
 
@@ -499,14 +506,16 @@
 		const cityKey = appState.activeCities.join(',');
 		const subredditKey = appState.activeSubreddits.join(',');
 		const savedKey = appState.showSavedOnly;
-		const currentKey = `${cuisineKey}|${cityKey}|${subredditKey}|${savedKey}`;
-		const prevKey = `${prevCuisines}|${prevCities}|${prevSubreddits}|${prevSavedOnly}`;
+		const momPopKey = appState.showMomAndPop;
+		const currentKey = `${cuisineKey}|${cityKey}|${subredditKey}|${savedKey}|${momPopKey}`;
+		const prevKey = `${prevCuisines}|${prevCities}|${prevSubreddits}|${prevSavedOnly}|${prevMomAndPop}`;
 
 		if (currentKey !== prevKey) {
 			prevCuisines = cuisineKey;
 			prevCities = cityKey;
 			prevSubreddits = subredditKey;
 			prevSavedOnly = savedKey;
+			prevMomAndPop = momPopKey;
 
 			appState.fitBoundsTarget = fitBoundsForPopulation(filteredRestaurants, allRestaurants);
 		}
@@ -611,6 +620,7 @@
 			freshnessCutoff: appState.freshnessCutoff,
 			freshnessSource: appState.freshnessSource,
 			showUnmapped: appState.showUnmapped,
+			showMomAndPop: appState.showMomAndPop,
 			sortKey: appState.sortKey,
 			sortDirection: appState.sortDirection,
 			selectedRestaurantSlug: appState.selectedRestaurantSlug

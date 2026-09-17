@@ -9,6 +9,9 @@ export function resetAppState(): void {
   appState.freshnessCutoff = null;
   appState.freshnessSource = null;
   appState.showUnmapped = false;
+  appState.showMomAndPop = true;
+  appState.showSavedOnly = false;
+  appState.reportedChainSlugs = [];
   appState.sortKey = "score";
   appState.sortDirection = "desc";
   appState.selectedRestaurantSlug = null;
@@ -35,6 +38,7 @@ export function makeRestaurant(
     source_threads: ["thread-1"],
     dish_rec_count: 0,
     top_comment_snippet: null,
+    chain_confidence: "independent",
     ...overrides,
   };
 }

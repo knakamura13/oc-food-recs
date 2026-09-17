@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Bookmark, ChevronDown, Map as MapIcon, Share2 } from 'lucide-svelte';
+	import { Bookmark, ChevronDown, Map as MapIcon, Share2, Store } from 'lucide-svelte';
 	import type { Restaurant } from '$lib/restaurants/types';
 	import {
 		appState,
@@ -15,6 +15,7 @@
 	import type { Attachment } from 'svelte/attachments';
 	import { toast } from '$lib/toast';
 	import RecencyHistogram from './RecencyHistogram.svelte';
+	import { MOM_AND_POP_HELP } from '$lib/restaurants/mom-and-pop';
 
 	interface Props {
 		restaurants: Restaurant[];
@@ -368,6 +369,23 @@
 			}
 		}}
 	>
+		<!-- Mom & pop — default ON; tooltip is locked policy v1 copy -->
+		<button
+			type="button"
+			class="dropdown-trigger mapped-only-toggle"
+			class:has-active={appState.showMomAndPop}
+			aria-pressed={appState.showMomAndPop}
+			title={MOM_AND_POP_HELP}
+			aria-label="Mom & pop. {MOM_AND_POP_HELP}"
+			onclick={() => (appState.showMomAndPop = !appState.showMomAndPop)}
+		>
+			{#if appState.showMomAndPop}
+				<span aria-hidden="true">✓</span>
+			{/if}
+			<Store size={13} aria-hidden="true" />
+			Mom & pop
+		</button>
+
 		<!-- Cuisine dropdown -->
 		<div class="dropdown-wrapper" onfocusout={handleDropdownFocusOut}>
 			<button

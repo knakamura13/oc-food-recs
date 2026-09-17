@@ -9,12 +9,16 @@ import {
   sliceRestaurantMentions,
 } from "./filter-restaurants";
 import { filterRestaurantsByQuery } from "./search-restaurants";
+import { passesMomAndPopFilter } from "./mom-and-pop";
 
 export interface PageFilterState {
   activeSubreddits: string[];
   activeCuisines: string[];
   activeCities: string[];
   showUnmapped: boolean;
+  /** Default ON. When true, hide likely_chain rows. */
+  showMomAndPop?: boolean;
+  reportedChainSlugs?: string[];
   freshnessCutoff: number | null;
 }
 
@@ -30,7 +34,12 @@ export function filterBeforeFreshness(
   restaurants: Restaurant[],
   state: Pick<
     PageFilterState,
-    "activeSubreddits" | "activeCuisines" | "activeCities" | "showUnmapped"
+    | "activeSubreddits"
+    | "activeCuisines"
+    | "activeCities"
+    | "showUnmapped"
+    | "showMomAndPop"
+    | "reportedChainSlugs"
   >,
   ctx: Pick<PageFilterContext, "threadSubreddit" | "subredditSliceCache">,
 ): Restaurant[] {
@@ -70,6 +79,12 @@ export function filterBeforeFreshness(
 
   if (!state.showUnmapped) {
     result = result.filter((r) => !isUnmappedRestaurant(r));
+  }
+
+  if (state.showMomAndPop !== false) {
+    result = result.filter((r) =>
+      passesMomAndPopFilter(r, state.reportedChainSlugs ?? []),
+    );
   }
 
   return result;

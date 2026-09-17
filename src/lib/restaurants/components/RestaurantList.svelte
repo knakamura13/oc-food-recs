@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Bookmark, ChevronRight, MapPin } from 'lucide-svelte';
+	import { Bookmark, ChevronRight, Flag, MapPin } from 'lucide-svelte';
 	import { getTrimmedSnippet } from '$lib/restaurants/snippet';
 	import { tick, untrack } from 'svelte';
 	import type { Attachment } from 'svelte/attachments';
@@ -357,6 +357,7 @@
 			activeSubreddits: appState.activeSubreddits,
 			freshnessCutoff: appState.freshnessCutoff,
 			showUnmapped: appState.showUnmapped,
+			showMomAndPop: appState.showMomAndPop,
 			sortKey: appState.sortKey,
 			sortDirection: appState.sortDirection,
 			selectedRestaurantSlug: slug
@@ -369,6 +370,63 @@
 			toast.success('Link copied!');
 		} catch {
 			toast.error('Could not copy link');
+		}
+	}
+
+	let reportingSlug = $state<string | null>(null);
+
+	function rememberReportedSlug(slug: string) {
+		if (appState.reportedChainSlugs.includes(slug)) return;
+		appState.reportedChainSlugs = [...appState.reportedChainSlugs, slug];
+	}
+
+	async function reportChain(restaurant: Restaurant) {
+		if (reportingSlug) return;
+		reportingSlug = restaurant.slug;
+		try {
+			const res = await fetch(`/api/r/${encodeURIComponent(restaurant.slug)}/report-chain`, {
+				method: 'POST'
+			});
+			const data = (await res.json()) as { result?: string };
+			const result = data.result;
+			if (
+				result !== 'queued' &&
+				result !== 'already_queued' &&
+				result !== 'already_excluded' &&
+				result !== 'reviewed_keep_active' &&
+				result !== 'not_found'
+			) {
+				toast.error('Could not report chain');
+				return;
+			}
+			switch (result) {
+				case 'queued':
+					rememberReportedSlug(restaurant.slug);
+					toast.success('Queued for review');
+					break;
+				case 'already_queued':
+					rememberReportedSlug(restaurant.slug);
+					toast.success('Already in review');
+					break;
+				case 'already_excluded':
+					toast.info('Already excluded');
+					break;
+				case 'reviewed_keep_active':
+					toast.info('Kept as independent');
+					break;
+				case 'not_found':
+					toast.error('Restaurant not found');
+					break;
+				default: {
+					const _exhaustive: never = result;
+					toast.error('Could not report chain');
+					void _exhaustive;
+				}
+			}
+		} catch {
+			toast.error('Could not report chain');
+		} finally {
+			reportingSlug = null;
 		}
 	}
 
@@ -803,6 +861,16 @@
 												<svg class="share-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
 												Copy link
 											</button>
+											<button
+												type="button"
+												class="report-link"
+												disabled={reportingSlug === restaurant.slug || appState.reportedChainSlugs.includes(restaurant.slug)}
+												onclick={() => reportChain(restaurant)}
+												aria-label="Report {restaurant.name} as a chain"
+											>
+												<Flag size={14} aria-hidden="true" />
+												Report a chain
+											</button>
 											<a
 												class="maps-link"
 												href={googleMapsUrl(restaurant)}
@@ -947,6 +1015,7 @@
 		.sort-btn:active,
 		.map-link:active,
 		.share-link:active,
+		.report-link:active,
 		.maps-link:active {
 			transform: none;
 		}
@@ -1659,6 +1728,33 @@
 	.share-link { display: inline-flex; align-items: center; gap: 4px; font-family: inherit; font-size: 0.8rem; padding: 5px 14px; border-radius: 6px; cursor: pointer; border: 1px solid #d4c8bb; background: #fffcf8; color: #5d4e37; transition: all 0.15s ease; font-weight: 500; }
 	.share-link:hover { border-color: #ff4500; color: #c43700; box-shadow: 0 2px 6px rgba(255, 69, 0, 0.1); }
 	.share-link:active { transform: scale(0.97); }
+	.report-link {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		font-family: inherit;
+		font-size: 0.8rem;
+		padding: 5px 14px;
+		border-radius: 6px;
+		cursor: pointer;
+		border: 1px solid #d4c8bb;
+		background: #fffcf8;
+		color: #5d4e37;
+		transition: all 0.15s ease;
+		font-weight: 500;
+	}
+	.report-link:hover:not(:disabled) {
+		border-color: #ff4500;
+		color: #c43700;
+		box-shadow: 0 2px 6px rgba(255, 69, 0, 0.1);
+	}
+	.report-link:active:not(:disabled) {
+		transform: scale(0.97);
+	}
+	.report-link:disabled {
+		opacity: 0.55;
+		cursor: default;
+	}
 	.share-icon { width: 14px; height: 14px; flex-shrink: 0; }
 
 	.maps-link {
@@ -1689,6 +1785,7 @@
 
 	.map-link:focus-visible,
 	.share-link:focus-visible,
+	.report-link:focus-visible,
 	.maps-link:focus-visible {
 		outline: 2px solid #ff4500;
 		outline-offset: 2px;
@@ -1723,6 +1820,7 @@
 
 		.map-link,
 		.share-link,
+		.report-link,
 		.maps-link {
 			min-height: 44px;
 			min-width: 44px;

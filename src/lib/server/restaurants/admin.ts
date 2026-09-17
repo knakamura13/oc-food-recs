@@ -102,6 +102,7 @@ export async function mergeRestaurants(
       lng: winner.lng ?? loser.lng,
       status: "active",
       exclusionReason: null,
+      chainConfidence: "independent",
       reviewedAt: sql`now()`,
       updatedAt: sql`now()`,
     })
@@ -170,6 +171,7 @@ export async function markRestaurantExcluded(
     .set({
       status: "excluded",
       exclusionReason: reason,
+      chainConfidence: "likely_chain",
       reviewedAt: sql`now()`,
       updatedAt: sql`now()`,
     })
@@ -190,6 +192,7 @@ export async function restoreRestaurantActive(
     .set({
       status: "active",
       exclusionReason: null,
+      chainConfidence: "independent",
       reviewedAt: sql`now()`,
       updatedAt: sql`now()`,
     })
@@ -213,4 +216,51 @@ export async function addBrandToRegistry(
       target: excludedBrands.normalizedName,
       set: { brandName, reason, groupName },
     });
+}
+
+export type ReportChainResult =
+  | "queued"
+  | "already_excluded"
+  | "already_queued"
+  | "reviewed_keep_active"
+  | "not_found";
+
+/**
+ * Public "Report a chain" action. Queues the restaurant for /admin/exclusions
+ * without adding it to the denylist (admin confirms that). Human-reviewed rows
+ * are not overwritten.
+ */
+export async function reportRestaurantAsChain(
+  slug: string,
+): Promise<ReportChainResult> {
+  const trimmed = slug.trim();
+  if (!trimmed) return "not_found";
+
+  const [row] = await db
+    .select({
+      id: restaurants.id,
+      status: restaurants.status,
+      reviewedAt: restaurants.reviewedAt,
+    })
+    .from(restaurants)
+    .where(eq(restaurants.slug, trimmed))
+    .limit(1);
+
+  if (!row) return "not_found";
+  if (row.status === "excluded") return "already_excluded";
+  if (row.reviewedAt) return "reviewed_keep_active";
+  if (row.status === "pending_review") return "already_queued";
+
+  const updated = await db
+    .update(restaurants)
+    .set({
+      status: "pending_review",
+      exclusionReason: "user_reported_chain",
+      chainConfidence: "likely_chain",
+      updatedAt: sql`now()`,
+    })
+    .where(and(eq(restaurants.id, row.id), sql`reviewed_at IS NULL`))
+    .returning({ id: restaurants.id });
+
+  return updated.length === 0 ? "already_queued" : "queued";
 }

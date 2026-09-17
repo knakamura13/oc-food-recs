@@ -32,6 +32,7 @@ export function buildPageTitle(
     parts.push(state.sortKey === "name" ? "by name" : "by recency");
   }
   if (state.showUnmapped) parts.push("unmapped");
+  if (state.showMomAndPop === false) parts.push("all spots");
   if (parts.length === 0) return DEFAULT_TITLE;
   return `${parts.join(" ")} — OC Food Recs`;
 }
@@ -50,6 +51,7 @@ export function buildPageDescription(
       activeCuisines: state.activeCuisines ?? [],
       activeCities: state.activeCities ?? [],
       showUnmapped: state.showUnmapped ?? false,
+      showMomAndPop: state.showMomAndPop ?? true,
       freshnessCutoff: state.freshnessCutoff ?? null,
       searchQuery: state.searchQuery ?? "",
     },
@@ -89,6 +91,7 @@ export function buildCanonicalShareUrl(
     freshnessCutoff: state.freshnessCutoff ?? null,
     freshnessSource: state.freshnessSource ?? null,
     showUnmapped: state.showUnmapped ?? false,
+    showMomAndPop: state.showMomAndPop ?? true,
     sortKey: state.sortKey ?? "score",
     sortDirection: state.sortDirection ?? "desc",
     selectedRestaurantSlug: state.selectedRestaurantSlug ?? null,
