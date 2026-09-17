@@ -1,3 +1,5 @@
+import type { ChainConfidence } from "./mom-and-pop";
+
 export interface Mention {
   comment_id: string;
   thread_id: string;
@@ -40,6 +42,8 @@ export interface Restaurant {
   lng: number | null;
   mentions: ListMention[];
   source_threads: string[];
+  /** Mom & pop policy v1 confidence. Missing/unknown still pass the default chip. */
+  chain_confidence?: ChainConfidence;
 }
 
 export interface ThreadSummary {

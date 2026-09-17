@@ -1,0 +1,1 @@
+ALTER TABLE "restaurants" ADD COLUMN "chain_confidence" text DEFAULT 'unknown' NOT NULL;

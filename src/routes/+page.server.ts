@@ -28,6 +28,7 @@ interface RestaurantRow {
   dish_rec_count: number;
   snippet_candidates: SnippetCandidate[];
   mentions: Mention[];
+  chain_confidence: string | null;
 }
 
 interface ThreadRow {
@@ -92,6 +93,7 @@ async function loadHomePage(
 				r.cuisine,
 				r.lat,
 				r.lng,
+				COALESCE(r.chain_confidence, 'unknown') AS chain_confidence,
 				-- Geometric ½ decay per repeat (must match REPEAT_AUTHOR_DECAY).
 				COALESCE(SUM(rm.score * POWER(0.5, rm.author_rank - 1)), 0)::int AS aggregate_score,
 				-- Distinct contributors = count of rank-1 mentions.
@@ -136,10 +138,10 @@ async function loadHomePage(
 			FROM restaurants r
 			INNER JOIN ranked_mentions rm ON rm.restaurant_id = r.id
 			-- Hide registry-excluded restaurants (chains / corporate groups). Only the
-			-- authoritative 'excluded' status is hidden; 'pending_review' stays public
-			-- (a fuzzy flag for the admin queue, not a confirmed exclusion).
+			-- authoritative 'excluded' status is hidden. 'pending_review' stays in the
+			-- payload as likely_chain so the Mom & pop chip can filter it.
 			WHERE r.status <> 'excluded'
-			GROUP BY r.id, r.name, r.slug, r.location, r.cuisine, r.lat, r.lng
+			GROUP BY r.id, r.name, r.slug, r.location, r.cuisine, r.lat, r.lng, r.chain_confidence
 		)
 		SELECT
 			name,
@@ -148,6 +150,7 @@ async function loadHomePage(
 			cuisine,
 			lat,
 			lng,
+			chain_confidence,
 			aggregate_score,
 			mention_count,
 			source_threads,
@@ -166,6 +169,12 @@ async function loadHomePage(
     cuisine: row.cuisine,
     lat: row.lat,
     lng: row.lng,
+    chain_confidence:
+      row.chain_confidence === "independent" ||
+      row.chain_confidence === "likely_chain" ||
+      row.chain_confidence === "unknown"
+        ? row.chain_confidence
+        : "unknown",
     aggregate_score: row.aggregate_score,
     mention_count: row.mention_count,
     dish_rec_count: row.dish_rec_count ?? 0,

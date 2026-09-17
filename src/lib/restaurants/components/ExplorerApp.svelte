@@ -15,6 +15,7 @@
 	} from '$lib/restaurants/filter-restaurants';
 	import { SEARCH_DEBOUNCE_MS, scheduleDebounced } from '$lib/debounce';
 	import { filterPageRestaurantsWithSearch } from '$lib/restaurants/filter-page-restaurants';
+	import { coordsForFitBounds } from '$lib/restaurants/explorer-bounds';
 	import { buildPageTitle, buildPageDescription, buildCanonicalShareUrl } from '$lib/restaurants/page-meta';
 	import { applyUrlStateSnapshot } from '$lib/restaurants/apply-url-state';
 	import { buildSearchParams } from '$lib/restaurants/url-state';
@@ -87,6 +88,7 @@
 	let prevCities = $state('');
 	let prevSubreddits = $state('');
 	let prevSavedOnly = $state(false);
+	let prevMomAndPop = $state(true);
 
 	let mapExpanded = $state(false);
 	let mapDesktopHovered = $state(false);
@@ -134,6 +136,7 @@
 				freshnessCutoff: appState.freshnessCutoff,
 				freshnessSource: appState.freshnessSource,
 				showUnmapped: appState.showUnmapped,
+				showMomAndPop: appState.showMomAndPop,
 				sortKey: appState.sortKey,
 				sortDirection: appState.sortDirection,
 				selectedRestaurantSlug: appState.selectedRestaurantSlug
@@ -153,6 +156,7 @@
 				activeCities: appState.activeCities,
 				activeSubreddits: appState.activeSubreddits,
 				showUnmapped: appState.showUnmapped,
+				showMomAndPop: appState.showMomAndPop,
 				freshnessCutoff: appState.freshnessCutoff
 			},
 			allRestaurants,
@@ -170,6 +174,7 @@
 			freshnessCutoff: appState.freshnessCutoff,
 			freshnessSource: appState.freshnessSource,
 			showUnmapped: appState.showUnmapped,
+			showMomAndPop: appState.showMomAndPop,
 			sortKey: appState.sortKey,
 			sortDirection: appState.sortDirection,
 			selectedRestaurantSlug: appState.selectedRestaurantSlug
@@ -451,6 +456,7 @@
 		activeCuisines: appState.activeCuisines,
 		activeCities: appState.activeCities,
 		showUnmapped: appState.showUnmapped,
+		showMomAndPop: appState.showMomAndPop,
 		freshnessCutoff: appState.freshnessCutoff,
 		searchQuery: debouncedSearchQuery
 	});
@@ -475,22 +481,8 @@
 	const restaurantsBeforeFreshness = $derived(pageFilterResult.beforeFreshness);
 	const filteredRestaurants = $derived(pageFilterResult.filtered);
 
-	function hasAnyExplorerFilter() {
-		return (
-			appState.searchQuery.trim().length > 0 ||
-			appState.activeCuisines.length > 0 ||
-			appState.activeCities.length > 0 ||
-			appState.activeSubreddits.length > 0 ||
-			appState.showSavedOnly ||
-			appState.freshnessCutoff !== null
-		);
-	}
-
-	function fitBoundsForPopulation(filtered: Restaurant[], all: Restaurant[]) {
-		const restaurants = hasAnyExplorerFilter() ? filtered : all;
-		return restaurants
-			.filter((r) => r.lat != null && r.lng != null)
-			.map((r) => ({ lat: r.lat as number, lng: r.lng as number }));
+	function fitBoundsForPopulation(filtered: Restaurant[], _all: Restaurant[]) {
+		return coordsForFitBounds(filtered);
 	}
 
 	// Trigger fitBounds when filters change
@@ -499,14 +491,16 @@
 		const cityKey = appState.activeCities.join(',');
 		const subredditKey = appState.activeSubreddits.join(',');
 		const savedKey = appState.showSavedOnly;
-		const currentKey = `${cuisineKey}|${cityKey}|${subredditKey}|${savedKey}`;
-		const prevKey = `${prevCuisines}|${prevCities}|${prevSubreddits}|${prevSavedOnly}`;
+		const momPopKey = appState.showMomAndPop;
+		const currentKey = `${cuisineKey}|${cityKey}|${subredditKey}|${savedKey}|${momPopKey}`;
+		const prevKey = `${prevCuisines}|${prevCities}|${prevSubreddits}|${prevSavedOnly}|${prevMomAndPop}`;
 
 		if (currentKey !== prevKey) {
 			prevCuisines = cuisineKey;
 			prevCities = cityKey;
 			prevSubreddits = subredditKey;
 			prevSavedOnly = savedKey;
+			prevMomAndPop = momPopKey;
 
 			appState.fitBoundsTarget = fitBoundsForPopulation(filteredRestaurants, allRestaurants);
 		}
@@ -611,6 +605,7 @@
 			freshnessCutoff: appState.freshnessCutoff,
 			freshnessSource: appState.freshnessSource,
 			showUnmapped: appState.showUnmapped,
+			showMomAndPop: appState.showMomAndPop,
 			sortKey: appState.sortKey,
 			sortDirection: appState.sortDirection,
 			selectedRestaurantSlug: appState.selectedRestaurantSlug

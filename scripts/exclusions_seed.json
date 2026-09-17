@@ -14,6 +14,7 @@
 		{ "brand_name": "In-N-Out", "reason": "chain" },
 		{ "brand_name": "Chick-fil-A", "reason": "chain" },
 		{ "brand_name": "Panera Bread", "reason": "chain" },
+		{ "brand_name": "Panera", "reason": "chain" },
 		{ "brand_name": "Olive Garden", "reason": "chain" },
 		{ "brand_name": "Buffalo Wild Wings", "reason": "chain" },
 		{ "brand_name": "Broken Yolk Cafe", "reason": "chain" },
@@ -21,6 +22,8 @@
 		{ "brand_name": "BJ's Restaurant and Brewhouse", "reason": "chain" },
 		{ "brand_name": "The Habit Burger Grill", "reason": "chain" },
 		{ "brand_name": "Raising Cane's", "reason": "chain" },
+		{ "brand_name": "Blaze Pizza", "reason": "chain" },
+		{ "brand_name": "Blaze", "reason": "chain" },
 		{ "brand_name": "Panda Express", "reason": "chain" },
 		{ "brand_name": "Taco Bell", "reason": "chain" },
 		{ "brand_name": "Wingstop", "reason": "chain" },
@@ -60,6 +63,15 @@
 		{ "brand_name": "Texas Roadhouse", "reason": "chain" },
 		{ "brand_name": "P.F. Chang's", "reason": "chain" },
 		{ "brand_name": "Maggiano's Little Italy", "reason": "chain" },
-		{ "brand_name": "California Pizza Kitchen", "reason": "chain" }
+		{ "brand_name": "California Pizza Kitchen", "reason": "chain" },
+		{ "brand_name": "Pieology", "reason": "chain" },
+		{ "brand_name": "Waba Grill", "reason": "chain" },
+		{ "brand_name": "Flame Broiler", "reason": "chain" },
+		{ "brand_name": "Rubio's", "reason": "chain" },
+		{ "brand_name": "Porto's", "reason": "chain" },
+		{ "brand_name": "Mendocino Farms", "reason": "chain" },
+		{ "brand_name": "Tender Greens", "reason": "chain" },
+		{ "brand_name": "CAVA", "reason": "chain" },
+		{ "brand_name": "Sweetgreen", "reason": "chain" }
 	]
 }

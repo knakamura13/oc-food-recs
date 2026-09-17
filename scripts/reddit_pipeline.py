@@ -77,19 +77,28 @@ OC_BOUNDS = {
 ENDORSEMENT_TYPES = {"dish_rec", "endorsement", "personal_story"}
 THREAD_FOLDER_PATTERN = "{subreddit}-{post_id}"
 
-# --- Chain / corporate-group exclusion -------------------------------------
-# How many distinct OC cities one normalized name must appear in (within the batch /
-# corpus) before the density heuristic flags it for review as a likely chain.
-DENSITY_CITY_THRESHOLD = int(os.environ.get("OC_FOOD_RECS_DENSITY_CITIES", "3"))
+# --- Chain / corporate-group exclusion (Mom & pop policy v1) ---------------
+# Exclude from Mom & pop if ANY of: franchise/national brand, denylist hit, or
+# 4+ Southern California locations under the same brand. Independents with
+# <=3 locations stay public. See docs/INGEST_TRACKING.md.
+#
+# How many distinct SoCal cities one normalized name must appear in (within the
+# batch / corpus) before the density heuristic flags it as a likely chain.
+# Aligned with the 4+ location rule (4 cities implies 4+ locations).
+DENSITY_CITY_THRESHOLD = int(os.environ.get("OC_FOOD_RECS_DENSITY_CITIES", "4"))
 # OFF by default: an unbounded Google Places probe that counts how many results a bare
 # name returns. Unreliable + paid, so it only ever routes to 'pending_review', never
 # auto-excludes. Enable with OC_FOOD_RECS_CHAIN_PROBE=1.
 CHAIN_PROBE_ENABLED = os.environ.get(
     "OC_FOOD_RECS_CHAIN_PROBE", ""
 ).strip().lower() in ("1", "true", "yes")
+# Flag when location count is >= this value (policy: 4+ SoCal locations fails).
 CHAIN_LOCATION_THRESHOLD = int(
-    os.environ.get("OC_FOOD_RECS_CHAIN_LOCATION_THRESHOLD", "5")
+    os.environ.get("OC_FOOD_RECS_CHAIN_LOCATION_THRESHOLD", "4")
 )
+CHAIN_CONFIDENCE_INDEPENDENT = "independent"
+CHAIN_CONFIDENCE_LIKELY_CHAIN = "likely_chain"
+CHAIN_CONFIDENCE_UNKNOWN = "unknown"
 
 SYSTEM_PROMPT = """You are a structured data extractor. Given a Reddit comment recommending food/drink spots, extract each establishment mentioned into a JSON array.
 
@@ -2544,6 +2553,41 @@ def google_location_count(name: str) -> int | None:
         return None
 
 
+def chain_confidence_for(status: str, _reason: str | None = None) -> str:
+    """Map publish status to Mom & pop policy confidence.
+
+    Denylist hits (`excluded`) and fuzzy flags (`pending_review`) are `likely_chain`.
+    Unflagged rows are `independent`. `unknown` is the DB default until backfill/ingest.
+    """
+    if status in ("excluded", "pending_review"):
+        return CHAIN_CONFIDENCE_LIKELY_CHAIN
+    return CHAIN_CONFIDENCE_INDEPENDENT
+
+
+def merge_unreviewed_classification(
+    current_status: str | None,
+    current_reason: str | None,
+    current_confidence: str | None,
+    new_status: str,
+    new_reason: str | None,
+    new_confidence: str,
+) -> tuple[str, str | None, str]:
+    """Merge a denylist/density reclassification onto an unreviewed row.
+
+    Denylist ``excluded`` always wins. ``pending_review`` (user reports, LLM,
+    density, location-count) stays queued — never cleared back to ``active``.
+    Existing unreviewed ``excluded`` can be recomputed so a registry removal
+    unhides the row.
+    """
+    status = current_status or "active"
+    confidence = current_confidence or CHAIN_CONFIDENCE_UNKNOWN
+    if new_status == "excluded":
+        return new_status, new_reason, new_confidence
+    if status == "pending_review":
+        return status, current_reason, confidence
+    return new_status, new_reason, new_confidence
+
+
 def classify_restaurant_status(
     restaurant: dict[str, Any],
     *,
@@ -2555,6 +2599,10 @@ def classify_restaurant_status(
     Precedence: the registry is authoritative (-> 'excluded'); every fuzzy signal only
     ever routes to 'pending_review'. Fuzzy reason priority: LLM > location-count > density.
     Returns ('active', None) when nothing fires.
+
+    Policy v1: denylist hits never land on the public map. 4+ SoCal locations (or
+    4+ distinct cities in-corpus) and LLM chain_suspect go to the admin queue as
+    likely_chain and fail the Mom & pop chip until a human confirms.
     """
     hit = match_excluded_brand(restaurant["name"], registry)
     if hit is not None:
@@ -2564,7 +2612,7 @@ def classify_restaurant_status(
         return "pending_review", "llm_suspected_chain"
 
     count = restaurant.get("chain_location_count")
-    if count is not None and count > CHAIN_LOCATION_THRESHOLD:
+    if count is not None and count >= CHAIN_LOCATION_THRESHOLD:
         return "pending_review", "many_locations"
 
     if city_counts is not None:
@@ -2671,12 +2719,12 @@ def write_to_db(
             deduped_restaurants = collapse_duplicate_restaurants(
                 restaurants_with_geocodes
             )
-            # Chain / corporate-group exclusion: the registry is authoritative ('excluded');
-            # fuzzy signals (LLM chain_suspect, optional Google count, multi-city density)
-            # only ever -> 'pending_review'. Status is set on INSERT for NEW rows only; the
-            # ON CONFLICT clause below deliberately leaves status/exclusion_reason/reviewed_at
-            # untouched, so a human's admin decision (and apply_exclusions sweep) own existing
-            # rows. Growing the registry retro-applies via scripts/apply_exclusions.py.
+            # Chain / corporate-group exclusion: the registry is authoritative ('excluded')
+            # and is applied on INSERT *and* on unreviewed ON CONFLICT rows so a denylist
+            # hit cannot re-enter the public map. Human-reviewed rows (reviewed_at set)
+            # and queued pending_review rows (user reports, LLM, density) are never
+            # overwritten by a weaker ingest classification (e.g. active).
+            # Growing the registry retro-applies via scripts/backfill_chain_policy.py.
             registry = _load_excluded_brands(cur)
             city_counts = batch_city_counts(deduped_restaurants)
             for restaurant, slug in assign_slugs(
@@ -2685,10 +2733,11 @@ def write_to_db(
                 status, exclusion_reason = classify_restaurant_status(
                     restaurant, registry=registry, city_counts=city_counts
                 )
+                confidence = chain_confidence_for(status, exclusion_reason)
                 cur.execute(
                     """
-                    INSERT INTO restaurants (name, slug, location, street, cuisine, lat, lng, status, exclusion_reason)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    INSERT INTO restaurants (name, slug, location, street, cuisine, lat, lng, status, exclusion_reason, chain_confidence)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (slug) DO UPDATE SET
                         name = CASE WHEN length(EXCLUDED.name) > length(restaurants.name) THEN EXCLUDED.name ELSE restaurants.name END,
                         location = COALESCE(restaurants.location, EXCLUDED.location),
@@ -2696,6 +2745,24 @@ def write_to_db(
                         cuisine = COALESCE(restaurants.cuisine, EXCLUDED.cuisine),
                         lat = COALESCE(restaurants.lat, EXCLUDED.lat),
                         lng = COALESCE(restaurants.lng, EXCLUDED.lng),
+                        status = CASE
+                            WHEN restaurants.reviewed_at IS NOT NULL THEN restaurants.status
+                            WHEN EXCLUDED.status = 'excluded' THEN 'excluded'
+                            WHEN restaurants.status IN ('excluded', 'pending_review') THEN restaurants.status
+                            ELSE EXCLUDED.status
+                        END,
+                        exclusion_reason = CASE
+                            WHEN restaurants.reviewed_at IS NOT NULL THEN restaurants.exclusion_reason
+                            WHEN EXCLUDED.status = 'excluded' THEN EXCLUDED.exclusion_reason
+                            WHEN restaurants.status IN ('excluded', 'pending_review') THEN restaurants.exclusion_reason
+                            ELSE EXCLUDED.exclusion_reason
+                        END,
+                        chain_confidence = CASE
+                            WHEN restaurants.reviewed_at IS NOT NULL THEN restaurants.chain_confidence
+                            WHEN EXCLUDED.status = 'excluded' THEN EXCLUDED.chain_confidence
+                            WHEN restaurants.status IN ('excluded', 'pending_review') THEN restaurants.chain_confidence
+                            ELSE EXCLUDED.chain_confidence
+                        END,
                         updated_at = now()
                     RETURNING id
                     """,
@@ -2709,6 +2776,7 @@ def write_to_db(
                         restaurant.get("lng"),
                         status,
                         exclusion_reason,
+                        confidence,
                     ),
                 )
                 row = cur.fetchone()

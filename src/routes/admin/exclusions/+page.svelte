@@ -12,6 +12,7 @@
 		llm_suspected_chain: 'LLM flagged as chain',
 		many_locations: 'Many global locations',
 		multi_city_density: 'Same name across many cities',
+		user_reported_chain: 'Reported as a chain',
 		duplicate_candidate: 'Likely duplicate at same location'
 	};
 
@@ -33,10 +34,12 @@
 	<header>
 		<h1>Exclusions</h1>
 		<p class="subtitle">
-			Keep chains and corporate restaurant groups off the public site. The curated registry
-			auto-excludes known brands; fuzzy signals (LLM, location count, multi-city density) only flag
-			restaurants for review here — they stay public until you confirm. Confirming or restoring a
-			restaurant locks that decision so re-ingests and the registry sweep won't undo it.
+			Keep chains and corporate restaurant groups off the public Mom & pop set. The curated
+			registry auto-excludes known brands from the map. Fuzzy signals (LLM, location count,
+			multi-city density) land here as <code>likely_chain</code> and stay out of Mom & pop
+			until you confirm or restore. Public “Report a chain” flags also land here, but they
+			do not hide the spot until you confirm. Confirming or restoring a restaurant locks
+			that decision so re-ingests and the registry sweep won't undo it.
 		</p>
 	</header>
 
@@ -89,7 +92,8 @@
 		<h2 id="pending-heading">Pending review</h2>
 		<p class="section-hint">
 			{pendingReview.length} restaurant{pendingReview.length === 1 ? '' : 's'} flagged by a fuzzy
-			signal. These are still public — confirm an exclusion or keep them active.
+			signal or a public chain report. These fail the Mom & pop chip until you confirm an
+			exclusion or keep them active.
 		</p>
 
 		{#if pendingReview.length > 0}
