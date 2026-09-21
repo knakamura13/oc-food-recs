@@ -43,7 +43,7 @@ npm run dev
 npm run check
 ```
 
-Admin routes (`/admin/geocode`, `/admin/exclusions`) require `ADMIN_PASSWORD` in production; locally they are open when unset.
+Admin routes (`/admin/geocode`, `/admin/exclusions`) require `ADMIN_PASSWORD` in production (or return 404 on all HTTP methods if unset); locally they are open when unset.
 
 ## Testing
 
