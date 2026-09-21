@@ -20,10 +20,7 @@ export const load: LayoutServerLoad = async ({ request }) => {
   // Production: simple Basic Auth check
   const auth = request.headers.get("authorization");
   if (auth !== `Basic ${btoa(`admin:${adminPassword}`)}`) {
-    throw new Response("Authentication required", {
-      status: 401,
-      headers: { "www-authenticate": 'Basic realm="admin"' },
-    });
+    error(401, "Authentication required");
   }
   return {};
 };
