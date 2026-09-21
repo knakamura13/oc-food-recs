@@ -61,54 +61,56 @@ export async function mergeRestaurants(
   if (winnerId === loserId)
     throw new Error("Cannot merge a restaurant with itself.");
 
-  const [winner] = await db
-    .select()
-    .from(restaurants)
-    .where(eq(restaurants.id, winnerId))
-    .limit(1);
-  const [loser] = await db
-    .select()
-    .from(restaurants)
-    .where(eq(restaurants.id, loserId))
-    .limit(1);
-  if (!winner || !loser) throw new Error("Restaurant not found.");
+  await db.transaction(async (tx) => {
+    const [winner] = await tx
+      .select()
+      .from(restaurants)
+      .where(eq(restaurants.id, winnerId))
+      .limit(1);
+    const [loser] = await tx
+      .select()
+      .from(restaurants)
+      .where(eq(restaurants.id, loserId))
+      .limit(1);
+    if (!winner || !loser) throw new Error("Restaurant not found.");
 
-  await db.execute(sql`
-    DELETE FROM mentions m1
-    WHERE m1.restaurant_id = ${loserId}
-    AND EXISTS (
-      SELECT 1 FROM mentions m2
-      WHERE m2.restaurant_id = ${winnerId}
-      AND m2.thread_id = m1.thread_id
-      AND m2.comment_id = m1.comment_id
-    )
-  `);
+    await tx.execute(sql`
+      DELETE FROM mentions m1
+      WHERE m1.restaurant_id = ${loserId}
+      AND EXISTS (
+        SELECT 1 FROM mentions m2
+        WHERE m2.restaurant_id = ${winnerId}
+        AND m2.thread_id = m1.thread_id
+        AND m2.comment_id = m1.comment_id
+      )
+    `);
 
-  await db
-    .update(mentions)
-    .set({ restaurantId: winnerId })
-    .where(eq(mentions.restaurantId, loserId));
+    await tx
+      .update(mentions)
+      .set({ restaurantId: winnerId })
+      .where(eq(mentions.restaurantId, loserId));
 
-  const mergedName =
-    loser.name.length > winner.name.length ? loser.name : winner.name;
+    const mergedName =
+      loser.name.length > winner.name.length ? loser.name : winner.name;
 
-  await db
-    .update(restaurants)
-    .set({
-      name: mergedName,
-      location: winner.location ?? loser.location,
-      cuisine: winner.cuisine ?? loser.cuisine,
-      lat: winner.lat ?? loser.lat,
-      lng: winner.lng ?? loser.lng,
-      status: "active",
-      exclusionReason: null,
-      chainConfidence: "independent",
-      reviewedAt: sql`now()`,
-      updatedAt: sql`now()`,
-    })
-    .where(eq(restaurants.id, winnerId));
+    await tx
+      .update(restaurants)
+      .set({
+        name: mergedName,
+        location: winner.location ?? loser.location,
+        cuisine: winner.cuisine ?? loser.cuisine,
+        lat: winner.lat ?? loser.lat,
+        lng: winner.lng ?? loser.lng,
+        status: "active",
+        exclusionReason: null,
+        chainConfidence: "independent",
+        reviewedAt: sql`now()`,
+        updatedAt: sql`now()`,
+      })
+      .where(eq(restaurants.id, winnerId));
 
-  await db.delete(restaurants).where(eq(restaurants.id, loserId));
+    await tx.delete(restaurants).where(eq(restaurants.id, loserId));
+  });
 }
 
 /** Dismiss duplicate flag and restore restaurant to the public site. */
