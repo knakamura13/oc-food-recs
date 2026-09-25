@@ -5,7 +5,6 @@ import ExplorerApp from "./ExplorerApp.svelte";
 import type { ExplorerPageData } from "$lib/restaurants/explorer-page-data";
 import { appState } from "$lib/restaurants/stores.svelte";
 import { makeRestaurant, resetAppState } from "$lib/restaurants/test-utils";
-import { DEFAULT_TITLE } from "$lib/restaurants/page-meta";
 import { SEARCH_DEBOUNCE_MS } from "$lib/debounce";
 
 const nav = vi.hoisted(() => ({
@@ -99,11 +98,6 @@ function makeHomeData(): ExplorerPageData {
   return {
     dataset: { restaurants, meta },
     urlState: {},
-    pageMeta: {
-      title: DEFAULT_TITLE,
-      description: "Explore 1 community-recommended mom and pop restaurants.",
-      shareUrl: "http://localhost/",
-    },
     pageOrigin: "http://localhost",
   };
 }

@@ -107,6 +107,47 @@ export interface PageMeta {
   shareUrl: string;
 }
 
+export interface PageMetaAggregates {
+	restaurantCount: number;
+	threadCount: number;
+	commentCount: number;
+}
+
+export function hasPageMetaFilters(state: Partial<UrlStateSnapshot>): boolean {
+	return Boolean(
+		state.searchQuery?.trim() ||
+			state.activeCuisines?.length ||
+			state.activeCities?.length ||
+			state.activeSubreddits?.length ||
+			state.freshnessCutoff != null ||
+			state.freshnessSource != null ||
+			state.showUnmapped ||
+			state.showMomAndPop === false ||
+			state.selectedRestaurantSlug
+	);
+}
+
+export function buildEagerPageMeta(
+	state: Partial<UrlStateSnapshot>,
+	aggregates: PageMetaAggregates,
+	origin: string,
+	pathname: string,
+	restaurantName?: string | null,
+): PageMeta {
+	const trimmedSearch = state.searchQuery?.trim() ?? '';
+	const description = trimmedSearch
+		? `Explore community-recommended mom and pop restaurants in Orange County matching "${trimmedSearch}".`
+		: hasPageMetaFilters(state)
+			? 'Explore community-recommended mom and pop restaurants in Orange County with your current filters applied.'
+			: `Explore ${aggregates.restaurantCount} community-recommended mom and pop restaurants in Orange County, CA — curated from ${aggregates.threadCount} Reddit ${aggregates.threadCount === 1 ? 'thread' : 'threads'} and ${aggregates.commentCount} comments.`;
+
+	return {
+		title: buildPageTitle(state, restaurantName),
+		description,
+		shareUrl: buildCanonicalShareUrl(origin, pathname, state)
+	};
+}
+
 function restaurantNameForSlug(
   slug: string | null | undefined,
   allRestaurants: Restaurant[],

@@ -10,6 +10,12 @@ const pageSource = readFileSync(
   "utf8",
 );
 
+const pageMeta = {
+  title: "OC Food Recs",
+  description: "Community-recommended restaurants in Orange County.",
+  shareUrl: "http://localhost/",
+};
+
 const nav = vi.hoisted(() => ({
   afterNavigate: vi.fn<(callback: () => void) => void>(),
   replaceState: vi.fn(),
@@ -44,7 +50,11 @@ describe("home page first-load shell", () => {
     stubMatchMedia();
     nav.afterNavigate.mockClear();
     render(Page, {
-      data: { home: new Promise<ExplorerPageData>(() => {}) },
+      data: {
+        home: new Promise<ExplorerPageData>(() => {}),
+        pageMeta,
+        pageOrigin: "http://localhost",
+      },
     });
 
     expect(document.querySelector(".explorer-skeleton")).toHaveAttribute(
@@ -59,7 +69,11 @@ describe("home page first-load shell", () => {
     stubMatchMedia();
     nav.afterNavigate.mockClear();
     render(Page, {
-      data: { home: new Promise<ExplorerPageData>(() => {}) },
+      data: {
+        home: new Promise<ExplorerPageData>(() => {}),
+        pageMeta,
+        pageOrigin: "http://localhost",
+      },
     });
 
     expect(document.querySelector(".explorer-skeleton")).toBeTruthy();
@@ -72,7 +86,9 @@ describe("home page first-load shell", () => {
     nav.afterNavigate.mockClear();
     const home = Promise.reject(new Error("load failed"));
     home.catch(() => {});
-    render(Page, { data: { home } });
+    render(Page, {
+      data: { home, pageMeta, pageOrigin: "http://localhost" },
+    });
 
     const link = await screen.findByRole("link", {
       name: /back to restaurants/i,
