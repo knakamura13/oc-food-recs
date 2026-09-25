@@ -139,23 +139,18 @@ test.describe("Shareable URL state", () => {
     );
   });
 
-  test("SSR meta tags reflect filtered views", async ({ page }, testInfo) => {
-    test.skip(
-      testInfo.project.name !== "Desktop Chrome",
-      "Desktop viewport only",
-    );
-    await page.goto("/?cuisine=Mexican");
+  test('SSR metadata is present in the initial HTML response', async ({ request }) => {
+	const response = await request.get('/?cuisine=Mexican');
+	expect(response.ok()).toBeTruthy();
 
-    const description = page.locator('meta[property="og:description"]');
-    await expect(description).toHaveAttribute(
-      "content",
-      /community-recommended mom and pop restaurants/i,
-    );
-
-    const ogUrl = page.locator('meta[property="og:url"]');
-    await expect(ogUrl).toHaveAttribute("content", /cuisine=Mexican/);
-
-    const ogImage = page.locator('meta[property="og:image"]');
-    await expect(ogImage).toHaveAttribute("content", /\/screenshot\.jpeg$/);
+	const html = await response.text();
+	const head = html.slice(0, html.indexOf('</head>'));
+	expect(head).toMatch(/<meta property="og:title" content="/);
+	expect(head).toMatch(
+		/<meta property="og:description" content="[^"]*community-recommended mom and pop restaurants/,
+	);
+	expect(head).toMatch(/<meta property="og:url" content="[^"]*cuisine=Mexican/);
+	expect(head).toMatch(/<link rel="canonical" href="[^"]*cuisine=Mexican/);
+	expect(head).toMatch(/<meta property="og:image" content="[^"]*\/screenshot\.jpeg/);
   });
 });

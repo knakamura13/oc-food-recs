@@ -16,7 +16,13 @@
 	import { SEARCH_DEBOUNCE_MS, scheduleDebounced } from '$lib/debounce';
 	import { filterPageRestaurantsWithSearch } from '$lib/restaurants/filter-page-restaurants';
 	import { coordsForFitBounds } from '$lib/restaurants/explorer-bounds';
-	import { buildPageTitle, buildPageDescription, buildCanonicalShareUrl } from '$lib/restaurants/page-meta';
+	import {
+		buildPageTitle,
+		buildPageDescription,
+		buildCanonicalShareUrl,
+		DEFAULT_TITLE,
+		type PageMeta
+	} from '$lib/restaurants/page-meta';
 	import { applyUrlStateSnapshot } from '$lib/restaurants/apply-url-state';
 	import { buildSearchParams } from '$lib/restaurants/url-state';
 	import { initSavedState, savedState } from '$lib/restaurants/saved-restaurants.svelte';
@@ -29,7 +35,21 @@
 	import BackToTop from '$lib/restaurants/components/BackToTop.svelte';
 	import type { ExplorerPageData } from '$lib/restaurants/explorer-page-data';
 
-	let { data, routerReady = false }: { data: ExplorerPageData; routerReady?: boolean } = $props();
+	let {
+		data,
+		initialPageMeta = {
+			title: DEFAULT_TITLE,
+			description: 'Explore community-recommended mom and pop restaurants in Orange County.',
+			shareUrl: data.pageOrigin
+		},
+		onPageMetaChange,
+		routerReady = false
+	}: {
+		data: ExplorerPageData;
+		initialPageMeta?: PageMeta;
+		onPageMetaChange?: (pageMeta: PageMeta) => void;
+		routerReady?: boolean;
+	} = $props();
 
 	const FOCUSABLE_SELECTOR = [
 		'a[href]',
@@ -126,7 +146,7 @@
 	});
 
 	const pageTitle = $derived.by(() => {
-		if (!clientHydrated) return data.pageMeta.title;
+		if (!clientHydrated) return initialPageMeta.title;
 		return buildPageTitle(
 			{
 				searchQuery: appState.searchQuery,
@@ -145,10 +165,8 @@
 		);
 	});
 
-	const ogImageUrl = $derived(`${data.pageOrigin}/screenshot.jpeg`);
-
 	const pageDescription = $derived.by(() => {
-		if (!clientHydrated) return data.pageMeta.description;
+		if (!clientHydrated) return initialPageMeta.description;
 		return buildPageDescription(
 			{
 				searchQuery: appState.searchQuery,
@@ -179,10 +197,14 @@
 			sortDirection: appState.sortDirection,
 			selectedRestaurantSlug: appState.selectedRestaurantSlug
 		};
-		if (!clientHydrated) return data.pageMeta.shareUrl;
+		if (!clientHydrated) return initialPageMeta.shareUrl;
 		const origin = typeof window !== 'undefined' ? window.location.origin : data.pageOrigin;
 		const pathname = typeof window !== 'undefined' ? window.location.pathname : '/';
 		return buildCanonicalShareUrl(origin, pathname, state);
+	});
+
+	$effect(() => {
+		onPageMetaChange?.({ title: pageTitle, description: pageDescription, shareUrl });
 	});
 
 	function isMobileViewport() {
@@ -618,27 +640,6 @@
 		}
 	});
 </script>
-
-<svelte:head>
-	<title>{pageTitle}</title>
-	<meta name="description" content={pageDescription} />
-	<meta property="og:title" content={pageTitle} />
-	<meta property="og:description" content={pageDescription} />
-	<meta property="og:type" content="website" />
-	<meta property="og:url" content={shareUrl} />
-	<meta property="og:image" content={ogImageUrl} />
-	<meta property="og:image:width" content="1200" />
-	<meta property="og:image:height" content="630" />
-	<meta property="og:image:alt" content="Screenshot of the OC Food Recs explorer showing a cream restaurant list beside an Orange County map" />
-	<meta name="twitter:card" content="summary_large_image" />
-	<meta name="twitter:title" content={pageTitle} />
-	<meta name="twitter:description" content={pageDescription} />
-	<meta name="twitter:image" content={ogImageUrl} />
-	<meta name="twitter:image:alt" content="Screenshot of the OC Food Recs explorer showing a cream restaurant list beside an Orange County map" />
-	<link rel="dns-prefetch" href="https://a.tile.openstreetmap.org" />
-	<link rel="dns-prefetch" href="https://b.tile.openstreetmap.org" />
-	<link rel="dns-prefetch" href="https://c.tile.openstreetmap.org" />
-</svelte:head>
 
 <svelte:window onkeydown={handleDesktopMapEscape} />
 
