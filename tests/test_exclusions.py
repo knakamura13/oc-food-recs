@@ -109,6 +109,12 @@ class TestRegistryMatching(unittest.TestCase):
         self.assertEqual(rp.match_excluded_brand("In-N-Out", REG), ("chain", None))
         self.assertIsNotNone(rp.match_excluded_brand("In N Out Costa Mesa", REG))
 
+    def test_single_word_brand_does_not_match_unrelated_name_suffix(self):
+        chilis = _registry(("Chili's", "chain", None))
+        self.assertIsNone(rp.match_excluded_brand("Tacos Los Chili’s", chilis))
+        self.assertEqual(rp.match_excluded_brand("Chili's", chilis), ("chain", None))
+        self.assertEqual(rp.match_excluded_brand("Chili's Irvine", chilis), ("chain", None))
+
     def test_reverse_word_boundary_match(self):
         # The extracted name is a full word-boundary prefix of the registry brand.
         self.assertEqual(rp.match_excluded_brand("Broken Yolk", REG), ("chain", None))

@@ -2440,7 +2440,9 @@ def _brand_names_match(extracted_name: str, brand_name: str) -> bool:
       avoid hiding independents. We allow only:
         * exact normalized equality ("DinTaiFung" == "Din Tai Fung"), and
         * a full word-boundary substring in either direction ("Vox Kitchen" in "Vox Kitchen
-          Fountain Valley"; "Broken Yolk" in "Broken Yolk Cafe").
+          Fountain Valley"; "Broken Yolk" in "Broken Yolk Cafe"). A single-word
+          registry brand must start a longer extracted name, so an unrelated restaurant
+          like "Tacos Los Chili's" does not match "Chili's".
       When the extracted name is shorter than the registry brand, it must span at least two
     words so single-token fragments ("Panda", "King", "Taco") cannot hit multi-word chains.
       We deliberately do NOT use ``_name_score``'s token-subset/fuzzy bonus here: with no geo
@@ -2457,6 +2459,8 @@ def _brand_names_match(extracted_name: str, brand_name: str) -> bool:
     if len(brand) <= len(ext) and _is_word_boundary_match(brand_name, extracted_name):
         # The full registry brand appears inside a longer extracted name (e.g. "Chipotle
         # Irvine", "Vox Kitchen Fountain Valley").
+        if _name_word_count(brand_name) == 1 and not ext.startswith(brand):
+            return False
         return True
     if len(ext) < len(brand) and _is_word_boundary_match(extracted_name, brand_name):
         # Extracted name is a strict prefix of the brand ("Broken Yolk" -> "Broken Yolk

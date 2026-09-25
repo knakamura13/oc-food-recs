@@ -31,7 +31,7 @@ import db_backup as b
 import reddit_pipeline as rp
 
 
-def main() -> int:
+def main(pending_registry_rows: list[dict] | None = None) -> int:
     apply = "--apply" in sys.argv[1:]
     try:
         conn = b._connect()
@@ -57,6 +57,11 @@ def main() -> int:
         return 0
 
     registry = rp._load_excluded_brands(cur)
+    if pending_registry_rows:
+        # Preview the registry after the seed upsert, without writing it.
+        by_name = {r["normalized_name"]: r for r in registry}
+        by_name.update({r["normalized_name"]: r for r in pending_registry_rows})
+        registry = list(by_name.values())
     if not registry:
         print(
             "excluded_brands is empty (or the table is missing). "
