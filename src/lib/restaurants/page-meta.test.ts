@@ -1,11 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from 'vitest';
 import {
-  buildCanonicalShareUrl,
-  buildPageDescription,
-  buildPageMeta,
-  buildPageTitle,
-} from "./page-meta";
-import { makeRestaurant } from "./test-utils";
+	buildCanonicalShareUrl,
+	buildEagerPageMeta,
+	buildPageDescription,
+	buildPageMeta,
+	buildPageTitle
+} from './page-meta';
+import { makeRestaurant } from './test-utils';
 
 const meta = {
   source_threads: [{ id: "t1", subreddit: "orangecounty" } as never],
@@ -125,4 +126,46 @@ describe("page-meta", () => {
     expect(pageMeta.shareUrl).toContain("q=tacos");
     expect(pageMeta.shareUrl).toContain("restaurant=la-taco-spot");
   });
+
+	it('builds eager metadata from aggregate counts and URL state', () => {
+		const defaultMeta = buildEagerPageMeta(
+			{},
+			{ restaurantCount: 2, threadCount: 1, commentCount: 100 },
+			'https://example.com',
+			'/'
+		);
+		expect(defaultMeta.description).toBe(
+			'Explore 2 community-recommended mom and pop restaurants in Orange County, CA — curated from 1 Reddit thread and 100 comments.'
+		);
+
+		const pageMeta = buildEagerPageMeta(
+			{ activeCuisines: ['Mexican'] },
+			{ restaurantCount: 2, threadCount: 1, commentCount: 100 },
+			'https://example.com',
+			'/'
+		);
+
+		expect(pageMeta.title).toContain('Mexican');
+		expect(pageMeta.description).toContain('community-recommended mom and pop restaurants');
+		expect(pageMeta.description).toContain('filters applied');
+		expect(pageMeta.shareUrl).toBe('https://example.com/?cuisine=Mexican');
+
+		const visitMeta = buildEagerPageMeta(
+			{ freshnessSource: 'visit' },
+			{ restaurantCount: 0, threadCount: 0, commentCount: 0 },
+			'https://example.com',
+			'/'
+		);
+		expect(visitMeta.description).toContain('filters applied');
+		expect(visitMeta.description).not.toContain('0 community-recommended');
+
+		const restaurantMeta = buildEagerPageMeta(
+			{ selectedRestaurantSlug: 'la-taco-spot' },
+			{ restaurantCount: 0, threadCount: 0, commentCount: 0 },
+			'https://example.com',
+			'/',
+			'La Taco Spot'
+		);
+		expect(restaurantMeta.title).toBe('La Taco Spot — OC Food Recs');
+	});
 });
