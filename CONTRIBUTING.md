@@ -104,6 +104,10 @@ npm run pipeline:backfill-permalinks
 
 Chain / Mom & pop policy v1 backfill (idempotent; exits 0 if `DATABASE_URL` is unset):
 
+Railway runs `npm run db:migrate` before each app deployment via `railway.toml`.
+The backfill remains a separate operation because it changes restaurant visibility;
+its dry run previews the seed registry together with the resulting classifications.
+
 ```sh
 npm run db:migrate
 npm run pipeline:backfill-chain-policy                 # dry run
