@@ -52,10 +52,13 @@ def main() -> int:
             return seed_rc
         print()
 
+    pending_registry_rows = (
+        seed_exclusions.load_seed() if not apply and not skip_seed else None
+    )
     saved = sys.argv
     sys.argv = ["apply_exclusions.py"] + (["--apply"] if apply else [])
     try:
-        return apply_exclusions.main()
+        return apply_exclusions.main(pending_registry_rows=pending_registry_rows)
     finally:
         sys.argv = saved
 
