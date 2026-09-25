@@ -2,9 +2,21 @@
 	import { afterNavigate } from '$app/navigation';
 	import ExplorerApp from '$lib/restaurants/components/ExplorerApp.svelte';
 	import ExplorerSkeleton from '$lib/restaurants/components/ExplorerSkeleton.svelte';
+	import type { PageMeta } from '$lib/restaurants/page-meta';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
+	let clientPageMeta = $state<PageMeta | null>(null);
+	const activePageMeta = $derived(clientPageMeta ?? data.pageMeta);
+	const ogImageUrl = $derived(`${data.pageOrigin}/screenshot.jpeg`);
+
+	$effect(() => {
+		if (data.pageMeta) clientPageMeta = null;
+	});
+
+	function handlePageMetaChange(pageMeta: PageMeta) {
+		clientPageMeta = pageMeta;
+	}
 
 	// afterNavigate must live on this page (always in the first hydrate tree).
 	// Kit registers the callback in onMount and only invokes callbacks that were
@@ -16,10 +28,37 @@
 	});
 </script>
 
+<svelte:head>
+	<title>{activePageMeta.title}</title>
+	<meta name="description" content={activePageMeta.description} />
+	<meta property="og:title" content={activePageMeta.title} />
+	<meta property="og:description" content={activePageMeta.description} />
+	<meta property="og:type" content="website" />
+	<meta property="og:url" content={activePageMeta.shareUrl} />
+	<meta property="og:image" content={ogImageUrl} />
+	<meta property="og:image:width" content="1200" />
+	<meta property="og:image:height" content="630" />
+	<meta property="og:image:alt" content="Screenshot of the OC Food Recs explorer showing a cream restaurant list beside an Orange County map" />
+	<meta name="twitter:card" content="summary_large_image" />
+	<meta name="twitter:title" content={activePageMeta.title} />
+	<meta name="twitter:description" content={activePageMeta.description} />
+	<meta name="twitter:image" content={ogImageUrl} />
+	<meta name="twitter:image:alt" content="Screenshot of the OC Food Recs explorer showing a cream restaurant list beside an Orange County map" />
+	<link rel="canonical" href={activePageMeta.shareUrl} />
+	<link rel="dns-prefetch" href="https://a.tile.openstreetmap.org" />
+	<link rel="dns-prefetch" href="https://b.tile.openstreetmap.org" />
+	<link rel="dns-prefetch" href="https://c.tile.openstreetmap.org" />
+</svelte:head>
+
 {#await data.home}
 	<ExplorerSkeleton />
 {:then home}
-	<ExplorerApp data={home} {routerReady} />
+	<ExplorerApp
+		data={home}
+		initialPageMeta={data.pageMeta}
+		onPageMetaChange={handlePageMetaChange}
+		{routerReady}
+	/>
 {:catch}
 	<main class="load-error">
 		<p class="error-code">Error</p>

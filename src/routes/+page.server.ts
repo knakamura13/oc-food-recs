@@ -1,5 +1,9 @@
 import type { ExplorerPageData } from "$lib/restaurants/explorer-page-data";
-import { buildPageMeta } from "$lib/restaurants/page-meta";
+import {
+	buildEagerPageMeta,
+	hasPageMetaFilters,
+	type PageMetaAggregates
+} from '$lib/restaurants/page-meta';
 import { db } from "$lib/server/db";
 import type {
   Mention,
@@ -45,18 +49,9 @@ interface StatsRow {
   total_comments_processed: number;
 }
 
-function threadSubredditLookup(
-  threads: ThreadSummary[],
-): Record<string, string> {
-  const lookup: Record<string, string> = {};
-  for (const t of threads) lookup[t.id] = t.subreddit;
-  return lookup;
-}
-
 async function loadHomePage(
   urlState: ReturnType<typeof parseSearchParams>,
   pageOrigin: string,
-  pathname: string,
 ): Promise<ExplorerPageData> {
   // Restaurants joined with their mentions; aggregated to one row per restaurant.
   // Only restaurants whose mentions belong to published threads are returned.
@@ -245,32 +240,89 @@ async function loadHomePage(
     total_comments_processed: statsRow.total_comments_processed ?? 0,
   };
 
-  const pageMeta = buildPageMeta(
-    urlState,
-    restaurants,
-    meta,
-    pageOrigin,
-    pathname,
-    threadSubredditLookup(sourceThreads),
-  );
-
   return {
     dataset: {
       restaurants,
       meta,
     },
     urlState,
-    pageMeta,
     pageOrigin,
   };
 }
 
-export const load: PageServerLoad = ({ url }) => {
+async function loadPageMeta(
+	urlState: ReturnType<typeof parseSearchParams>,
+	pageOrigin: string,
+	pathname: string
+) {
+	let restaurantName: string | null = null;
+	if (urlState.selectedRestaurantSlug) {
+		const restaurantResult = await db.execute(sql`
+			SELECT r.name
+			FROM restaurants r
+			WHERE r.slug = ${urlState.selectedRestaurantSlug}
+				AND r.status <> 'excluded'
+				AND EXISTS (
+					SELECT 1
+					FROM mentions m
+					JOIN threads t ON t.id = m.thread_id
+					WHERE m.restaurant_id = r.id
+						AND t.included_in_publish = true
+				)
+			LIMIT 1
+		`);
+		restaurantName =
+			(restaurantResult.rows[0] as { name: string } | undefined)?.name ?? null;
+	}
+
+	let aggregates: PageMetaAggregates = {
+		restaurantCount: 0,
+		threadCount: 0,
+		commentCount: 0
+	};
+
+	if (!hasPageMetaFilters(urlState)) {
+		const [restaurantResult, threadResult] = await Promise.all([
+			db.execute(sql`
+				SELECT COUNT(DISTINCT r.id)::int AS restaurant_count
+				FROM restaurants r
+				JOIN mentions m ON m.restaurant_id = r.id
+				JOIN threads t ON t.id = m.thread_id
+				WHERE t.included_in_publish = true
+					AND r.status <> 'excluded'
+			`),
+			db.execute(sql`
+				SELECT
+					COUNT(*)::int AS thread_count,
+					COALESCE(SUM(t.comment_count), 0)::int AS comment_count
+				FROM threads t
+				WHERE t.included_in_publish = true
+			`)
+		]);
+
+		aggregates = {
+			restaurantCount: Number(restaurantResult.rows[0]?.restaurant_count ?? 0),
+			threadCount: Number(threadResult.rows[0]?.thread_count ?? 0),
+			commentCount: Number(threadResult.rows[0]?.comment_count ?? 0)
+		};
+	}
+
+	return buildEagerPageMeta(
+		urlState,
+		aggregates,
+		pageOrigin,
+		pathname,
+		restaurantName
+	);
+}
+
+export const load: PageServerLoad = async ({ url }) => {
   // Read URL in the load body so SvelteKit tracks search-param dependencies.
-  // The DB work is returned as a promise so the explorer shell can stream
-  // before Postgres finishes — first paint is SSR/DB-bound, not client nav.
+  // Keep the full dataset streamed while the three summary aggregates resolve,
+  // so the page can render crawlable head metadata before the explorer mounts.
   const urlState = parseSearchParams(url.searchParams);
-  const home = loadHomePage(urlState, url.origin, url.pathname);
+  const home = loadHomePage(urlState, url.origin);
   void home.catch(() => {});
-  return { home };
+  const pageMeta = await loadPageMeta(urlState, url.origin, url.pathname);
+  return { home, pageMeta, pageOrigin: url.origin };
 };
