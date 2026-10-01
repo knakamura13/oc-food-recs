@@ -8,6 +8,7 @@
 		relativeAge,
 		setFreshnessFilter
 	} from '$lib/restaurants/stores.svelte';
+	import { trackEvent } from '$lib/events';
 
 	interface Props {
 		/** Dated mentions for the current selection (already filtered by every OTHER filter). */
@@ -137,7 +138,11 @@
 				step={DAY_MS}
 				bind:value={handleMs}
 				oninput={scheduleCommit}
-				onchange={flush}
+				onchange={() => {
+					flush();
+					// `change` fires once per release, unlike the throttled `input` stream.
+					if (handleMs > extent.min) trackEvent('filter_applied', { kind: 'recency' });
+				}}
 				onpointerdown={() => (dragging = true)}
 				onpointerup={() => {
 					dragging = false;

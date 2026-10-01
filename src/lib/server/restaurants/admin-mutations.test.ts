@@ -106,3 +106,42 @@ describe("restaurants admin mutations", () => {
     expect(updateMock).not.toHaveBeenCalled();
   });
 });
+
+describe("mention takedown helpers", () => {
+  beforeEach(() => {
+    updateMock.mockReset();
+  });
+
+  it("takes a comment down for every restaurant row and reports how many changed", async () => {
+    const returning = vi.fn().mockResolvedValue([{ id: 1 }, { id: 2 }]);
+    const where = vi.fn().mockReturnValue({ returning });
+    const set = vi.fn().mockReturnValue({ where });
+    updateMock.mockReturnValue({ set });
+
+    const { takeDownMention } = await import("./admin");
+    await expect(takeDownMention("t", "t1_x")).resolves.toBe(2);
+    expect(set).toHaveBeenCalledWith({ status: "taken_down" });
+  });
+
+  it("restore throws when the comment is missing", async () => {
+    const returning = vi.fn().mockResolvedValue([]);
+    updateMock.mockReturnValue({
+      set: vi.fn().mockReturnValue({ where: vi.fn().mockReturnValue({ returning }) }),
+    });
+    const { restoreMention } = await import("./admin");
+    await expect(restoreMention("t", "t1_x")).rejects.toThrow("Mention not found.");
+  });
+
+  it("recognises a pasted permalink in any reddit.com form", async () => {
+    const { redditCommentIdFromUrl } = await import("./admin");
+    expect(
+      redditCommentIdFromUrl(
+        "https://old.reddit.com/r/CostaMesa/comments/14n9q0f/comment/jqz1lke/?context=3",
+      ),
+    ).toBe("t1_jqz1lke");
+    expect(
+      redditCommentIdFromUrl("https://www.reddit.com/r/CostaMesa/comments/14n9q0f/best_food/jqz1lke"),
+    ).toBe("t1_jqz1lke");
+    expect(redditCommentIdFromUrl("best tacos in town")).toBeNull();
+  });
+});
