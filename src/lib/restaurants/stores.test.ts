@@ -17,6 +17,7 @@ function mention(overrides: Partial<ListMention> = {}): ListMention {
     comment_date: null,
     thread_id: "t1",
     role: "primary",
+    credit: 1,
     ...overrides,
   };
 }
@@ -68,51 +69,61 @@ describe("stores utilities", () => {
   describe("weightedAggregates", () => {
     it("decays repeat mentions from the same author", () => {
       const mentions: ListMention[] = [
-        {
-          author: "alice",
-          score: 10,
-          comment_date: null,
-          thread_id: "t1",
-          role: "primary",
-        },
-        {
-          author: "alice",
-          score: 8,
-          comment_date: null,
-          thread_id: "t1",
-          role: "endorsement",
-        },
+        mention({ author: "alice", score: 10 }),
+        mention({ author: "alice", score: 8, role: "endorsement" }),
       ];
 
       const result = weightedAggregates(mentions);
-      const expectedScore = Math.round(10 + 8 * REPEAT_AUTHOR_DECAY);
+      const raw = 10 + 8 * REPEAT_AUTHOR_DECAY;
 
-      expect(result.aggregate_score).toBe(expectedScore);
+      // One voice: shrunk by 1/(1+2).
+      expect(result.aggregate_score).toBe(Math.round(raw / 3));
       expect(result.mention_count).toBe(1);
     });
 
     it("counts each anonymous mention as a distinct voice", () => {
       const mentions: ListMention[] = [
-        {
-          author: "[deleted]",
-          score: 5,
-          comment_date: null,
-          thread_id: "t1",
-          role: "primary",
-        },
-        {
-          author: "[deleted]",
-          score: 3,
-          comment_date: null,
-          thread_id: "t1",
-          role: "endorsement",
-        },
+        mention({ author: "[deleted]", score: 5 }),
+        mention({ author: "[deleted]", score: 3, role: "endorsement" }),
       ];
 
       const result = weightedAggregates(mentions);
 
-      expect(result.aggregate_score).toBe(8);
+      // Two voices: shrunk by 2/(2+2).
+      expect(result.aggregate_score).toBe(Math.round(8 / 2));
       expect(result.mention_count).toBe(2);
+    });
+
+    it("pays a comment's upvotes only in proportion to its credit", () => {
+      const shared = weightedAggregates([
+        mention({ author: "a", score: 300, credit: 1 / 6 }),
+        mention({ author: "b", score: 300, credit: 1 / 6 }),
+      ]);
+      const solo = weightedAggregates([
+        mention({ author: "a", score: 50 }),
+        mention({ author: "b", score: 50 }),
+      ]);
+
+      expect(shared).toEqual(solo);
+    });
+
+    it("shrinks few-voice rows so breadth beats one big comment", () => {
+      const oneBig = weightedAggregates([mention({ author: "a", score: 225 })]);
+      const broad = weightedAggregates(
+        ["a", "b", "c", "d", "e", "f"].map((author) =>
+          mention({ author, score: 60 }),
+        ),
+      );
+
+      expect(oneBig.aggregate_score).toBe(75);
+      expect(broad.aggregate_score).toBe(270);
+    });
+
+    it("scores an empty slice as zero", () => {
+      expect(weightedAggregates([])).toEqual({
+        aggregate_score: 0,
+        mention_count: 0,
+      });
     });
   });
 

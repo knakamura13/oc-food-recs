@@ -19,6 +19,7 @@ const mentions: ListMention[] = [
     score: 5,
     author: "alice",
     role: "primary",
+    credit: 1,
   },
 ];
 

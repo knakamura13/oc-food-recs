@@ -18,6 +18,7 @@ describe("+page.server ranking", () => {
         score: 10,
         role: "primary",
         comment_date: null,
+        credit: 1,
       },
       {
         thread_id: "t1",
@@ -25,6 +26,7 @@ describe("+page.server ranking", () => {
         score: 8,
         role: "endorsement",
         comment_date: null,
+        credit: 1,
       },
       {
         thread_id: "t1",
@@ -32,9 +34,11 @@ describe("+page.server ranking", () => {
         score: 4,
         role: "primary",
         comment_date: null,
+        credit: 1,
       },
     ]);
-    expect(aggregate_score).toBe(Math.round(10 + 8 * 0.5 + 4));
+    // Two voices (alice, bob): raw 18 shrunk by 2/(2+2).
+    expect(aggregate_score).toBe(Math.round(((10 + 8 * 0.5 + 4) * 2) / 4));
     expect(mention_count).toBe(2);
   });
 });
