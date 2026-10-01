@@ -106,6 +106,15 @@ describe("snippet utility", () => {
   });
 
   describe("getTrimmedSnippet", () => {
+    it("shows no URLs or percent-encoding from markdown links", () => {
+      const body =
+        "El Farolito is great, [Apple Maps](https://maps.apple.com/?q=%E2%80%A6)";
+      const result = getTrimmedSnippet(body, "El Farolito");
+      expect(result.text).not.toContain("http");
+      expect(result.text).not.toContain("%");
+      expect(result.text).toContain("Apple Maps");
+    });
+
     it("returns empty snippet for empty inputs", () => {
       const result = getTrimmedSnippet("", "El Farolito");
       expect(result).toEqual({ text: "", segments: [] });

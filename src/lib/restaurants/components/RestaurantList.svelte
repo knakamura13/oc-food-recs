@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { Bookmark, ChevronRight, Flag, MapPin } from 'lucide-svelte';
 	import { getTrimmedSnippet } from '$lib/restaurants/snippet';
+	import CommentBody from '$lib/restaurants/components/CommentBody.svelte';
+	import { primaryMentions, primaryThreadCount } from '$lib/restaurants/drawer-comments';
 	import { googleMapsUrl } from '$lib/restaurants/maps-url';
 	import { trackEvent } from '$lib/events';
 	import { tick, untrack } from 'svelte';
@@ -65,6 +67,9 @@
 	let details = $state<Record<string, Mention[] | undefined>>({});
 	let detailErrors = $state<Record<string, boolean>>({});
 	let openScoreTipSlug = $state<string | null>(null);
+	const PRIMARY_CAP_THRESHOLD = 12;
+	const PRIMARY_SHOWN = 5;
+	let allPrimariesOpen = $state<Record<string, boolean>>({});
 	async function loadDetail(slug: string, { force = false } = {}) {
 		if (!force && details[slug] !== undefined) return;
 		if (force) {
@@ -460,14 +465,6 @@
 		}
 	}
 
-	function getPrimaryMention(mentions: Mention[]): Mention | null {
-		const primaries = mentions.filter((m) => m.role === 'primary');
-		if (primaries.length === 0) return null;
-		// Defensive: there should be exactly one per restaurant per thread, but
-		// pick the highest-scored primary if multiple slipped through.
-		return primaries.reduce((best, m) => (m.score > best.score ? m : best), primaries[0]);
-	}
-
 	function groupEndorsements(mentions: Mention[]) {
 		const groups = {
 			dish_rec: [] as Mention[],
@@ -484,15 +481,21 @@
 	}
 
 	function hasDrawerCommentContent(
-		primary: Mention | null,
+		hasPrimary: boolean,
 		groups: ReturnType<typeof groupEndorsements>
 	) {
-		return Boolean(
-			primary ||
-				groups.dish_rec.length > 0 ||
-				groups.personal_story.length > 0 ||
-				groups.endorsement.length > 0
+		return (
+			hasPrimary ||
+			groups.dish_rec.length > 0 ||
+			groups.personal_story.length > 0 ||
+			groups.endorsement.length > 0
 		);
+	}
+
+	const openableSlugs = $derived(new Set(table.rows.map((r) => r.slug)));
+
+	function openPlace(slug: string) {
+		appState.listScrollTarget = slug;
 	}
 
 	function relativeDate(isoDate: string | null): string {
@@ -730,52 +733,71 @@
 							</div>
 						{:else}
 							{@const mentions = details[slug] ?? []}
-							{@const primary = getPrimaryMention(mentions)}
+							{@const primaries = primaryMentions(mentions)}
+							{@const threadCount = primaryThreadCount(primaries)}
 							{@const groups = groupEndorsements(mentions)}
-							{@const hasComments = hasDrawerCommentContent(primary, groups)}
+							{@const hasComments = hasDrawerCommentContent(primaries.length > 0, groups)}
 								<div class="drawer-content" class:no-motion={reduceMotion()}>
-									{#if primary}
-										<div class="primary-comment">
-											<div class="comment-header">
-												<span class="comment-author">
-													u/{primary.author}
-													{#if primary.comment_date}
-														<span class="comment-date"> · {relativeDate(primary.comment_date)}</span>
+									{#if primaries.length > 0}
+										<div class="primary-section">
+											<h3 class="primary-heading">Recommended in {threadCount} thread{threadCount === 1 ? '' : 's'}</h3>
+											{#each primaries.length > PRIMARY_CAP_THRESHOLD && !allPrimariesOpen[slug] ? primaries.slice(0, PRIMARY_SHOWN) : primaries as primary (primary.comment_id)}
+												{@const tipKey = `${slug}:${primary.comment_id}`}
+												<div class="primary-comment">
+													<div class="comment-header">
+														<span class="comment-author">
+															u/{primary.author}
+															{#if primary.comment_date}
+																<span class="comment-date"> · {relativeDate(primary.comment_date)}</span>
+															{/if}
+														</span>
+														<span class="comment-score">
+															{primary.score} points
+															<button
+																type="button"
+																class="info-tip"
+																aria-label="Score info"
+																aria-expanded={openScoreTipSlug === tipKey}
+																aria-controls="score-tip-{slug}-{primary.comment_id}"
+																onclick={(e) => toggleScoreTip(tipKey, e)}
+															>
+																<span class="info-icon" aria-hidden="true">i</span>
+															</button>
+															<span
+																id="score-tip-{slug}-{primary.comment_id}"
+																class="info-tooltip"
+																class:open={openScoreTipSlug === tipKey}
+																role="tooltip"
+															>
+																Reddit upvotes on this recommendation comment.
+															</span>
+														</span>
+													</div>
+													<CommentBody body={primary.body} restaurantName={restaurant.name} otherPlaces={primary.other_places} {openableSlugs} onOpenPlace={openPlace} />
+													{#if primary.permalink}
+														<!-- External absolute URLs (Reddit/Maps below): do not wrap in resolve() — that is for in-app routes only. -->
+														<a
+															href={primary.permalink}
+															target="_blank"
+															rel="noopener noreferrer"
+															class="permalink"
+														>
+															View on Reddit &rarr;
+														</a>
 													{/if}
-												</span>
-												<span class="comment-score">
-													{primary.score} points
-													<button
-														type="button"
-														class="info-tip"
-														aria-label="Score info"
-														aria-expanded={openScoreTipSlug === slug}
-														aria-controls="score-tip-{slug}"
-														onclick={(e) => toggleScoreTip(slug, e)}
-													>
-														<span class="info-icon" aria-hidden="true">i</span>
-													</button>
-													<span
-														id="score-tip-{slug}"
-														class="info-tooltip"
-														class:open={openScoreTipSlug === slug}
-														role="tooltip"
-													>
-														Reddit upvotes on this recommendation comment.
-													</span>
-												</span>
-											</div>
-											<p class="comment-body">{primary.body}</p>
-											{#if primary.permalink}
-									<!-- External absolute URLs (Reddit/Maps below): do not wrap in resolve() — that is for in-app routes only. -->
-									<a
-										href={primary.permalink}
-										target="_blank"
-										rel="noopener noreferrer"
-										class="permalink"
-									>
-										View on Reddit &rarr;
-									</a>
+												</div>
+											{/each}
+											{#if primaries.length > PRIMARY_CAP_THRESHOLD}
+												<button
+													type="button"
+													class="primary-more"
+													aria-expanded={allPrimariesOpen[slug] === true}
+													onclick={() => (allPrimariesOpen[slug] = !allPrimariesOpen[slug])}
+												>
+													{allPrimariesOpen[slug]
+														? 'Show fewer recommendations'
+														: `Show ${primaries.length - PRIMARY_SHOWN} more recommendations`}
+												</button>
 											{/if}
 										</div>
 									{/if}
@@ -791,7 +813,7 @@
 											</span>
 											<span class="endorsement-score">{e.score} pts</span>
 										</div>
-										<p>{e.body}</p>
+										<CommentBody body={e.body} restaurantName={restaurant.name} otherPlaces={e.other_places} {openableSlugs} onOpenPlace={openPlace} clampable />
 										{#if e.permalink}
 											<a
 												href={e.permalink}
@@ -818,7 +840,7 @@
 											</span>
 											<span class="endorsement-score">{e.score} pts</span>
 										</div>
-										<p>{e.body}</p>
+										<CommentBody body={e.body} restaurantName={restaurant.name} otherPlaces={e.other_places} {openableSlugs} onOpenPlace={openPlace} clampable />
 										{#if e.permalink}
 											<a
 												href={e.permalink}
@@ -845,7 +867,7 @@
 											</span>
 											<span class="endorsement-score">{e.score} pts</span>
 										</div>
-										<p>{e.body}</p>
+										<CommentBody body={e.body} restaurantName={restaurant.name} otherPlaces={e.other_places} {openableSlugs} onOpenPlace={openPlace} clampable />
 										{#if e.permalink}
 											<a
 												href={e.permalink}
@@ -1631,17 +1653,6 @@
 		font-weight: 600;
 	}
 
-	.comment-body {
-		font-family: 'DM Serif Display', Georgia, serif;
-		font-size: 1rem;
-		font-style: italic;
-		line-height: 1.5;
-		color: #3e2c23;
-		margin: 0;
-		white-space: pre-wrap;
-		overflow-wrap: anywhere;
-	}
-
 	.permalink {
 		display: inline-block;
 		margin-top: 0.4rem;
@@ -1661,7 +1672,8 @@
 		margin-bottom: 0.75rem;
 	}
 
-	.endorsement-section h3 {
+	.endorsement-section h3,
+	.primary-heading {
 		font-family: 'DM Sans', sans-serif;
 		font-size: 0.72rem;
 		color: #7a6e63;
@@ -1701,12 +1713,24 @@
 		font-weight: 600;
 	}
 
-	.endorsement-card p {
-		overflow-wrap: anywhere;
-		font-size: 0.85rem;
-		line-height: 1.5;
-		color: #3e2c23;
-		margin: 0;
+	.primary-section {
+		margin-bottom: 0.75rem;
+	}
+
+	.primary-section .primary-comment + .primary-comment {
+		margin-top: 0.5rem;
+	}
+
+	.primary-more {
+		margin-top: 0.5rem;
+		background: none;
+		border: 0;
+		padding: 0;
+		font: inherit;
+		font-size: 0.78rem;
+		color: #c43700;
+		text-decoration: underline;
+		cursor: pointer;
 	}
 
 	.endorsement-permalink {

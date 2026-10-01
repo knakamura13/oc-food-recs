@@ -1,3 +1,5 @@
+import { stripMarkdownForSnippet } from "./comment-body";
+
 export interface SnippetSegment {
   text: string;
   isMatch: boolean;
@@ -370,7 +372,7 @@ export function getTrimmedSnippet(
   restaurantName: string,
   maxLen: number = 150,
 ): SnippetResult {
-  const normalizedBody = (body || "").trim();
+  const normalizedBody = stripMarkdownForSnippet(body || "").trim();
   if (!normalizedBody) {
     return { text: "", segments: [] };
   }
