@@ -19,11 +19,16 @@ export interface Mention {
   comment_date: string | null;
 }
 
-/** The subset of Mention fields shipped in the page payload; the rest load on demand. */
+/**
+ * The subset of Mention fields shipped in the page payload; the rest load on demand.
+ * `credit` is 1/n for a comment that names n restaurants, so a mention contributes
+ * `score * credit`; it is computed server-side (comment_id isn't shipped) and
+ * `weightedAggregates` multiplies by it.
+ */
 export type ListMention = Pick<
   Mention,
   "comment_date" | "thread_id" | "score" | "author" | "role"
->;
+> & { credit: number };
 
 export interface Restaurant {
   name: string;

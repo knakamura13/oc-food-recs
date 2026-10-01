@@ -7,7 +7,7 @@ import {
 import { countsTowardScore } from '$lib/server/restaurants/counts-toward-score';
 import { db } from "$lib/server/db";
 import type {
-  Mention,
+  ListMention,
   Restaurant,
   RestaurantData,
   ThreadSummary,
@@ -34,7 +34,7 @@ interface RestaurantRow {
   source_threads: string[];
   dish_rec_count: number;
   snippet_candidates: SnippetCandidate[];
-  mentions: Mention[];
+  mentions: ListMention[];
   chain_confidence: string | null;
 }
 
@@ -66,12 +66,24 @@ async function loadHomePage(
 			WHERE t.included_in_publish = true
 				AND ${countsTowardScore('m')}
 		),
+		comment_spread AS (
+			-- How many restaurants each comment names. Counted over published_mentions only,
+			-- i.e. mentions that pass countsTowardScore: a restaurant a comment merely
+			-- co-occurs with (names_restaurant = false) doesn't dilute the ones it names.
+			-- Restaurants later hidden (status = 'excluded') still count: a comment
+			-- listing six places, chains included, is a list, not six endorsements.
+			SELECT thread_id, comment_id, COUNT(DISTINCT restaurant_id) AS co_mentions
+			FROM published_mentions
+			GROUP BY thread_id, comment_id
+		),
 		ranked_mentions AS (
 			-- Rank each author's mentions of a restaurant by score so the same
 			-- person recommending the same place over and over can't read as
 			-- broad consensus. Anonymous authors are each their own voice.
+			-- credit splits one comment's upvotes across the restaurants it names.
 			SELECT
 				pm.*,
+				1.0::float8 / cs.co_mentions AS credit,
 				CASE
 					WHEN COALESCE(NULLIF(TRIM(pm.author), ''), '[deleted]')
 						IN ('[deleted]', '[removed]')
@@ -82,6 +94,8 @@ async function loadHomePage(
 					)
 				END AS author_rank
 			FROM published_mentions pm
+			JOIN comment_spread cs
+				ON cs.thread_id = pm.thread_id AND cs.comment_id = pm.comment_id
 		),
 		restaurant_mentions AS (
 			SELECT
@@ -94,9 +108,10 @@ async function loadHomePage(
 				r.lat,
 				r.lng,
 				COALESCE(r.chain_confidence, 'unknown') AS chain_confidence,
-				-- Geometric ½ decay per repeat (must match REPEAT_AUTHOR_DECAY).
-				COALESCE(SUM(rm.score * POWER(0.5, rm.author_rank - 1)), 0)::int AS aggregate_score,
-				-- Distinct contributors = count of rank-1 mentions.
+				-- Geometric ½ decay per repeat (must match REPEAT_AUTHOR_DECAY), each mention
+				-- paid its co-mention share (credit = 1/n). The voices shrink is applied below.
+				COALESCE(SUM(rm.score * rm.credit * POWER(0.5, rm.author_rank - 1)), 0) AS weighted_sum,
+				-- Distinct contributors = count of rank-1 mentions (= voices).
 				COUNT(*) FILTER (WHERE rm.author_rank = 1)::int AS mention_count,
 				COALESCE(
 					ARRAY_AGG(DISTINCT rm.thread_id) FILTER (WHERE rm.thread_id IS NOT NULL),
@@ -109,7 +124,8 @@ async function loadHomePage(
 							'author', rm.author,
 							'score', rm.score,
 							'role', rm.role,
-							'comment_date', rm.comment_date
+							'comment_date', rm.comment_date,
+							'credit', rm.credit
 						)
 						ORDER BY
 							CASE WHEN rm.role = 'primary' THEN 0 ELSE 1 END,
@@ -134,7 +150,8 @@ async function loadHomePage(
 							)
 					),
 					'[]'::json
-				) AS snippet_candidates
+				) AS snippet_candidates,
+				MAX(rm.comment_date) AS newest
 			FROM restaurants r
 			INNER JOIN ranked_mentions rm ON rm.restaurant_id = r.id
 			-- Hide registry-excluded restaurants (chains / corporate groups). Only the
@@ -152,14 +169,18 @@ async function loadHomePage(
 			lat,
 			lng,
 			chain_confidence,
-			aggregate_score,
+			-- Shrink low-evidence rows: voices/(voices+2.0) (must match VOICE_SHRINK_PRIOR).
+			-- ROUND on numeric rounds half away from zero, like the client's Math.round.
+			ROUND((weighted_sum * mention_count / (mention_count + 2.0))::numeric)::int AS aggregate_score,
 			mention_count,
 			source_threads,
 			mentions,
 			dish_rec_count,
 			snippet_candidates
 		FROM restaurant_mentions
-		ORDER BY aggregate_score DESC, name ASC
+		-- Past the first ~100 rows most scores differ by a point or two, so break ties by
+		-- breadth, then freshness, before falling back to the name.
+		ORDER BY aggregate_score DESC, mention_count DESC, newest DESC NULLS LAST, name ASC
 	`);
 
   const restaurantRows = restaurantsResult.rows as unknown as RestaurantRow[];
@@ -191,6 +212,7 @@ async function loadHomePage(
       score: m.score,
       role: m.role,
       comment_date: m.comment_date,
+      credit: m.credit,
     })),
     endorsement_count: (row.mentions ?? []).filter(
       (m) => m.role === "endorsement",
