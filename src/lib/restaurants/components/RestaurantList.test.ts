@@ -304,6 +304,7 @@ describe("RestaurantList", () => {
     const tip = screen.getByRole("tooltip");
     expect(tip).toHaveTextContent(/3 people across 2 threads/);
     expect(tip).toHaveTextContent(/strongest comment 40 upvotes/);
+    expect(tip).toHaveTextContent(/scaled by 3 ÷ \(3 \+ \d+\)/);
     expect(screen.getByRole("link", { name: "How scores work" })).toHaveAttribute(
       "href",
       "/about#how-it-works",
@@ -339,6 +340,37 @@ describe("RestaurantList", () => {
       restaurants: [makeRestaurant({ dish_rec_count: 3 })],
     });
     expect(screen.getByText("3 dish recs")).toBeInTheDocument();
+  });
+
+  it("announces dish recommendations in the row's accessible name", () => {
+    render(RestaurantList, {
+      restaurants: [makeRestaurant({ name: "Taco Place", dish_rec_count: 3 })],
+    });
+    expect(
+      screen.getByRole("button", { name: /taco place.*3 dish recs/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("omits the focus toggle when a multi-restaurant comment is a single line", async () => {
+    stubDrawerMentions([
+      {
+        comment_id: "c1",
+        thread_id: "t1",
+        role: "primary",
+        author: "ann",
+        body: "La Taco Spot and Forn Al Hara are both great",
+        score: 30,
+        other_places: [{ slug: "forn-al-hara", name: "Forn Al Hara" }],
+      },
+    ]);
+    render(RestaurantList, { restaurants });
+    appState.selectedRestaurantSlug = "la-taco-spot";
+
+    await screen.findByText(/and 1 other place in this comment/);
+    expect(
+      screen.queryByRole("button", { name: /show full comment/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText(/are both great/)).toBeInTheDocument();
   });
 
   it("shows every primary comment under a thread-count heading", async () => {

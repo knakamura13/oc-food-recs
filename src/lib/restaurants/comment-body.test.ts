@@ -34,6 +34,14 @@ describe('tokenizeCommentBody', () => {
 		const tokens = tokenizeCommentBody('[x](javascript:alert(1))').flat();
 		expect(tokens.some((t) => t.type === 'link')).toBe(false);
 	});
+
+	it('keeps a link inside bold text and drops trailing sentence punctuation from URLs', () => {
+		const [a] = tokenizeCommentBody('**[Name](https://x.com/a)**');
+		expect(a.some((t) => t.type === 'link' && t.href === 'https://x.com/a')).toBe(true);
+		const [b] = tokenizeCommentBody('See https://x.com.');
+		expect(b).toContainEqual({ type: 'link', text: 'x.com', href: 'https://x.com' });
+		expect(b.at(-1)).toEqual({ type: 'text', text: '.' });
+	});
 });
 
 describe('stripMarkdownForSnippet', () => {

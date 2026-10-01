@@ -27,7 +27,8 @@
 		clearExplorerFilters,
 		isUnmappedRestaurant,
 		latestMentionMs,
-		normalizeCuisine
+		normalizeCuisine,
+		VOICE_SHRINK_PRIOR
 	} from '$lib/restaurants/stores.svelte';
 	import { buildCanonicalShareUrl } from '$lib/restaurants/page-meta';
 	import { isSaved, toggleSaved } from '$lib/restaurants/saved-restaurants.svelte';
@@ -291,6 +292,9 @@
 		const parts = [restaurant.name];
 		if (restaurant.cuisine) parts.push(normalizeCuisine(restaurant.cuisine));
 		if (restaurant.location) parts.push(restaurant.location);
+		if (restaurant.dish_rec_count > 0) {
+			parts.push(`${restaurant.dish_rec_count} dish rec${restaurant.dish_rec_count === 1 ? '' : 's'}`);
+		}
 		if (hasNewMentions(restaurant)) parts.push('new since last visit');
 		if (isUnmappedRestaurant(restaurant)) parts.push('not on the map');
 		return parts.join(', ');
@@ -701,7 +705,7 @@
 										>
 											{people} {people === 1 ? 'person' : 'people'} across {threadTotal}
 											{threadTotal === 1 ? 'thread' : 'threads'} · strongest comment {strongest} upvotes ·
-											repeat mentions by the same person count less.
+											lists split points, repeat mentions count less, scaled by {people} ÷ ({people} + {VOICE_SHRINK_PRIOR}).
 											<a href="/about#how-it-works">How scores work</a>
 										</span>
 									</span>
@@ -1969,6 +1973,10 @@
 	}
 
 	@media (max-width: 1023px) {
+		.primary-more {
+			min-height: 44px;
+		}
+
 		.map-link,
 		.share-link,
 		.report-link,
