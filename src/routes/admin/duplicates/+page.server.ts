@@ -3,6 +3,7 @@ import {
   dismissDuplicateCandidate,
   loadDuplicateQueue,
   mergeRestaurants,
+  renameRestaurant,
 } from "$lib/server/restaurants/admin";
 import type { Actions, PageServerLoad } from "./$types";
 
@@ -37,6 +38,35 @@ export const actions: Actions = {
     } catch (err) {
       const message = err instanceof Error ? err.message : "Merge failed.";
       return fail(400, { error: message, action: "mergeRestaurants" });
+    }
+  },
+
+  renameRestaurant: async ({ request }) => {
+    const form = await request.formData();
+    const restaurantId = Number(form.get("restaurantId"));
+    const name = String(form.get("name") ?? "");
+    if (!Number.isInteger(restaurantId) || restaurantId <= 0) {
+      return fail(400, {
+        error: "Invalid restaurant id.",
+        action: "renameRestaurant",
+      });
+    }
+    if (!name.trim()) {
+      return fail(400, {
+        error: "Name is required.",
+        action: "renameRestaurant",
+      });
+    }
+    try {
+      await renameRestaurant(restaurantId, name);
+      return {
+        success: true,
+        action: "renameRestaurant",
+        message: "Restaurant renamed.",
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Rename failed.";
+      return fail(400, { error: message, action: "renameRestaurant" });
     }
   },
 
