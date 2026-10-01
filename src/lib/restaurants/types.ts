@@ -29,6 +29,8 @@ export interface Restaurant {
   name: string;
   slug: string;
   location: string | null;
+  /** Street address (e.g. "1421 N El Camino Real"), or null when unknown. */
+  street: string | null;
   cuisine: string | null;
   aggregate_score: number;
   mention_count: number;

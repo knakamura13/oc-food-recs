@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { Bookmark, ChevronRight, Flag, MapPin } from 'lucide-svelte';
 	import { getTrimmedSnippet } from '$lib/restaurants/snippet';
+	import { googleMapsUrl } from '$lib/restaurants/maps-url';
 	import { tick, untrack } from 'svelte';
 	import type { Attachment } from 'svelte/attachments';
 	import {
@@ -343,12 +344,6 @@
 		}
 	}
 
-	function googleMapsUrl(restaurant: Restaurant): string {
-		const query = restaurant.name + ' ' + (restaurant.location || 'Orange County') + ' CA';
-		return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(query);
-	}
-
-
 	function shareUrl(slug: string): string {
 		return buildCanonicalShareUrl(window.location.origin, window.location.pathname, {
 			searchQuery: appState.searchQuery,
@@ -602,6 +597,9 @@
 													<span class="tag new-tag" aria-label="New mentions since your last visit">New</span>
 												{/if}
 											</div>
+											{#if restaurant.street}
+												<div class="row-street">{restaurant.street}</div>
+											{/if}
 											<div class="row-tags">
 												{#if restaurant.endorsement_count >= 15}
 													<span class="tag popular-tag" aria-label="Highly endorsed community favorite">🔥 Popular</span>
@@ -1236,6 +1234,14 @@
 		color: #3e2c23;
 	}
 
+	.row-street {
+		margin-top: 0.1rem;
+		font-size: 0.78rem;
+		line-height: 1.3;
+		color: #7a6a5a;
+		overflow-wrap: anywhere;
+	}
+
 	.new-tag {
 		background: #c43700;
 		color: #fff;
@@ -1394,6 +1400,8 @@
 	}
 
 	.drawer {
+		display: flex;
+		flex-direction: column;
 		padding: 0.75rem 1rem 1rem;
 		border-top: 1px solid #e8e0d6;
 	}
@@ -1690,17 +1698,23 @@
 	}
 
 	.unmapped-drawer-hint {
-		margin: 0.5rem 0 0;
+		margin: 0 0 0.5rem;
 		font-size: 0.8rem;
 		line-height: 1.4;
 		color: #5d4e37;
+	}
+
+	/* Actions sit above the comments at every width so they are never buried. */
+	.unmapped-drawer-hint,
+	.drawer-actions {
+		order: -1;
 	}
 
 	.drawer-actions {
 		display: flex;
 		flex-wrap: wrap;
 		gap: 0.5rem;
-		margin-top: 0.5rem;
+		margin-bottom: 0.75rem;
 	}
 
 	.map-link {
@@ -1802,26 +1816,6 @@
 	}
 
 	@media (max-width: 1023px) {
-		.drawer {
-			display: flex;
-			flex-direction: column;
-		}
-
-		.unmapped-drawer-hint,
-		.drawer-actions {
-			order: -1;
-		}
-
-		.unmapped-drawer-hint {
-			margin-top: 0;
-			margin-bottom: 0.5rem;
-		}
-
-		.drawer-actions {
-			margin-top: 0;
-			margin-bottom: 0.75rem;
-		}
-
 		.map-link,
 		.share-link,
 		.report-link,
