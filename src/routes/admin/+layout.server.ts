@@ -3,10 +3,6 @@ import { error } from "@sveltejs/kit";
 import { dev } from "$app/environment";
 import type { LayoutServerLoad } from "./$types";
 
-// /admin is dynamic — auth gate at request time. The root layout prerenders the
-// public site (true only under SITES_BUILD); override it to false here so /admin
-// is never statically built and always runs server-side.
-export const prerender = false;
 export const ssr = true;
 
 export const load: LayoutServerLoad = async ({ request }) => {
