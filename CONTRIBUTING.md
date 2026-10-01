@@ -23,7 +23,7 @@ cp ../../../.env .env   # from .claude/worktrees/<name>/
 ### Ollama (pipeline only)
 
 ```sh
-ollama pull gemma4:latest
+ollama pull gemma4:e4b
 # Or set OC_FOOD_RECS_OLLAMA_MODEL to your preferred tag
 ```
 
