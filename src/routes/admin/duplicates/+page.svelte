@@ -58,6 +58,21 @@
 		{/if}
 	{/if}
 
+	<section class="rename-card" aria-labelledby="rename-heading">
+		<h2 id="rename-heading">Rename a restaurant</h2>
+		<p class="subtitle">
+			Keeps the slug and remembers the old name, so a re-ingest of the old spelling still lands
+			on this row. Locks the name against re-ingest.
+		</p>
+		<form method="POST" action="?/renameRestaurant" use:enhance class="rename-form">
+			<label for="rename-id">Restaurant id</label>
+			<input id="rename-id" name="restaurantId" type="number" min="1" required />
+			<label for="rename-name">New name</label>
+			<input id="rename-name" name="name" type="text" autocomplete="off" required />
+			<button type="submit">Rename</button>
+		</form>
+	</section>
+
 	{#if duplicates.length === 0}
 		<p class="empty">No duplicate candidates in the review queue.</p>
 	{:else}
@@ -170,7 +185,8 @@
 		color: #7a6e63;
 	}
 
-	.group-card {
+	.group-card,
+	.rename-card {
 		background: #fffdf9;
 		border: 1px solid #e2d9ce;
 		border-radius: 12px;
@@ -178,7 +194,8 @@
 		margin-bottom: 1rem;
 	}
 
-	.group-card h2 {
+	.group-card h2,
+	.rename-card h2 {
 		margin: 0 0 0.75rem;
 		font-size: 1.05rem;
 	}
@@ -218,7 +235,8 @@
 		margin: 0;
 	}
 
-	.merge-form {
+	.merge-form,
+	.rename-form {
 		display: flex;
 		flex-wrap: wrap;
 		gap: 0.75rem;
@@ -227,7 +245,8 @@
 		border-top: 1px solid #ece3d9;
 	}
 
-	.merge-form label {
+	.merge-form label,
+	.rename-form label {
 		display: flex;
 		flex-direction: column;
 		gap: 0.25rem;
@@ -236,6 +255,8 @@
 		color: #7a6e63;
 	}
 
+	input[type='text'],
+	input[type='number'],
 	select {
 		min-width: 220px;
 		padding: 0.45rem 0.55rem;
@@ -243,6 +264,10 @@
 		border: 1px solid #d8cdc1;
 		background: #fff;
 		font: inherit;
+	}
+
+	.rename-card .subtitle {
+		margin-bottom: 0.75rem;
 	}
 
 	select:user-invalid {
