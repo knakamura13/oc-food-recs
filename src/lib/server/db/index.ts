@@ -21,7 +21,20 @@ function getDb(): DrizzleClient {
 	const usingProxy = env.DATABASE_URL.includes('proxy.rlwy.net');
 	const pool = new pg.Pool({
 		connectionString: env.DATABASE_URL,
-		ssl: usingProxy ? { rejectUnauthorized: false } : undefined
+		ssl: usingProxy ? { rejectUnauthorized: false } : undefined,
+		max: 10,
+		idleTimeoutMillis: 30_000,
+		connectionTimeoutMillis: 5_000,
+		statement_timeout: 10_000,
+		query_timeout: 10_000
+	});
+	// node-postgres re-emits idle-client errors (e.g. 57P01 when the backend is
+	// terminated) on the pool; without a listener the EventEmitter throws and the
+	// process exits. The pool discards the dead client and reconnects on next use.
+	pool.on('error', (err: Error & { code?: string }) => {
+		console.error(
+			JSON.stringify({ level: 'error', source: 'pg-pool', code: err.code, message: err.message })
+		);
 	});
 	_db = drizzle(pool, { schema });
 	return _db;
