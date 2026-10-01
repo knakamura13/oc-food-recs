@@ -17,7 +17,7 @@ export const SCORING_PARAGRAPHS = [
 	'Each recommendation is a Reddit comment, and its points are the comment’s upvotes. A comment counts when it is the one that brought the restaurant up, or when its text actually names the restaurant. A reply that only says “agreed!” under someone else’s pick adds nothing.',
 	'A comment that names several restaurants is a list, not several full endorsements: its upvotes are split evenly across the restaurants it names.',
 	`So that one enthusiastic person cannot read as consensus, each commenter’s repeat recommendations of the same place are discounted: their best comment counts in full, the next at ${decayLabel(1)}, the next at ${decayLabel(2)}, and so on.`,
-	`Finally the total is scaled by voices ÷ (voices + ${VOICE_SHRINK_PRIOR}), where “voices” is the number of distinct commenters (the “mentions” shown on each card). A place praised by one person is held back; the penalty fades as more people agree.`
+	`Finally the total is scaled by voices ÷ (voices + ${VOICE_SHRINK_PRIOR}), where “voices” is the number of distinct commenters (the “people” shown on each card). A place praised by one person is held back; the penalty fades as more people agree.`
 ];
 
 export interface ScoringExample {

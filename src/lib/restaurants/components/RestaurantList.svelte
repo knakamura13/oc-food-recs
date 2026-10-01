@@ -705,8 +705,7 @@
 										>
 											{people} {people === 1 ? 'person' : 'people'} across {threadTotal}
 											{threadTotal === 1 ? 'thread' : 'threads'} · strongest comment {strongest} upvotes ·
-											lists split their points, repeat mentions by one person count less, and the total is
-											scaled by {people} ÷ ({people} + {VOICE_SHRINK_PRIOR}).
+											lists split points, repeat mentions count less, scaled by {people} ÷ ({people} + {VOICE_SHRINK_PRIOR}).
 											<a href="/about#how-it-works">How scores work</a>
 										</span>
 									</span>
