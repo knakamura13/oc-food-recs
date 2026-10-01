@@ -55,3 +55,7 @@ data/geocode-cache.json
 # audit/QA capture artifacts (evidence, kept locally; never committed)
 output/
 test-results/
+
+# DuckDB spill files from local read-only evaluation
+/.tmp/
+*.egg-info/
