@@ -2,6 +2,7 @@ import { db } from '$lib/server/db';
 import { sql } from 'drizzle-orm';
 import { json } from '@sveltejs/kit';
 import type { Mention } from '$lib/restaurants/types';
+import { PUBLIC_CACHE_CONTROL } from '$lib/server/cache-control';
 import type { RequestHandler } from './$types';
 
 export const GET: RequestHandler = async ({ params }) => {
@@ -24,5 +25,7 @@ export const GET: RequestHandler = async ({ params }) => {
 			AND r.slug = ${params.slug}
 		ORDER BY CASE WHEN m.role = 'primary' THEN 0 ELSE 1 END, m.score DESC
 	`);
-	return json(res.rows as unknown as Mention[]);
+	return json(res.rows as unknown as Mention[], {
+		headers: { 'cache-control': PUBLIC_CACHE_CONTROL }
+	});
 };

@@ -43,7 +43,7 @@ The result is an interactive map + list explorer where you can:
 
 ## Data
 
-The app is **server-rendered live from a PostgreSQL database** (hosted on Railway). There is no static dataset checked into the repo — [`src/routes/+page.server.ts`](src/routes/+page.server.ts) runs the read queries on every request through Drizzle ([`src/lib/server/db`](src/lib/server/db)).
+The app is **server-rendered live from a PostgreSQL database** (hosted on Railway). There is no static dataset checked into the repo — [`src/routes/+page.server.ts`](src/routes/+page.server.ts) runs the read queries on every request through Drizzle ([`src/lib/server/db`](src/lib/server/db)). Public pages and `/api/r/<slug>.json` send `s-maxage=300`, so with the Railway CDN enabled, data edits reach visitors within 5 minutes (or immediately after `railway cdn purge html`). `/admin/*`, `/api/health` and non-GET requests are `no-store`.
 
 The schema ([`src/lib/server/db/schema.ts`](src/lib/server/db/schema.ts)) has four tables:
 
