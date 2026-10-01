@@ -1,14 +1,14 @@
 import type { Restaurant } from "./types";
 import {
   normalizeCity,
-  normalizeCuisine,
+  cuisineFacetKey,
   isUnmappedRestaurant,
 } from "./stores.svelte";
 import {
   createSliceCache,
   sliceRestaurantMentions,
 } from "./filter-restaurants";
-import { filterRestaurantsByQuery } from "./search-restaurants";
+import { searchRankBySlug } from "./search-restaurants";
 import { passesMomAndPopFilter } from "./mom-and-pop";
 
 export interface PageFilterState {
@@ -63,8 +63,7 @@ export function filterBeforeFreshness(
 
   if (state.activeCuisines.length > 0) {
     result = result.filter((r) => {
-      const normalized = normalizeCuisine(r.cuisine);
-      return state.activeCuisines.includes(normalized);
+      return state.activeCuisines.includes(cuisineFacetKey(r.cuisine));
     });
   }
 
@@ -125,6 +124,21 @@ export function filterPageRestaurants(
   return { beforeFreshness, filtered };
 }
 
+/** Keeps restaurants that matched the search, in relevance order. */
+function applySearchRank(
+  restaurants: Restaurant[],
+  rank: Map<string, number> | null,
+): Restaurant[] {
+  if (!rank) return restaurants;
+  return restaurants
+    .filter((r) => rank.has(r.slug))
+    .sort((a, b) => rank.get(a.slug)! - rank.get(b.slug)!);
+}
+
+/**
+ * Result order is Fuse relevance order whenever `searchQuery` is non-blank; the list's
+ * "Relevance" sort reads that order.
+ */
 export function filterPageRestaurantsWithSearch(
   allRestaurants: Restaurant[],
   state: PageFilterState & { searchQuery: string },
@@ -139,9 +153,9 @@ export function filterPageRestaurantsWithSearch(
     { ...state, showUnmapped: true },
     ctx,
   );
-  const searched = filterRestaurantsByQuery(
+  const searched = applySearchRank(
     includingUnmapped.filtered,
-    state.searchQuery,
+    searchRankBySlug(allRestaurants, state.searchQuery),
   );
   const unmappedCount = searched.filter(isUnmappedRestaurant).length;
   if (state.showUnmapped) {
@@ -159,5 +173,34 @@ export function filterPageRestaurantsWithSearch(
       (restaurant) => !isUnmappedRestaurant(restaurant),
     ),
     unmappedCount,
+  };
+}
+
+export interface FacetPopulations {
+  cuisine: Restaurant[];
+  city: Restaurant[];
+  subreddit: Restaurant[];
+}
+
+/**
+ * Per-facet populations for the filter menus: every active filter (including search,
+ * recency, unmapped and mom & pop) EXCEPT the facet's own, so a count equals the number
+ * of rows the list would show after selecting that option (standard faceted counts).
+ */
+export function filterPageFacetPopulations(
+  allRestaurants: Restaurant[],
+  state: PageFilterState & { searchQuery: string },
+  ctx: PageFilterContext,
+): FacetPopulations {
+  const rank = searchRankBySlug(allRestaurants, state.searchQuery);
+  const without = (omit: Partial<PageFilterState>) =>
+    applySearchRank(
+      filterPageRestaurants(allRestaurants, { ...state, ...omit }, ctx).filtered,
+      rank,
+    );
+  return {
+    cuisine: without({ activeCuisines: [] }),
+    city: without({ activeCities: [] }),
+    subreddit: without({ activeSubreddits: [] }),
   };
 }

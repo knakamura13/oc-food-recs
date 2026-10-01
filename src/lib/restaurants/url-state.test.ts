@@ -20,6 +20,19 @@ const defaults: UrlStateSnapshot = {
   selectedRestaurantSlug: null,
 };
 
+describe("buildSearchParams sort", () => {
+  it("omits the default sort for the current mode and keeps an explicit override", () => {
+    const searching = { ...defaults, searchQuery: "birria" };
+    expect(
+      buildSearchParams({ ...searching, sortKey: "relevance" }).toString(),
+    ).toBe("q=birria");
+    expect(
+      buildSearchParams({ ...searching, sortKey: "score" }).toString(),
+    ).toBe("q=birria&sort=score");
+    expect(buildSearchParams(defaults).toString()).toBe("");
+  });
+});
+
 describe("parseSearchParams", () => {
   it("parses all supported params", () => {
     const params = new URLSearchParams(
@@ -50,6 +63,18 @@ describe("parseSearchParams", () => {
       "sort=invalid&sortdir=up&since=not-a-date",
     );
     expect(parseSearchParams(params)).toEqual({});
+  });
+
+  it("defaults to relevance when searching, and ignores relevance without a query", () => {
+    expect(parseSearchParams(new URLSearchParams("q=birria"))).toEqual({
+      searchQuery: "birria",
+      sortKey: "relevance",
+    });
+    expect(parseSearchParams(new URLSearchParams("q=birria&sort=score"))).toEqual({
+      searchQuery: "birria",
+      sortKey: "score",
+    });
+    expect(parseSearchParams(new URLSearchParams("sort=relevance"))).toEqual({});
   });
 
   it("accepts unmapped=true", () => {

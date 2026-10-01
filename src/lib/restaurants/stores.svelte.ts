@@ -67,8 +67,6 @@ const CUISINE_MAP: Record<string, string> = {
   burgers: "Burgers",
   pizza: "Pizza",
   sandwiches: "Sandwiches",
-  "ice cream": "Ice Cream",
-  donuts: "Donuts",
   deli: "Deli",
 
   // Merge similar
@@ -123,6 +121,17 @@ const CUISINE_MAP: Record<string, string> = {
   Seafood: "Seafood",
 };
 
+/** Facet/filter key for restaurants with no usable cuisine (null, "Other", or mapped to Other). */
+export const UNCATEGORIZED_CUISINE = "Uncategorized";
+
+/** Cuisine as shown in the Cuisine filter: normalized, with Unknown/Other folded into one bucket. */
+export function cuisineFacetKey(cuisine: string | null): string {
+  const normalized = normalizeCuisine(cuisine);
+  return normalized === "Unknown" || normalized === "Other"
+    ? UNCATEGORIZED_CUISINE
+    : normalized;
+}
+
 export function normalizeCuisine(cuisine: string | null): string {
   if (!cuisine) return "Unknown";
   const trimmed = cuisine.trim();
@@ -164,20 +173,38 @@ const CITY_NORMALIZE: Record<string, string> = {
   "Rancho Santa Margarita": "Mission Viejo",
   "Ladera Ranch": "Mission Viejo",
   "Corona del Mar": "Newport Beach",
+  YL: "Yorba Linda",
+  SC: "San Clemente",
+  Santana: "Santa Ana",
 };
+
+const CITY_NORMALIZE_LOWER = new Map(
+  Object.entries(CITY_NORMALIZE).map(([k, v]) => [k.toLowerCase(), v]),
+);
 
 export function normalizeCity(location: string | null): string | null {
   if (!location) return null;
-  return CITY_NORMALIZE[location] || location;
+  const trimmed = location.trim();
+  if (!trimmed) return null;
+  return CITY_NORMALIZE_LOWER.get(trimmed.toLowerCase()) ?? trimmed;
 }
 
 // Search synonyms for fuzzy filter matching
 export const FILTER_SYNONYMS: Record<string, string[]> = {
   // Cuisine synonyms
-  Mexican: ["tacos", "taqueria", "burritos", "enchiladas", "mexican food"],
+  Mexican: [
+    "tacos",
+    "taqueria",
+    "burritos",
+    "enchiladas",
+    "mexican food",
+    "birria",
+    "carnitas",
+    "al pastor",
+  ],
   Italian: ["pasta", "italian food"],
   Vietnamese: ["pho", "banh mi", "viet"],
-  Japanese: ["sushi", "ramen", "izakaya", "japanese food"],
+  Japanese: ["sushi", "ramen", "izakaya", "japanese food", "omakase"],
   Chinese: ["dim sum", "chinese food", "noodles"],
   Korean: ["kbbq", "korean bbq", "korean food"],
   Thai: ["thai food", "pad thai", "laotian", "lao"],
@@ -187,11 +214,11 @@ export const FILTER_SYNONYMS: Record<string, string[]> = {
   Bakery: ["bakeries", "baked goods", "pastries", "pastry"],
   BBQ: ["barbecue", "barbeque", "smoked meat"],
   Breakfast: ["brunch", "diner", "pancakes", "waffles"],
-  Mediterranean: ["med", "hummus", "falafel", "greek"],
+  Mediterranean: ["med", "hummus", "falafel", "greek", "shawarma"],
   Greek: ["gyro", "gyros", "souvlaki"],
   Persian: ["iranian"],
   Sandwiches: ["sandwich", "subs", "hoagie", "hoagies"],
-  Deli: ["delis", "delicatessen"],
+  Deli: ["delis", "delicatessen", "pastrami"],
   Seafood: ["fish", "shrimp", "lobster", "crab"],
   Vegan: ["vegetarian", "plant-based", "plant based"],
   Cafe: ["coffee", "coffeeshop", "coffee shop"],
@@ -271,6 +298,26 @@ export function weightedAggregates(mentions: ListMention[]): {
   return { aggregate_score: Math.round(score), mention_count: count };
 }
 
+function containsWord(haystack: string, needle: string): boolean {
+  let from = 0;
+  for (;;) {
+    const i = haystack.indexOf(needle, from);
+    if (i < 0) return false;
+    const before = i === 0 || !/[a-z0-9]/.test(haystack[i - 1]);
+    const end = i + needle.length;
+    const after = end === haystack.length || !/[a-z0-9]/.test(haystack[end]);
+    if (before && after) return true;
+    from = i + 1;
+  }
+}
+
+/** Exact synonym hit, or (3+ chars) a whole-word overlap in either direction. */
+function matchesSynonym(q: string, syn: string): boolean {
+  if (q === syn) return true;
+  if (q.length < 3) return false;
+  return containsWord(syn, q) || containsWord(q, syn);
+}
+
 // Find the best filter match for a search term
 export function findFilterMatch(
   query: string,
@@ -303,11 +350,7 @@ export function findFilterMatch(
   // Synonym match
   for (const [canonical, synonyms] of Object.entries(FILTER_SYNONYMS)) {
     for (const syn of synonyms) {
-      if (
-        q === syn.toLowerCase() ||
-        syn.toLowerCase().includes(q) ||
-        q.includes(syn.toLowerCase())
-      ) {
+      if (matchesSynonym(q, syn.toLowerCase())) {
         if (cuisineNames.includes(canonical))
           return { type: "cuisine", value: canonical };
         if (cityNames.includes(canonical))
@@ -318,14 +361,20 @@ export function findFilterMatch(
 
   // Partial match on cuisine names (start of word)
   for (const name of cuisineNames) {
-    if (name.toLowerCase().startsWith(q) || q.startsWith(name.toLowerCase())) {
+    if (
+      (q.length >= 3 && name.toLowerCase().startsWith(q)) ||
+      q.startsWith(name.toLowerCase())
+    ) {
       return { type: "cuisine", value: name };
     }
   }
 
   // Partial match on city names
   for (const name of cityNames) {
-    if (name.toLowerCase().startsWith(q) || q.startsWith(name.toLowerCase())) {
+    if (
+      (q.length >= 3 && name.toLowerCase().startsWith(q)) ||
+      q.startsWith(name.toLowerCase())
+    ) {
       return { type: "city", value: name };
     }
   }

@@ -22,7 +22,7 @@ export interface UrlStateSnapshot {
   selectedRestaurantSlug: string | null;
 }
 
-const VALID_SORT_KEYS = new Set<SortKey>(["score", "name", "recency"]);
+const VALID_SORT_KEYS = new Set<SortKey>(["score", "name", "recency", "relevance"]);
 
 export function parseSearchParams(
   params: URLSearchParams,
@@ -52,9 +52,12 @@ export function parseSearchParams(
     }
   }
 
+  // Relevance is the default order while searching, and meaningless without a query.
   const sort = params.get("sort");
   if (sort === "name" || sort === "score" || sort === "recency") {
     result.sortKey = sort;
+  } else if (q) {
+    result.sortKey = "relevance";
   }
 
   const sortDir = params.get("sortdir");
@@ -90,7 +93,8 @@ export function buildSearchParams(state: UrlStateSnapshot): URLSearchParams {
     params.set("city", state.activeCities.join(","));
   if (state.activeSubreddits.length > 0)
     params.set("subreddit", state.activeSubreddits.join(","));
-  if (state.sortKey !== "score") params.set("sort", state.sortKey);
+  const defaultSortKey: SortKey = state.searchQuery ? "relevance" : "score";
+  if (state.sortKey !== defaultSortKey) params.set("sort", state.sortKey);
   if (state.sortDirection !== "desc")
     params.set("sortdir", state.sortDirection);
   if (state.selectedRestaurantSlug)
