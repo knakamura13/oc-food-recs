@@ -147,6 +147,75 @@ def normalize_text(value: str) -> str:
     return value.strip()
 
 
+# --- names_restaurant -------------------------------------------------------
+# Python port of `namesRestaurant()` (src/lib/restaurants/top-comment-snippet.ts) and the
+# `findRestaurantMatch()` it falls back to (src/lib/restaurants/snippet.ts). Keep the three
+# in step. re.ASCII makes `\b` ASCII-only, matching JavaScript's regex semantics.
+_NR_LEADING_ARTICLES = {"the", "a", "an", "el", "la", "los", "las"}
+_NR_GENERIC_WORDS = {
+    "the", "and", "a", "of", "in", "to", "for", "with", "on", "at", "by", "an", "el", "la",
+    "los", "las", "restaurant", "cafe", "bakery", "kitchen", "place", "grill", "house", "bar",
+    "shop", "coffee", "co", "pizza", "taco", "tacos", "burger", "burgers", "food", "market",
+    "deli", "inn", "bistro", "pub", "lounge", "taqueria", "express", "boba", "tea", "creme",
+    "cream",
+}
+_NR_WEAK_NAME_WORDS = _NR_GENERIC_WORDS | {"cuisine"}
+_NR_FLAGS = re.IGNORECASE | re.ASCII
+
+
+def _nr_search(pattern: str, body: str) -> bool:
+    return re.search(pattern, body, _NR_FLAGS) is not None
+
+
+def _nr_find_restaurant_match(body: str, name: str) -> bool:
+    if not body or not name:
+        return False
+    escaped = re.escape(name)
+    if _nr_search(rf"(?:\b|^){escaped}(?:'s|’s|s)?(?:\b|$)", body):
+        return True
+    if _nr_search(escaped, body):
+        return True
+    name_words = re.split(r"\s+", name)
+    if len(name_words) > 1:
+        start = 0
+        while start < len(name_words) and name_words[start].lower() in _NR_LEADING_ARTICLES:
+            start += 1
+        end = len(name_words) - 1
+        while end >= start and name_words[end].lower() in _NR_LEADING_ARTICLES:
+            end -= 1
+        if start <= end and (start > 0 or end < len(name_words) - 1):
+            sub_name = " ".join(name_words[start : end + 1])
+            if len(sub_name) >= 3 and _nr_search(
+                rf"(?:\b|^){re.escape(sub_name)}(?:'s|’s|s)?(?:\b|$)", body
+            ):
+                return True
+    words = [w for w in re.split(r"[^a-z0-9]+", name.lower(), flags=re.ASCII) if w]
+    keywords = [w for w in words if len(w) >= 3 and w not in _NR_GENERIC_WORDS]
+    for kw in keywords:
+        if _nr_search(rf"\b{re.escape(kw)}(?:'s|’s|s)?\b", body):
+            return True
+    for kw in keywords:
+        if _nr_search(re.escape(kw), body):
+            return True
+    if words:
+        longest = max(words, key=len)
+        if len(longest) >= 3 and _nr_search(re.escape(longest), body):
+            return True
+    return False
+
+
+def names_restaurant(body: str, restaurant_name: str) -> bool:
+    """True when the comment body actually mentions the restaurant by (a distinctive part of) its name."""
+    keywords = [
+        w
+        for w in re.split(r"[^a-z0-9]+", restaurant_name.lower(), flags=re.ASCII)
+        if len(w) >= 3 and w not in _NR_WEAK_NAME_WORDS
+    ]
+    if not keywords:
+        return _nr_find_restaurant_match(body, restaurant_name)
+    return any(_nr_search(rf"\b{re.escape(kw)}(?:'s|’s|s)?\b", body) for kw in keywords)
+
+
 def rich_text(container: Any) -> str:
     if container is None:
         return ""
@@ -2809,15 +2878,16 @@ def write_to_db(
                 for primary in primary_comments:
                     cur.execute(
                         """
-                        INSERT INTO mentions (restaurant_id, thread_id, comment_id, permalink, author, body, score, role, classification, comment_date)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, 'primary', NULL, %s)
+                        INSERT INTO mentions (restaurant_id, thread_id, comment_id, permalink, author, body, score, role, classification, comment_date, names_restaurant)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, 'primary', NULL, %s, %s)
                         ON CONFLICT (thread_id, comment_id, restaurant_id) DO UPDATE SET
                             restaurant_id = EXCLUDED.restaurant_id,
                             permalink = EXCLUDED.permalink,
                             author = EXCLUDED.author,
                             body = EXCLUDED.body,
                             score = EXCLUDED.score,
-                            comment_date = EXCLUDED.comment_date
+                            comment_date = EXCLUDED.comment_date,
+                            names_restaurant = EXCLUDED.names_restaurant
                         RETURNING id
                         """,
                         (
@@ -2829,6 +2899,7 @@ def write_to_db(
                             primary["body"],
                             primary["score"],
                             parse_comment_date(primary.get("created_utc")),
+                            names_restaurant(primary["body"], restaurant["name"]),
                         ),
                     )
                     row = cur.fetchone()
@@ -2844,8 +2915,8 @@ def write_to_db(
                 for endorsement in restaurant.get("endorsements", []):
                     cur.execute(
                         """
-                        INSERT INTO mentions (restaurant_id, thread_id, comment_id, permalink, author, body, score, role, classification, comment_date)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, 'endorsement', %s, %s)
+                        INSERT INTO mentions (restaurant_id, thread_id, comment_id, permalink, author, body, score, role, classification, comment_date, names_restaurant)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, 'endorsement', %s, %s, %s)
                         ON CONFLICT (thread_id, comment_id, restaurant_id) DO UPDATE SET
                             restaurant_id = EXCLUDED.restaurant_id,
                             permalink = EXCLUDED.permalink,
@@ -2853,7 +2924,8 @@ def write_to_db(
                             body = EXCLUDED.body,
                             score = EXCLUDED.score,
                             classification = EXCLUDED.classification,
-                            comment_date = EXCLUDED.comment_date
+                            comment_date = EXCLUDED.comment_date,
+                            names_restaurant = EXCLUDED.names_restaurant
                         RETURNING id
                         """,
                         (
@@ -2866,6 +2938,7 @@ def write_to_db(
                             endorsement["score"],
                             endorsement.get("type"),
                             parse_comment_date(endorsement.get("created_utc")),
+                            names_restaurant(endorsement["body"], restaurant["name"]),
                         ),
                     )
                     row = cur.fetchone()
