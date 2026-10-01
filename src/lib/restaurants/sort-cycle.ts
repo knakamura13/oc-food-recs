@@ -4,6 +4,8 @@ export const SORT_DEFAULT_DIRECTION: Record<SortKey, SortDirection> = {
   score: "desc",
   recency: "desc",
   name: "asc",
+  // desc = best match first (the default whenever a search query is active).
+  relevance: "desc",
 };
 
 export function nextSortState(
@@ -34,6 +36,8 @@ export function sortDirectionPhrase(
       return direction === "desc" ? "newest first" : "oldest first";
     case "name":
       return direction === "asc" ? "A to Z" : "Z to A";
+    case "relevance":
+      return direction === "desc" ? "best match first" : "worst match first";
     default: {
       const _exhaustive: never = key;
       return _exhaustive;
@@ -54,6 +58,8 @@ export function sortDirectionShort(
       return direction === "desc" ? "↓" : "↑";
     case "name":
       return direction === "asc" ? "A-Z" : "Z-A";
+    case "relevance":
+      return direction === "desc" ? "↓" : "↑";
     default: {
       const _exhaustive: never = key;
       return _exhaustive;

@@ -4,8 +4,9 @@
 	import {
 		appState,
 		clearExplorerFilters,
-		normalizeCuisine,
+		cuisineFacetKey,
 		normalizeCity,
+		UNCATEGORIZED_CUISINE,
 		formatMonthYear,
 		setFreshnessFilter
 	} from '$lib/restaurants/stores.svelte';
@@ -18,7 +19,15 @@
 	import { MOM_AND_POP_HELP } from '$lib/restaurants/mom-and-pop';
 
 	interface Props {
+		/** Full roster: defines which options exist (and their stable "More cuisines" tiering). */
 		restaurants: Restaurant[];
+		/**
+		 * Rows each facet would show after selecting an option: every other active filter
+		 * applied, this facet's own ignored. Default to `restaurants` (no cross-filtering).
+		 */
+		cuisineFacetRestaurants?: Restaurant[];
+		cityFacetRestaurants?: Restaurant[];
+		subredditFacetRestaurants?: Restaurant[];
 		/** thread_id -> subreddit, used to attribute each restaurant to its origin subreddit. */
 		threadSubreddit: Record<string, string>;
 		/** Restaurants after every filter EXCEPT recency — the histogram's reactive population. */
@@ -33,6 +42,9 @@
 
 	let {
 		restaurants,
+		cuisineFacetRestaurants,
+		cityFacetRestaurants,
+		subredditFacetRestaurants,
 		threadSubreddit,
 		restaurantsForHistogram,
 		dateExtent,
@@ -131,47 +143,73 @@
 		return `Since ${formatMonthYear(appState.freshnessCutoff)}`;
 	});
 
-	let subredditCounts = $derived.by(() => {
+	type FacetItem = { name: string; count: number; total: number };
+
+	function countBy(list: Restaurant[], keyOf: (r: Restaurant) => string | string[] | null) {
 		const counts = new Map<string, number>();
-		for (const r of restaurants) {
-			const seen = new Set<string>();
-			for (const tid of r.source_threads) {
-				const sub = threadSubreddit[tid];
-				if (sub) seen.add(sub);
+		for (const r of list) {
+			const keys = keyOf(r);
+			if (keys === null) continue;
+			for (const key of new Set(Array.isArray(keys) ? keys : [keys])) {
+				counts.set(key, (counts.get(key) || 0) + 1);
 			}
-			for (const sub of seen) counts.set(sub, (counts.get(sub) || 0) + 1);
 		}
-		return [...counts.entries()]
-			.sort((a, b) => b[1] - a[1])
-			.map(([name, count]) => ({ name, count }));
-	});
+		return counts;
+	}
+
+	/** Every option from the full roster, with its cross-filtered count (0 = greyed out). */
+	function buildFacetItems(
+		all: Restaurant[],
+		facet: Restaurant[],
+		keyOf: (r: Restaurant) => string | string[] | null
+	): FacetItem[] {
+		const totals = countBy(all, keyOf);
+		const counts = countBy(facet, keyOf);
+		return [...totals.entries()]
+			.map(([name, total]) => ({ name, total, count: counts.get(name) ?? 0 }))
+			.sort((a, b) => b.count - a.count || b.total - a.total || a.name.localeCompare(b.name));
+	}
+
+	const subredditOf = (r: Restaurant): string[] =>
+		r.source_threads.map((tid) => threadSubreddit[tid]).filter(Boolean);
+
+	let subredditCounts = $derived(
+		buildFacetItems(restaurants, subredditFacetRestaurants ?? restaurants, subredditOf)
+	);
 
 	// Only worth showing the subreddit filter once data spans more than one subreddit.
 	let showSubredditFilter = $derived(subredditCounts.length > 1);
 
-	let cuisineCounts = $derived.by(() => {
-		const counts = new Map<string, number>();
-		for (const r of restaurants) {
-			const c = normalizeCuisine(r.cuisine);
-			if (c === 'Unknown' || c === 'Other') continue;
-			counts.set(c, (counts.get(c) || 0) + 1);
-		}
-		return [...counts.entries()]
-			.sort((a, b) => b[1] - a[1])
-			.map(([name, count]) => ({ name, count }));
-	});
+	// Cuisines with fewer roster rows than this sit behind "More cuisines".
+	const MIN_PRIMARY_CUISINE_TOTAL = 3;
+	let showMoreCuisines = $state(false);
 
-	let cityCounts = $derived.by(() => {
-		const counts = new Map<string, number>();
-		for (const r of restaurants) {
-			const city = normalizeCity(r.location);
-			if (!city || city === 'Other') continue;
-			counts.set(city, (counts.get(city) || 0) + 1);
-		}
-		return [...counts.entries()]
-			.sort((a, b) => b[1] - a[1])
-			.map(([name, count]) => ({ name, count }));
+	let cuisineItems = $derived(
+		buildFacetItems(restaurants, cuisineFacetRestaurants ?? restaurants, (r) =>
+			cuisineFacetKey(r.cuisine)
+		)
+	);
+	let primaryCuisines = $derived.by(() => {
+		const list = cuisineItems.filter(
+			(c) =>
+				c.name !== UNCATEGORIZED_CUISINE &&
+				(c.total >= MIN_PRIMARY_CUISINE_TOTAL || appState.activeCuisines.includes(c.name))
+		);
+		const uncategorized = cuisineItems.find((c) => c.name === UNCATEGORIZED_CUISINE);
+		return uncategorized ? [...list, uncategorized] : list;
 	});
+	let moreCuisines = $derived(
+		cuisineItems.filter(
+			(c) => c.name !== UNCATEGORIZED_CUISINE && !primaryCuisines.some((p) => p.name === c.name)
+		)
+	);
+
+	let cityCounts = $derived(
+		buildFacetItems(restaurants, cityFacetRestaurants ?? restaurants, (r) => {
+			const city = normalizeCity(r.location);
+			return city && city !== 'Other' ? city : null;
+		})
+	);
 
 	function toggleCuisine(cuisine: string) {
 		const idx = appState.activeCuisines.indexOf(cuisine);
@@ -355,6 +393,25 @@
 	};
 </script>
 
+{#snippet facetOption(item: FacetItem, active: boolean, label: string, onToggle: () => void)}
+	{@const empty = item.count === 0 && !active}
+	<button
+		class="dropdown-item"
+		class:active
+		class:empty
+		onclick={() => {
+			if (!empty) onToggle();
+		}}
+		role="option"
+		aria-selected={active}
+		aria-disabled={empty ? 'true' : undefined}
+	>
+		<span class="item-check" aria-hidden="true">{active ? '\u2713' : ''}</span>
+		<span class="item-name">{label}</span>
+		<span class="item-count">({item.count})</span>
+	</button>
+{/snippet}
+
 <nav class="filter-bar" aria-label="Restaurant filters">
 	<div class="filter-row">
 	<div
@@ -396,19 +453,33 @@
 					aria-label="Filter by cuisine"
 					{@attach pinDropdownPanel}
 				>
-					{#each cuisineCounts as { name, count } (name)}
-						<button
-							class="dropdown-item"
-							class:active={appState.activeCuisines.includes(name)}
-							onclick={() => toggleCuisine(name)}
-							role="option"
-							aria-selected={appState.activeCuisines.includes(name)}
-						>
-							<span class="item-check" aria-hidden="true">{appState.activeCuisines.includes(name) ? '\u2713' : ''}</span>
-							<span class="item-name">{name}</span>
-							<span class="item-count">({count})</span>
-						</button>
+					{#each primaryCuisines as item (item.name)}
+						{@render facetOption(item, appState.activeCuisines.includes(item.name), item.name, () =>
+							toggleCuisine(item.name)
+						)}
 					{/each}
+					{#if moreCuisines.length > 0}
+						<button
+							type="button"
+							class="dropdown-item more-toggle"
+							aria-expanded={showMoreCuisines}
+							onclick={() => (showMoreCuisines = !showMoreCuisines)}
+						>
+							<span class="item-name">
+								{showMoreCuisines ? 'Fewer cuisines' : `More cuisines (${moreCuisines.length})`}
+							</span>
+							<span class="arrow" aria-hidden="true" class:open={showMoreCuisines}>
+								<ChevronDown size={14} aria-hidden="true" />
+							</span>
+						</button>
+						{#if showMoreCuisines}
+							{#each moreCuisines as item (item.name)}
+								{@render facetOption(item, appState.activeCuisines.includes(item.name), item.name, () =>
+									toggleCuisine(item.name)
+								)}
+							{/each}
+						{/if}
+					{/if}
 				</div>
 			{/if}
 		</div>
@@ -440,18 +511,10 @@
 					aria-label="Filter by city"
 					{@attach pinDropdownPanel}
 				>
-					{#each cityCounts as { name, count } (name)}
-						<button
-							class="dropdown-item"
-							class:active={appState.activeCities.includes(name)}
-							onclick={() => toggleCity(name)}
-							role="option"
-							aria-selected={appState.activeCities.includes(name)}
-						>
-							<span class="item-check" aria-hidden="true">{appState.activeCities.includes(name) ? '\u2713' : ''}</span>
-							<span class="item-name">{name}</span>
-							<span class="item-count">({count})</span>
-						</button>
+					{#each cityCounts as item (item.name)}
+						{@render facetOption(item, appState.activeCities.includes(item.name), item.name, () =>
+							toggleCity(item.name)
+						)}
 					{/each}
 				</div>
 			{/if}
@@ -531,18 +594,13 @@
 						aria-label="Filter by subreddit"
 						{@attach pinDropdownPanel}
 					>
-						{#each subredditCounts as { name, count } (name)}
-							<button
-								class="dropdown-item"
-								class:active={appState.activeSubreddits.includes(name)}
-								onclick={() => toggleSubreddit(name)}
-								role="option"
-								aria-selected={appState.activeSubreddits.includes(name)}
-							>
-								<span class="item-check" aria-hidden="true">{appState.activeSubreddits.includes(name) ? '✓' : ''}</span>
-								<span class="item-name">r/{name}</span>
-								<span class="item-count">({count})</span>
-							</button>
+						{#each subredditCounts as item (item.name)}
+							{@render facetOption(
+								item,
+								appState.activeSubreddits.includes(item.name),
+								`r/${item.name}`,
+								() => toggleSubreddit(item.name)
+							)}
 						{/each}
 					</div>
 				{/if}
@@ -855,6 +913,25 @@
 
 	.dropdown-item:hover {
 		background: #faf7f2;
+	}
+
+	.dropdown-item.empty {
+		color: #a89d92;
+		cursor: default;
+	}
+
+	.dropdown-item.empty:hover {
+		background: none;
+	}
+
+	.dropdown-item.empty .item-count {
+		color: #b8aea4;
+	}
+
+	.dropdown-item.more-toggle {
+		color: #c43700;
+		font-weight: 500;
+		border-top: 1px solid rgba(232, 224, 214, 0.7);
 	}
 
 	.dropdown-item.active {

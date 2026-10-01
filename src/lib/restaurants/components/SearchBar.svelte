@@ -4,11 +4,13 @@
 	import type { Restaurant } from '$lib/restaurants/types';
 	import { appState, findFilterMatch } from '$lib/restaurants/stores.svelte';
 	import {
-		FUSE_SEARCH_OPTIONS,
-		prepareSearchIndex,
+		getCachedRestaurantFuse,
+		getNameMatchTier,
 		rankSearchResults,
 		type SearchableRestaurant
 	} from '$lib/restaurants/search-restaurants';
+	import { normalizeSearchText } from '$lib/restaurants/normalize-name';
+	import { SEARCH_DEBOUNCE_MS, scheduleDebounced } from '$lib/debounce';
 
 	interface Props {
 		restaurants: Restaurant[];
@@ -27,34 +29,55 @@
 	let showDropdown = $state(false);
 	let highlightIndex = $state(-1);
 
-	let FuseCtor = $state<typeof import('fuse.js').default | null>(null);
-	async function ensureFuse() {
-		if (!FuseCtor) FuseCtor = (await import('fuse.js')).default;
+	// The shared, memoized index is only built once the field is first used.
+	let fuseRequested = $state(false);
+	function ensureFuse() {
+		fuseRequested = true;
 	}
 
-	let fuse = $derived.by(() =>
-		FuseCtor
-			? new FuseCtor(prepareSearchIndex(restaurants), FUSE_SEARCH_OPTIONS)
-			: null
-	);
-
-	let results = $derived.by(() => {
-		const q = appState.searchQuery.trim();
-		if (!fuse || !q) return [] as FuseResult<SearchableRestaurant>[];
-		return rankSearchResults(fuse.search(q), q).slice(0, 10);
+	// Keystrokes stay instant in the input; the typeahead search waits like the list and map.
+	let debouncedQuery = $state(appState.searchQuery);
+	$effect(() => {
+		const q = appState.searchQuery;
+		if (q === debouncedQuery) return;
+		if (!q.trim()) {
+			debouncedQuery = q;
+			return;
+		}
+		return scheduleDebounced(() => {
+			debouncedQuery = q;
+		}, SEARCH_DEBOUNCE_MS);
 	});
 
-	let queryTrimmed = $derived(appState.searchQuery.trim());
+	let queryTrimmed = $derived(debouncedQuery.trim());
+
+	let results = $derived.by(() => {
+		if (!fuseRequested || !queryTrimmed) return [] as FuseResult<SearchableRestaurant>[];
+		const fuse = getCachedRestaurantFuse(restaurants);
+		return rankSearchResults(fuse.search(queryTrimmed), queryTrimmed).slice(0, 10);
+	});
 
 	let filterMatch = $derived.by(() =>
 		queryTrimmed ? findFilterMatch(queryTrimmed, cuisineNames, cityNames) : null
 	);
 
+	// A restaurant whose name equals/starts with the query beats a synonym-derived filter
+	// ("Pho 79" must open Pho 79, not filter to Vietnamese). Typing a cuisine or city name
+	// outright still prefers the filter.
+	let restaurantNameWins = $derived.by(() => {
+		if (!filterMatch || results.length === 0) return false;
+		if (filterMatch.value.toLowerCase() === queryTrimmed.toLowerCase()) return false;
+		return (
+			getNameMatchTier(results[0].item.nameNormalized, normalizeSearchText(queryTrimmed)) <= 1
+		);
+	});
+
 	let options = $derived.by((): SearchOption[] => {
 		const list: SearchOption[] = [];
-		if (filterMatch) {
-			list.push({ kind: 'filter', match: filterMatch, id: 'search-option-filter' });
-		}
+		const filterOption: SearchOption | null = filterMatch
+			? { kind: 'filter', match: filterMatch, id: 'search-option-filter' }
+			: null;
+		if (filterOption && !restaurantNameWins) list.push(filterOption);
 		for (const result of results) {
 			list.push({
 				kind: 'restaurant',
@@ -62,11 +85,12 @@
 				id: `search-option-${result.item.slug}`
 			});
 		}
+		if (filterOption && restaurantNameWins) list.splice(1, 0, filterOption);
 		return list;
 	});
 
 	let showNoResults = $derived(
-		Boolean(showDropdown && FuseCtor && queryTrimmed && options.length === 0)
+		Boolean(showDropdown && fuseRequested && queryTrimmed && options.length === 0)
 	);
 	let showResultsDropdown = $derived(showDropdown && options.length > 0);
 
@@ -145,7 +169,6 @@
 				appState.activeCities = [...appState.activeCities, match.value];
 			}
 		}
-		appState.searchQuery = '';
 		showDropdown = false;
 		highlightIndex = -1;
 	}
@@ -161,25 +184,13 @@
 	}
 
 	function applyFilterFromSearch() {
-		const query = appState.searchQuery.trim();
-		if (!query) return;
+		// Enter must act on the query as typed, not the debounced copy.
+		debouncedQuery = appState.searchQuery;
+		if (!queryTrimmed) return;
 
-		// Highlighted row always wins — matches what the user sees selected.
-		if (highlightIndex >= 0 && options.length > 0) {
-			activateOption(highlightIndex);
-			return;
-		}
-
-		const match = findFilterMatch(query, cuisineNames, cityNames);
-		if (match) {
-			applyFilterMatch(match);
-			return;
-		}
-
-		// If there's exactly one result, select it
-		if (results.length === 1) {
-			selectResult(results[0].item);
-		}
+		// The visibly highlighted row wins; with nothing highlighted, the first row does.
+		const index = highlightIndex >= 0 ? highlightIndex : 0;
+		activateOption(Math.min(index, options.length - 1));
 	}
 
 	function handleKeydown(e: KeyboardEvent) {
@@ -206,7 +217,7 @@
 	function handleInput() {
 		ensureFuse();
 		showDropdown = true;
-		highlightIndex = -1;
+		highlightIndex = 0;
 	}
 </script>
 

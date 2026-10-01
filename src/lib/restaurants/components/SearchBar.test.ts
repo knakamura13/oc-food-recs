@@ -98,7 +98,7 @@ describe("SearchBar", () => {
     await user.type(input, "tacos");
     await user.keyboard("{Enter}");
     expect(appState.activeCuisines).toEqual(["Mexican"]);
-    expect(appState.searchQuery).toBe("");
+    expect(appState.searchQuery).toBe("tacos");
   });
 
   it("applies a consolidated cuisine filter when Enter matches a raw alias", async () => {
@@ -110,7 +110,7 @@ describe("SearchBar", () => {
     await user.type(input, "argentinian");
     await user.keyboard("{Enter}");
     expect(appState.activeCuisines).toEqual(["Latin American"]);
-    expect(appState.searchQuery).toBe("");
+    expect(appState.searchQuery).toBe("argentinian");
   });
 
   it("selects a restaurant when there is exactly one fuzzy match", async () => {
@@ -274,7 +274,7 @@ describe("SearchBar", () => {
     });
     await user.keyboard("{Enter}");
     expect(appState.activeCities).toEqual(["Irvine"]);
-    expect(appState.searchQuery).toBe("");
+    expect(appState.searchQuery).toBe("Irvine");
     expect(appState.selectedRestaurantSlug).toBeNull();
   });
 
@@ -418,6 +418,68 @@ describe("SearchBar", () => {
     });
     await user.click(filterOption);
     expect(appState.activeCities).toEqual(["Irvine"]);
-    expect(appState.searchQuery).toBe("");
+    expect(appState.searchQuery).toBe("Irvine");
+  });
+
+  it("opens the restaurant, not the synonym's cuisine filter, when the name starts with the query", async () => {
+    const user = userEvent.setup();
+    const withPho = [
+      ...restaurants,
+      makeRestaurant({
+        name: "Pho 79",
+        slug: "pho-79",
+        cuisine: "Vietnamese",
+        location: "Garden Grove",
+      }),
+    ];
+    render(SearchBar, {
+      restaurants: withPho,
+      cuisineNames: [...cuisineNames, "Vietnamese"],
+      cityNames,
+    });
+    const input = screen.getByRole("combobox", {
+      name: /search restaurants, cuisines, or cities/i,
+    });
+    await user.click(input);
+    await user.type(input, "Pho 79");
+    await user.keyboard("{Enter}");
+    expect(appState.activeCuisines).toEqual([]);
+    expect(appState.selectedRestaurantSlug).toBe("pho-79");
+    expect(appState.searchQuery).toBe("Pho 79");
+  });
+
+  it("still prefers the filter when the query is exactly a cuisine name", async () => {
+    const user = userEvent.setup();
+    const withKitchen = [
+      ...restaurants,
+      makeRestaurant({
+        name: "Japanese Kitchen",
+        slug: "japanese-kitchen",
+        cuisine: "Japanese",
+        location: "Irvine",
+      }),
+    ];
+    render(SearchBar, { restaurants: withKitchen, cuisineNames, cityNames });
+    const input = screen.getByRole("combobox", {
+      name: /search restaurants, cuisines, or cities/i,
+    });
+    await user.click(input);
+    await user.type(input, "japanese");
+    await user.keyboard("{Enter}");
+    expect(appState.activeCuisines).toEqual(["Japanese"]);
+  });
+
+  it("does not suggest a filter for a single letter", async () => {
+    const user = userEvent.setup();
+    render(SearchBar, { restaurants, cuisineNames, cityNames });
+    const input = screen.getByRole("combobox", {
+      name: /search restaurants, cuisines, or cities/i,
+    });
+    await user.click(input);
+    await user.type(input, "p");
+    await waitFor(() => {
+      expect(screen.getAllByRole("option").length).toBeGreaterThan(0);
+    });
+    expect(screen.queryByRole("option", { name: /filter by/i })).toBeNull();
   });
 });

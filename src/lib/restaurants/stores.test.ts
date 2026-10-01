@@ -33,6 +33,13 @@ describe("stores utilities", () => {
       expect(normalizeCuisine("British Indian")).toBe("Indian");
     });
 
+    it("merges every Ice Cream / Donuts spelling into Dessert", () => {
+      expect(normalizeCuisine("ice cream")).toBe("Dessert");
+      expect(normalizeCuisine("Ice Cream")).toBe("Dessert");
+      expect(normalizeCuisine("donuts")).toBe("Dessert");
+      expect(normalizeCuisine("Donuts")).toBe("Dessert");
+    });
+
     it("title-cases unknown cuisines and handles null", () => {
       expect(normalizeCuisine("ethiopian")).toBe("Ethiopian");
       expect(normalizeCuisine(null)).toBe("Unknown");
@@ -47,6 +54,14 @@ describe("stores utilities", () => {
 
     it("returns null for missing locations", () => {
       expect(normalizeCity(null)).toBeNull();
+    });
+
+    it("folds abbreviations, misspellings and stray casing into the real city", () => {
+      expect(normalizeCity("YL")).toBe("Yorba Linda");
+      expect(normalizeCity("SC")).toBe("San Clemente");
+      expect(normalizeCity("Santana")).toBe("Santa Ana");
+      expect(normalizeCity("  yorba linda ")).toBe("yorba linda");
+      expect(normalizeCity("newport")).toBe("Newport Beach");
     });
   });
 
@@ -161,6 +176,39 @@ describe("stores utilities", () => {
         type: "cuisine",
         value: "Latin American",
       });
+    });
+
+    it("ignores single-letter and two-letter noise queries", () => {
+      expect(findFilterMatch("p", cuisineNames, cityNames)).toBeNull();
+      expect(findFilterMatch("y", cuisineNames, cityNames)).toBeNull();
+      expect(findFilterMatch("ir", cuisineNames, cityNames)).toBeNull();
+    });
+
+    it("matches synonyms only on whole words, never inside a longer word", () => {
+      // "pho" is a Vietnamese synonym, but "phoenix" merely contains it.
+      const names = [...cuisineNames, "Vietnamese"];
+      expect(findFilterMatch("phoenix", names, cityNames)).toBeNull();
+      expect(findFilterMatch("pho 79", names, cityNames)).toEqual({
+        type: "cuisine",
+        value: "Vietnamese",
+      });
+    });
+
+    it("maps dish names to their cuisine", () => {
+      const names = ["Mexican", "Deli", "Japanese", "Mediterranean"];
+      for (const [dish, cuisine] of [
+        ["birria", "Mexican"],
+        ["carnitas", "Mexican"],
+        ["al pastor", "Mexican"],
+        ["pastrami", "Deli"],
+        ["omakase", "Japanese"],
+        ["shawarma", "Mediterranean"],
+      ]) {
+        expect(findFilterMatch(dish, names, cityNames)).toEqual({
+          type: "cuisine",
+          value: cuisine,
+        });
+      }
     });
 
     it("matches canonical cuisine names directly", () => {
