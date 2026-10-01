@@ -10,8 +10,10 @@ For active restaurants with a null/empty street this script:
   3. Sets `street` only when the match is unambiguous.
 
 Ambiguous rows are never written: several cache rows with different streets, a
-city that disagrees with the restaurant's `location`, or a geocoded place name
-that does not resemble the restaurant name. The admin geocode review queue
+city that disagrees with the restaurant's `location`, a cached address more than
+1 km from the restaurant's own coordinates, a restaurant with neither a city nor
+coordinates to check against, or a geocoded place name that does not resemble the
+restaurant name. The admin geocode review queue
 (/admin/geocode) is driven purely by "restaurant has no lat/lng", so there is no
 flag to set for ambiguity; ambiguous rows that already lack coordinates are
 already in that queue (counted in the summary) and the rest are listed in the
@@ -27,7 +29,7 @@ Usage:
 Reads DATABASE_URL from environment or .env (via db_backup).
 """
 from __future__ import annotations
-import argparse, re, sys, os
+import argparse, math, re, sys, os
 from collections import defaultdict
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -97,31 +99,54 @@ def names_resemble(restaurant: str, place: str | None) -> bool:
     return bool(toks(restaurant) & toks(place))
 
 
-def classify(name: str, location: str | None, candidates: list[tuple[str | None, str | None]],
-             norm_city=lambda s: (s or "").strip().lower()):
+MAX_GEOCODE_KM = 1.0
+
+
+def km_between(a: tuple[float, float], b: tuple[float, float]) -> float:
+    """Great-circle distance in km between two (lat, lng) points."""
+    lat1, lng1, lat2, lng2 = map(math.radians, (*a, *b))
+    h = math.sin((lat2 - lat1) / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin((lng2 - lng1) / 2) ** 2
+    return 6371 * 2 * math.asin(math.sqrt(h))
+
+
+def classify(name: str, location: str | None,
+             candidates: list[tuple[str | None, str | None, float | None, float | None]],
+             norm_city=lambda s: (s or "").strip().lower(),
+             coords: tuple[float, float] | None = None):
     """Decide one restaurant.
 
-    candidates: list of (detail, geocoded_city) for name-matching cache rows.
+    candidates: list of (detail, geocoded_city, lat, lng) for name-matching cache rows.
+    coords: the restaurant's own (lat, lng), when it has them. A cached address more
+    than MAX_GEOCODE_KM away is another branch (or a mis-parsed name), not this row.
+    A restaurant with neither a city nor coordinates has nothing to verify a
+    name-only match against, so it is never set.
     Returns ('set', street, note) | ('ambiguous', None, reason) | ('none', None, reason).
     """
     parsed = []
-    for detail, gcity in candidates:
+    for detail, gcity, lat, lng in candidates:
         place, street, city = parse_detail(detail)
         if street:
-            parsed.append((place, street, city or gcity))
+            parsed.append((place, street, city or gcity, lat, lng))
     if not parsed:
         return "none", None, "no parseable street in cache"
 
     want = norm_city(location)
+    if not want and coords is None:
+        return "ambiguous", None, "no city or coordinates to verify the match"
     in_city = [p for p in parsed if not want or norm_city(p[2]) == want]
     if not in_city:
         return "ambiguous", None, f"city mismatch: {location!r} vs {sorted({p[2] for p in parsed})}"
+
+    if coords is not None:
+        in_city = [p for p in in_city if p[3] is not None and km_between(coords, (p[3], p[4])) <= MAX_GEOCODE_KM]
+        if not in_city:
+            return "ambiguous", None, f"cached address over {MAX_GEOCODE_KM:g} km from the restaurant"
 
     streets = {p[1].lower() for p in in_city}
     if len(streets) > 1:
         return "ambiguous", None, f"multiple streets: {sorted(streets)}"
 
-    place, street, _ = in_city[0]
+    place, street = in_city[0][:2]
     if not names_resemble(name, place):
         return "ambiguous", None, f"place name mismatch: {place!r}"
     return "set", street, ""
@@ -141,12 +166,12 @@ def main() -> int:
     cur = conn.cursor()
 
     cur.execute(
-        "SELECT query, detail, geocoded_city FROM geocode_cache "
+        "SELECT query, detail, geocoded_city, lat, lng FROM geocode_cache "
         "WHERE lat IS NOT NULL AND detail IS NOT NULL"
     )
-    by_name: dict[str, list[tuple[str | None, str | None]]] = defaultdict(list)
-    for query, detail, gcity in cur.fetchall():
-        by_name[normalize_name(query.split("|", 1)[0])].append((detail, gcity))
+    by_name: dict[str, list[tuple[str | None, str | None, float | None, float | None]]] = defaultdict(list)
+    for query, detail, gcity, lat, lng in cur.fetchall():
+        by_name[normalize_name(query.split("|", 1)[0])].append((detail, gcity, lat, lng))
 
     cur.execute(
         "SELECT id, name, location, lat, lng FROM restaurants "
@@ -161,7 +186,8 @@ def main() -> int:
 
     buckets: dict[str, list] = {"set": [], "ambiguous": [], "none": []}
     for rid, name, location, lat, lng in rows:
-        kind, street, note = classify(name, location, by_name.get(normalize_name(name), []), city_key)
+        coords = (lat, lng) if lat is not None and lng is not None else None
+        kind, street, note = classify(name, location, by_name.get(normalize_name(name), []), city_key, coords)
         buckets[kind].append((rid, name, location, street, note, lat is None or lng is None))
 
     written = 0

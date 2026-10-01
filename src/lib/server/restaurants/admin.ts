@@ -9,7 +9,10 @@ import {
 } from "$lib/server/db/schema";
 import { and, eq, ne, sql } from "drizzle-orm";
 
+/** Reasons a brand can sit in the `excluded_brands` registry. */
 export type ExclusionReason = "chain" | "corporate_group";
+/** Reasons a single restaurant can be excluded. `closed` is per-row and never goes to the registry. */
+export type RestaurantExclusionReason = ExclusionReason | "closed";
 
 export interface ReviewRestaurant {
   id: number;
@@ -253,17 +256,18 @@ export function partitionExclusionQueue(rows: ReviewRestaurant[]): {
 /**
  * Confirm an exclusion. Stamps `reviewed_at` so re-ingest and the apply_exclusions sweep
  * never silently flip it back — a human decision is permanent until changed here.
+ * A closed restaurant is not a chain, so `closed` leaves `chain_confidence` alone.
  */
 export async function markRestaurantExcluded(
   restaurantId: number,
-  reason: ExclusionReason,
+  reason: RestaurantExclusionReason,
 ): Promise<void> {
   const updated = await db
     .update(restaurants)
     .set({
       status: "excluded",
       exclusionReason: reason,
-      chainConfidence: "likely_chain",
+      ...(reason === "closed" ? {} : { chainConfidence: "likely_chain" as const }),
       reviewedAt: sql`now()`,
       updatedAt: sql`now()`,
     })
