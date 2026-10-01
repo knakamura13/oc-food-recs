@@ -163,6 +163,46 @@ export async function mergeRestaurants(
   });
 }
 
+/**
+ * Rename a restaurant, keeping its slug. Snapshots the pre-rename row into
+ * `restaurant_aliases` (source 'rename') so a re-ingest of the old spelling still
+ * resolves to this row instead of forking a new one (#152, #156). Stamps `reviewed_at`
+ * so the ingest upsert never reverts the human-chosen name.
+ */
+export async function renameRestaurant(
+  id: number,
+  newName: string,
+): Promise<void> {
+  const name = newName.trim();
+  if (!name) throw new Error("Name is required.");
+
+  await db.transaction(async (tx) => {
+    const [row] = await tx
+      .select()
+      .from(restaurants)
+      .where(eq(restaurants.id, id))
+      .limit(1);
+    if (!row) throw new Error("Restaurant not found.");
+    if (name === row.name)
+      throw new Error("New name is the same as the current name.");
+
+    await tx.insert(restaurantAliases).values({
+      restaurantId: id,
+      name: row.name,
+      location: row.location,
+      street: row.street,
+      lat: row.lat,
+      lng: row.lng,
+      source: "rename",
+    });
+
+    await tx
+      .update(restaurants)
+      .set({ name, reviewedAt: sql`now()`, updatedAt: sql`now()` })
+      .where(eq(restaurants.id, id));
+  });
+}
+
 /** Dismiss duplicate flag and restore restaurant to the public site. */
 export async function dismissDuplicateCandidate(
   restaurantId: number,
