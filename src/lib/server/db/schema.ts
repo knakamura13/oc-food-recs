@@ -148,6 +148,43 @@ export const excludedBrands = pgTable('excluded_brands', {
 	createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
+/**
+ * Slugs that no longer have their own restaurants row (merged away) but must keep resolving
+ * to a surviving one. The Python ingest feeds these to `assign_slugs` as extra `existing`
+ * entries (alias name, winner's slug/coords) so a re-ingest does not re-mint the loser.
+ */
+export const restaurantAliases = pgTable('restaurant_aliases', {
+	slug: text('slug').primaryKey(),
+	restaurantId: bigint('restaurant_id', { mode: 'number' })
+		.notNull()
+		.references(() => restaurants.id, { onDelete: 'cascade' }),
+	name: text('name').notNull(),
+	source: text('source').notNull(), // 'merge'
+	createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+/**
+ * Undo record for admin merges. winner_id/loser_id are deliberately not FKs: the loser row is
+ * deleted by the merge, and the log must outlive either restaurant.
+ */
+export const mergeLog = pgTable('merge_log', {
+	id: bigserial('id', { mode: 'number' }).primaryKey(),
+	winnerId: bigint('winner_id', { mode: 'number' }).notNull(),
+	loserId: bigint('loser_id', { mode: 'number' }).notNull(),
+	loserSlug: text('loser_slug').notNull(),
+	loserName: text('loser_name').notNull(),
+	loserLocation: text('loser_location'),
+	loserStreet: text('loser_street'),
+	loserLat: real('loser_lat'),
+	loserLng: real('loser_lng'),
+	movedMentionIds: bigint('moved_mention_ids', { mode: 'number' }).array().notNull(),
+	deletedMentionIds: bigint('deleted_mention_ids', { mode: 'number' }).array().notNull(),
+	createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export type RestaurantAlias = typeof restaurantAliases.$inferSelect;
+export type MergeLogEntry = typeof mergeLog.$inferSelect;
+
 export type Thread = typeof threads.$inferSelect;
 export type NewThread = typeof threads.$inferInsert;
 export type Restaurant = typeof restaurants.$inferSelect;

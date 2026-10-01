@@ -2694,9 +2694,18 @@ def write_to_db(
                 ),
             )
 
-            # Fetch existing restaurants for cross-thread deduplication
+            # Fetch existing restaurants for cross-thread deduplication. Merge aliases
+            # (restaurant_aliases) are projected as the winner's row under the alias name,
+            # so a merged-away name still resolves to the winner's slug instead of
+            # re-minting the freed one. Two entries may share a slug; the upsert is by slug.
             cur.execute(
-                "SELECT name, slug, location, street, lat, lng FROM restaurants"
+                """
+                SELECT name, slug, location, street, lat, lng FROM restaurants
+                UNION ALL
+                SELECT a.name, r.slug, r.location, r.street, r.lat, r.lng
+                FROM restaurant_aliases a
+                JOIN restaurants r ON r.id = a.restaurant_id
+                """
             )
             # psycopg 3 cursor returns tuples by default unless a row_factory is used.
             # We use column indices to ensure compatibility with any row_factory.
