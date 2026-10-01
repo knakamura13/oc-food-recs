@@ -12,6 +12,10 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests" / "fixtures"
+# Synthetic saved-thread pages with invented users and text. Never commit real
+# Reddit page saves as fixtures (see CONTRIBUTING.md).
+PAGE_FIXTURE = FIXTURES / "synthetic-thread-page.html"
+FRAGMENT_FIXTURE = FIXTURES / "synthetic-thread-fragment.html"
 SCRIPT_PATH = ROOT / "scripts" / "reddit_pipeline.py"
 
 
@@ -89,42 +93,132 @@ class RedditPipelineTest(unittest.TestCase):
         )
         self.assertEqual([e["name"] for e in entities], ["Real Taco"])
 
-    def test_parse_saved_reddit_html_thread_01(self):
-        parsed = self.pipeline.parse_saved_reddit_html(FIXTURES / "thread-01.html")
+    def test_parse_saved_reddit_html_page_save(self):
+        parsed = self.pipeline.parse_saved_reddit_html(PAGE_FIXTURE)
 
-        self.assertEqual(parsed["post"]["id"], "1sb0qo7")
-        self.assertEqual(parsed["post"]["subreddit"], "orangecounty")
         self.assertEqual(
-            parsed["post"]["title"],
-            "What’s your favorite “mom and pop” family owned restaurant?",
+            parsed["post"],
+            {
+                "id": "synth01",
+                "subreddit": "orangecounty",
+                "title": "Where’s the “hole in the wall” spot you keep going back to?",
+                "body": (
+                    "Every list online is the same three chains. I want the "
+                    "**family-run** places you would send a friend to.\n\n"
+                    "1. Anywhere in the county\n\n"
+                    "2. Cash-only spots welcome"
+                ),
+                "author": "fixture_op",
+                "flair": "Recommendations Needed",
+                "url": "https://www.reddit.com/r/orangecounty/comments/synth01/",
+            },
         )
-        self.assertEqual(parsed["comment_count"], 735)
-        self.assertEqual(parsed["max_depth"], 6)
-        self.assertTrue(parsed["comments"])
-        self.assertEqual(parsed["comments"][0]["id"], "t1_oe04j5u")
-        self.assertTrue(
-            parsed["comments"][0]["permalink"].startswith(
-                "https://www.reddit.com/r/orangecounty/comments/1sb0qo7/comment/"
-            )
-        )
+        self.assertEqual(parsed["comment_count"], 11)
+        self.assertEqual(parsed["max_depth"], 4)
 
-    def test_parse_saved_reddit_html_thread_02(self):
-        parsed = self.pipeline.parse_saved_reddit_html(FIXTURES / "thread-02.html")
-
-        self.assertEqual(parsed["post"]["id"], "1slszch")
-        self.assertEqual(parsed["post"]["subreddit"], "orangecounty")
+        # Roots and replies come back sorted by score, not in page order.
+        roots = parsed["comments"]
         self.assertEqual(
-            parsed["post"]["title"],
-            "What’s a mom & pop restaurant that is delish and could use more customers?",
+            [c["id"] for c in roots], ["t1_pg07", "t1_pg01", "t1_pg10", "t1_pg11"]
         )
-        self.assertEqual(parsed["comment_count"], 202)
-        self.assertEqual(parsed["max_depth"], 6)
-        self.assertTrue(parsed["comments"])
-        self.assertEqual(parsed["comments"][0]["id"], "t1_og95lhn")
-        self.assertTrue(
-            parsed["comments"][0]["permalink"].startswith(
-                "https://www.reddit.com/r/orangecounty/comments/1slszch/comment/"
-            )
+        self.assertEqual(
+            roots[0]["permalink"],
+            "https://www.reddit.com/r/orangecounty/comments/synth01/comment/pg07/",
+        )
+        self.assertEqual([r["id"] for r in roots[0]["replies"]], ["t1_pg09", "t1_pg08"])
+        self.assertEqual([r["id"] for r in roots[1]["replies"]], ["t1_pg03", "t1_pg02"])
+
+        # Nested replies keep their parent links down to depth 4.
+        chain = [roots[1]["replies"][0]]
+        while chain[-1]["replies"]:
+            chain.append(chain[-1]["replies"][0])
+        self.assertEqual(
+            [(c["id"], c["depth"], c["parent_id"]) for c in chain],
+            [
+                ("t1_pg03", 1, "t1_pg01"),
+                ("t1_pg04", 2, "t1_pg03"),
+                ("t1_pg05", 3, "t1_pg04"),
+                ("t1_pg06", 4, "t1_pg05"),
+            ],
+        )
+
+        comments = {
+            c["id"]: c for c in self.pipeline.flatten_comment_tree(parsed["comments"])
+        }
+        # Markdown survives: list items, bold, links, emphasis, and blockquotes.
+        self.assertEqual(
+            comments["t1_pg01"]["body"],
+            "Two that never miss for me:\n\n"
+            "- Tía Rosalba’s Kitchen on 4th St in Santa Ana, get the mole negro\n\n"
+            "- Lantern Alley Pho in Westminster, the oxtail bowl is enormous\n\n"
+            "Both are **cash only**. Hours are on "
+            "[their site](https://example.com/rosalba-hours).",
+        )
+        self.assertEqual(
+            comments["t1_pg07"]["body"],
+            "**Saffron Courtyard** in Irvine. The *tahdig* alone is worth the drive.",
+        )
+        self.assertEqual(
+            comments["t1_pg10"]["body"],
+            "Golden Hour Donuts in Tustin.\n\n"
+            "> best apple fritter in the county\n\n"
+            "Their sign, not my words. Still true.",
+        )
+        # A removed comment keeps its "[removed]" body even though the author is gone.
+        self.assertEqual(
+            (comments["t1_pg09"]["author"], comments["t1_pg09"]["body"]),
+            ("[deleted]", "[removed]"),
+        )
+        self.assertEqual(comments["t1_pg08"]["score"], -3)
+        self.assertEqual(
+            comments["t1_pg01"]["created_utc"], "2026-05-02T16:41:09.207000+0000"
+        )
+
+    def test_parse_saved_reddit_html_main_fragment_save(self):
+        parsed = self.pipeline.parse_saved_reddit_html(FRAGMENT_FIXTURE)
+
+        self.assertEqual(
+            parsed["post"],
+            {
+                "id": "synth02",
+                "subreddit": "orangecounty",
+                "title": "Which mom & pop spot deserves more regulars?",
+                "body": "",
+                "author": "fixture_kai",
+                "flair": "Food & Drink",
+                "url": "https://www.reddit.com/r/orangecounty/comments/synth02/",
+            },
+        )
+        self.assertEqual(parsed["comment_count"], 9)
+        self.assertEqual(parsed["max_depth"], 3)
+
+        roots = parsed["comments"]
+        self.assertEqual(
+            [c["id"] for c in roots], ["t1_fr01", "t1_fr05", "t1_fr08", "t1_deleted"]
+        )
+        self.assertEqual(
+            roots[0]["permalink"],
+            "https://www.reddit.com/r/orangecounty/comments/synth02/comment/fr01/",
+        )
+        # The negative-score reply sorts last; the deleted reply is not attached here.
+        self.assertEqual([r["id"] for r in roots[1]["replies"]], ["t1_fr07", "t1_fr06"])
+        self.assertEqual(roots[1]["replies"][1]["score"], -9)
+
+        # A deleted reply saved without parentid, permalink, score, or body text
+        # surfaces as its own root with a "[deleted]" placeholder body.
+        self.assertEqual(
+            roots[-1],
+            {
+                "id": "t1_deleted",
+                "author": "[deleted]",
+                "body": "[deleted]",
+                "score": 0,
+                "created_utc": "2025-11-30T08:15:02.774000+0000",
+                "depth": 1,
+                "parent_id": None,
+                "permalink": "",
+                "replies": [],
+            },
         )
 
     def test_build_thread_is_deterministic_with_injected_extractors(self):
@@ -133,7 +227,7 @@ class RedditPipelineTest(unittest.TestCase):
             threads_root = tmp_path / "data" / "threads"
 
             thread_dir = self.pipeline.init_thread(
-                FIXTURES / "thread-02.html",
+                FRAGMENT_FIXTURE,
                 threads_root=threads_root,
             )
 
@@ -1010,6 +1104,74 @@ class BuildThreadDatasetTest(unittest.TestCase):
         ]
         dataset = self.pipeline.build_thread_dataset(parsed, entity_records)
         self.assertEqual(len(dataset["restaurants"][0]["endorsements"]), 2)
+
+    def test_thread_dataset_from_page_save_shares_nested_endorsements(self):
+        parsed = self.pipeline.parse_saved_reddit_html(PAGE_FIXTURE)
+        entity_records = [
+            {
+                "comment_id": "t1_pg01",
+                "entities": [
+                    {"name": "Tía Rosalba’s Kitchen", "location": "Santa Ana"},
+                    {"name": "Lantern Alley Pho", "location": "Westminster"},
+                ],
+            },
+            {
+                "comment_id": "t1_pg07",
+                "entities": [{"name": "Saffron Courtyard", "location": "Irvine"}],
+            },
+            {
+                "comment_id": "t1_pg10",
+                "entities": [{"name": "Golden Hour Donuts", "location": "Tustin"}],
+            },
+            {
+                "comment_id": "t1_pg11",
+                "entities": [{"name": "Okonomi Corner", "location": "Costa Mesa"}],
+            },
+        ]
+
+        dataset = self.pipeline.build_thread_dataset(parsed, entity_records)
+        restaurants = {r["name"]: r for r in dataset["restaurants"]}
+        names_restaurant = self.pipeline.names_restaurant
+
+        self.assertEqual(
+            list(restaurants),
+            [
+                "Saffron Courtyard",
+                "Tía Rosalba’s Kitchen",
+                "Lantern Alley Pho",
+                "Golden Hour Donuts",
+                "Okonomi Corner",
+            ],
+        )
+        # Both restaurants from the multi-restaurant root collect its endorsement-type
+        # replies at every depth (the depth-4 question is dropped), and each of those
+        # replies names at most one of the two.
+        for name, naming_reply in (
+            ("Tía Rosalba’s Kitchen", "t1_pg04"),
+            ("Lantern Alley Pho", "t1_pg02"),
+        ):
+            with self.subTest(restaurant=name):
+                restaurant = restaurants[name]
+                self.assertEqual(restaurant["primary_comment"]["id"], "t1_pg01")
+                self.assertEqual(
+                    [(e["id"], e["type"]) for e in restaurant["endorsements"]],
+                    [
+                        ("t1_pg03", "endorsement"),
+                        ("t1_pg04", "dish_rec"),
+                        ("t1_pg02", "endorsement"),
+                        ("t1_pg05", "personal_story"),
+                    ],
+                )
+                self.assertEqual(
+                    [
+                        e["id"]
+                        for e in restaurant["endorsements"]
+                        if names_restaurant(e["body"], name)
+                    ],
+                    [naming_reply],
+                )
+        # Neither the negative-score reply nor the removed one is an endorsement.
+        self.assertEqual(restaurants["Saffron Courtyard"]["endorsements"], [])
 
     def test_location_alias_dtsa(self):
         self.assertEqual(self.pipeline.normalize_location("DTSA"), "Santa Ana")
