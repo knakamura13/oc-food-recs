@@ -35,9 +35,9 @@
 			lines.find((l) => findRestaurantMatch(l, restaurantName)) ?? lines[0] ?? body
 		);
 	});
-	const paragraphs = $derived(
-		tokenizeCommentBody(multi && !showFull ? focusLine : body)
-	);
+	const hasMoreLines = $derived(multi && body.split('\n').filter((l) => l.trim()).length > 1);
+	const focused = $derived(hasMoreLines && !showFull);
+	const paragraphs = $derived(tokenizeCommentBody(focused ? focusLine : body));
 	const shownPlaces = $derived(otherPlaces.slice(0, MAX_PLACES));
 </script>
 
@@ -57,7 +57,7 @@
 
 <div class="comment-text" class:endorsement={clampable} class:clamped>
 	{#each paragraphs as tokens, i (i)}
-		{#if multi && !showFull}
+		{#if focused}
 			<div class="match-line">{@render inline(tokens)}</div>
 		{:else}
 			<p>{@render inline(tokens)}</p>
@@ -81,14 +81,16 @@
 			and {otherPlaces.length - MAX_PLACES} more
 		{/if}
 	</p>
-	<button
-		type="button"
-		class="comment-toggle"
-		aria-expanded={showFull}
-		onclick={() => (showFull = !showFull)}
-	>
-		{showFull ? 'Hide full comment' : 'Show full comment'}
-	</button>
+	{#if hasMoreLines}
+		<button
+			type="button"
+			class="comment-toggle"
+			aria-expanded={showFull}
+			onclick={() => (showFull = !showFull)}
+		>
+			{showFull ? 'Hide full comment' : 'Show full comment'}
+		</button>
+	{/if}
 {:else if clampable && body.length > CLAMP_MIN_CHARS}
 	<button
 		type="button"
@@ -167,6 +169,10 @@
 	}
 
 	@media (max-width: 1023px) {
+		.comment-toggle {
+			min-height: 44px;
+		}
+
 		.comment-text.endorsement {
 			font-size: 1rem;
 			line-height: 1.55;

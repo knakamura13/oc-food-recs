@@ -29,6 +29,8 @@ function collect(line: string): Match[] {
 		});
 	}
 	for (const m of line.matchAll(BOLD_RE)) {
+		// Bold around a link would hide the link; let the link win.
+		if (/\]\(https?:\/\/|https?:\/\//.test(m[1])) continue;
 		found.push({
 			start: m.index,
 			end: m.index + m[0].length,
@@ -36,13 +38,14 @@ function collect(line: string): Match[] {
 		});
 	}
 	for (const m of line.matchAll(URL_RE)) {
-		const label = hostLabel(m[0]);
+		const url = m[0].replace(/[.,!?;:]+$/, '');
+		const label = hostLabel(url);
 		found.push({
 			start: m.index,
-			end: m.index + m[0].length,
+			end: m.index + url.length,
 			token: label
-				? { type: 'link', text: label, href: m[0] }
-				: { type: 'text', text: m[0] }
+				? { type: 'link', text: label, href: url }
+				: { type: 'text', text: url }
 		});
 	}
 	found.sort((a, b) => a.start - b.start || b.end - a.end);
