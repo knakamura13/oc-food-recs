@@ -23,6 +23,7 @@ interface RestaurantRow {
   name: string;
   slug: string;
   location: string | null;
+  street: string | null;
   cuisine: string | null;
   lat: number | null;
   lng: number | null;
@@ -85,6 +86,7 @@ async function loadHomePage(
 				r.name,
 				r.slug,
 				r.location,
+				r.street,
 				r.cuisine,
 				r.lat,
 				r.lng,
@@ -136,12 +138,13 @@ async function loadHomePage(
 			-- authoritative 'excluded' status is hidden. 'pending_review' stays in the
 			-- payload as likely_chain so the Mom & pop chip can filter it.
 			WHERE r.status <> 'excluded'
-			GROUP BY r.id, r.name, r.slug, r.location, r.cuisine, r.lat, r.lng, r.chain_confidence
+			GROUP BY r.id, r.name, r.slug, r.location, r.street, r.cuisine, r.lat, r.lng, r.chain_confidence
 		)
 		SELECT
 			name,
 			slug,
 			location,
+			street,
 			cuisine,
 			lat,
 			lng,
@@ -161,6 +164,7 @@ async function loadHomePage(
     name: row.name,
     slug: row.slug,
     location: row.location,
+    street: row.street?.trim() || null,
     cuisine: row.cuisine,
     lat: row.lat,
     lng: row.lng,

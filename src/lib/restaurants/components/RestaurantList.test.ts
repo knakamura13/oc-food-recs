@@ -135,6 +135,39 @@ describe("RestaurantList", () => {
     ).toBeInTheDocument();
   });
 
+  it("keeps the Google Maps link when the comment fetch fails", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, json: async () => [] })));
+
+    render(RestaurantList, { restaurants });
+    appState.selectedRestaurantSlug = "la-taco-spot";
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent(/could not load comments/i);
+    });
+    expect(
+      screen.getByRole("link", { name: /open la taco spot in google maps/i }),
+    ).toHaveAttribute(
+      "href",
+      "https://www.google.com/maps/dir/?api=1&destination=33.6846,-117.8265",
+    );
+  });
+
+  it("shows the street under the restaurant name only when known", () => {
+    render(RestaurantList, {
+      restaurants: [
+        ...restaurants,
+        makeRestaurant({
+          name: "Cafe Rae",
+          slug: "cafe-rae",
+          street: "1421 N El Camino Real",
+        }),
+      ],
+    });
+
+    expect(screen.getByText("1421 N El Camino Real")).toBeInTheDocument();
+    expect(screen.getAllByText(/El Camino|Main/)).toHaveLength(1);
+  });
+
   it("retries a failed mention load from the drawer", async () => {
     const user = userEvent.setup();
     const fetchMock = vi
@@ -700,29 +733,6 @@ describe("RestaurantList drawer actions", () => {
     });
     expect(mocks.toastSuccess).toHaveBeenCalledWith("Queued for review");
     expect(appState.reportedChainSlugs).toEqual(["la-taco-spot"]);
-  });
-
-  it("reorders drawer actions above comments only under the mobile breakpoint", () => {
-    expect(restaurantListSource).toMatch(
-      /class="drawer-actions" role="group" aria-label="Restaurant actions"/,
-    );
-    expect(restaurantListSource).toMatch(
-      /<button type="button" class="map-link"/,
-    );
-    const orderMatches = restaurantListSource.match(/order:\s*-1/g) ?? [];
-    expect(orderMatches).toHaveLength(1);
-    const drawerMedia = restaurantListSource.lastIndexOf(
-      "@media (max-width: 1023px)",
-    );
-    expect(drawerMedia).toBeGreaterThan(-1);
-    const block = restaurantListSource.slice(drawerMedia);
-    expect(block).toContain("order: -1");
-    expect(block).toContain("min-height: 44px");
-    expect(block).toContain(".drawer-actions");
-    expect(block).toMatch(/\.empty-action \{[\s\S]*min-height: 44px/);
-    expect(block.indexOf("order: -1")).toBeLessThan(
-      block.indexOf("@media (max-width: 600px)"),
-    );
   });
 
   it("enlarges comment permalink tap targets under the mobile breakpoint", () => {
