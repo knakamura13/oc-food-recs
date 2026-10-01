@@ -42,11 +42,18 @@ versions are not assumed to exist in this older backup.
   Its GeoJSON collections are streamed. Malformed input files are recorded.
 - Shared ordering, social, and site-builder domains are excluded. Registrable
   domains use the bundled public-suffix list, including private suffixes.
+- Distinct locations use meter-sized spherical Cartesian cells and a 60 m
+  great-circle distance check, including high latitudes and the date line.
 - Jev is pinned to `typesafe/jev-1.13`. The adapter reads `OPENROUTER_API_KEY` or the
   macOS Keychain's `openrouter-api-key`; keys are never written to artifacts.
   Public comment text goes to OpenRouter without author handles. Website evidence
   is fetched with limits on redirects, response size, and request time; nonpublic
   destinations are rejected.
+- Jev sees the restaurant's city, local-match provenance, source URL and text.
+  A small total additionally requires a verified official publisher. Known
+  platforms and third-party directories/press sites are ineligible. Each numeric
+  candidate is checked in its quoted context, independently of whole-page chain
+  evidence; postal codes, closed sites and unrelated counts do not qualify.
 - Gemma uses local Ollama `gemma4:31b`, `think: false`, JSON, temperature 0.
   It sees supplied evidence; a quoted count must actually occur in a source.
   Empty evidence, unsupported claims and explicit abstentions cannot exclude a row.
@@ -76,7 +83,13 @@ HTTP/model requests are cached by exact input hash. Identical concurrent model
 requests share one call. Model failures retry on the next invocation; they are
 never converted into evidence of independence. Successful requests resume without
 calling the model again. A changed restaurant selection invalidates the global
-source cache. Source failures and truncation remain visible in the artifacts.
+source cache. A hash-verified superset selection can serve a narrower domain
+allowlist without rescanning the global release. Source failures and truncation
+remain visible in the artifacts.
+
+Use `--prepare-only` while local model work is unavailable. It stops before all
+Gemma calls, writes `preparation-summary.json`, and verifies the database is
+unchanged. This is an explicitly incomplete stage, not a completed evaluation.
 
 Outputs include `results.jsonl` (one row per active restaurant plus excluded-chain
 control rows), `summary.json`, before/after table fingerprints, source manifests,
@@ -85,3 +98,7 @@ Separate active/control counts before reporting recall. The acceptance report al
 includes the 62-item Jev/Gemma comparison, all F6 disagreements, and official-source
 checks around the five/six/seven boundary. Dataset labels are proxies rather than
 human-audited truth; unmatched comparison items must stay unlabeled.
+Overall recall uses every positive reference label; abstentions count as misses.
+Conditional recall/accuracy and response coverage are reported separately, along
+with raw zero-confidence answers. A Boolean false with zero confidence is not
+evidence that a restaurant is independent.

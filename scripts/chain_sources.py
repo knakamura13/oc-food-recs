@@ -68,7 +68,7 @@ WORDS = {
     'twenty': 20,
 }
 COUNT_RE = re.compile(
-    r'\b(\d{1,5}|'
+    r'\b(\d{1,3}(?:,\d{3})+|\d{1,5}|'
     + '|'.join(WORDS)
     + r')\s+(?:(?:restaurant|current|total|operating|different|global|worldwide|classic|distinct|unique|retail)\s+){0,2}(?:locations?|branches?|restaurants?|stores?|outlets?)\b',
     re.I,
@@ -119,10 +119,60 @@ def place_matches(restaurant, place):
 
 
 def explicit_location_counts(text):
-    return [
-        int(m.group(1)) if m.group(1).isdigit() else WORDS[m.group(1).lower()]
-        for m in COUNT_RE.finditer(text)
-    ]
+    return [candidate['count'] for candidate in location_count_candidates(text)]
+
+
+def location_count_candidates(text):
+    """Keep exact context for semantic validation, excluding common postal headings."""
+    candidates = []
+    for match in COUNT_RE.finditer(text):
+        raw = match.group(1).replace(',', '')
+        count = int(raw) if raw.isdigit() else WORDS[raw.lower()]
+        prefix = text[max(0, match.start() - 30) : match.start()]
+        if (
+            raw.isdigit() and len(raw) == 5 and re.search(r'\b[A-Z]{2}\s*$', prefix)
+        ) or re.search(r'\b(?:zip|postal(?: code)?|postcode)\s*$', prefix, re.I):
+            continue
+        if count < 1:
+            continue
+        candidates.append(
+            {
+                'count': count,
+                'quote': text[max(0, match.start() - 120) : match.end() + 120],
+            }
+        )
+    return candidates
+
+
+def global_cache_matches(meta, selection):
+    """A hash-verified superset selection can serve a narrower platform allowlist."""
+
+    def signature(value):
+        return hashlib.sha256(
+            json.dumps(
+                [
+                    RELEASE,
+                    'static-domain-v2',
+                    value['domains'],
+                    value['names'],
+                    value['phones'],
+                ]
+            ).encode()
+        ).hexdigest()
+
+    if meta.get('release') != RELEASE or meta.get('scope') != 'worldwide':
+        return False
+    if meta.get('signature') == signature(selection):
+        return True
+    previous = meta.get('selection')
+    return (
+        isinstance(previous, dict)
+        and all(k in previous for k in selection)
+        and signature(previous) == meta.get('signature')
+        and all(
+            set(values).issubset(previous[key]) for key, values in selection.items()
+        )
+    )
 
 
 def grounded_count(result, sources):
@@ -336,8 +386,10 @@ def global_places(cache, restaurants, matches):
         json.dumps([RELEASE, 'static-domain-v2', domains, names, phones]).encode()
     ).hexdigest()
     meta = cache / 'overture-global.json'
+    selection = {'domains': domains, 'names': names, 'phones': phones}
     if path.exists() and (
-        not meta.exists() or json.loads(meta.read_text())['signature'] != signature
+        not meta.exists()
+        or not global_cache_matches(json.loads(meta.read_text()), selection)
     ):
         raise ValueError(
             'Global cache belongs to a different restaurant/source selection'
@@ -369,6 +421,7 @@ def global_places(cache, restaurants, matches):
                 'release': RELEASE,
                 'scope': 'worldwide',
                 'signature': signature,
+                'selection': selection,
                 'seconds': round(time.time() - start, 2),
                 'domains': len(domains),
                 'names': len(names),

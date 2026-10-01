@@ -25,6 +25,7 @@ from chain_sources import (
     explicit_location_counts,
     global_places,
     local_places,
+    location_count_candidates,
     match_places,
     model_evidence,
     place_matches,
@@ -212,13 +213,36 @@ def jev_sources(rows, mentions, websites, models, output, workers):
         ]
         contexts[r['id']] = sources
         for s in sources:
-            tasks.append({'restaurant_id': r['id'], 'source': s, 'name': r['name']})
+            tasks.append(
+                {
+                    'restaurant_id': r['id'],
+                    'source': s,
+                    'name': r['name'],
+                    'city': r['location'],
+                    'local_matches': r['overture_matches'],
+                }
+            )
 
     def call(task):
         s = task['source']
         state = {
-            'restaurant': {'name': task['name']},
-            'source': {'text': s['text'], 'thread_title': s.get('thread_title')},
+            'restaurant': {
+                'name': task['name'],
+                'city': task['city'],
+                'local_matches': [
+                    {
+                        'name': p.get('name'),
+                        'city': p.get('city'),
+                        'websites': p.get('websites'),
+                    }
+                    for p in task['local_matches']
+                ],
+            },
+            'source': {
+                'text': s['text'],
+                'thread_title': s.get('thread_title'),
+                'url': s.get('url'),
+            },
         }
         result = models.jev(state, EVIDENCE_QUESTIONS)
         return {'restaurant_id': task['restaurant_id'], 'source': s, 'result': result}
@@ -229,21 +253,62 @@ def jev_sources(rows, mentions, websites, models, output, workers):
             results.append(result)
             if (index + 1) % 100 == 0:
                 print('Jev source', index + 1, '/', len(tasks), flush=True)
-    write_json(output / 'jev-sources.json', results)
     for result in results:
+        s = result['source']
+        s['official_source'] = False
         if result['result'].get('error'):
             continue
         r = next(r for r in rows if r['id'] == result['restaurant_id'])
         s = result['source']
         body = result['result']['response']
         probs = {q: probability(body, q) for q in EVIDENCE_QUESTIONS}
+        official_probability = probs['official_source']
+        s['official_source_probability'] = official_probability
+        s['official_source'] = (
+            s['kind'] == 'S5'
+            and website_domain(s.get('url') or '') is not None
+            and official_probability is not None
+            and official_probability >= 0.95
+        )
         record = {
             'kind': s['kind'],
             'url': s.get('url'),
             'source_id': s['id'],
             'probabilities': probs,
+            'official_source': s['official_source'],
         }
-        counts = explicit_location_counts(s['text'])
+        candidates = location_count_candidates(s['text'])
+        counts = []
+        # A whole-page yes/no cannot attribute every numeric phrase on that page.
+        # Validate the actual count and quoted context before selecting it.
+        if candidates and any(
+            probs.get(k) is not None and probs[k] >= 0.95
+            for k in ['six_plus', 'complete_small_total']
+        ):
+            selected = {f'count_{i}': c for i, c in enumerate(candidates[:20])}
+            questions = {
+                key: noul(
+                    f'Does `candidates.{key}.quote`, in the context of `source.text`, explicitly give `candidates.{key}.count` as a CURRENT operating restaurant-location count for `restaurant.name` near `restaurant.city`? Reject postal codes, years, menu prices, unrelated businesses, historical or closed sites and counts of planned locations. A count of six or more in any region is a valid worldwide lower bound; a smaller count must be the complete worldwide total.'
+                )
+                for key in selected
+            }
+            validation = models.jev(
+                {
+                    'restaurant': {'name': r['name'], 'city': r['location']},
+                    'source': {'text': s['text'], 'url': s.get('url')},
+                    'candidates': selected,
+                },
+                questions,
+            )
+            result['count_validation'] = validation
+            if not validation.get('error'):
+                validated = [
+                    c
+                    for key, c in selected.items()
+                    if (probability(validation['response'], key) or 0) >= 0.95
+                ]
+                counts = [c['count'] for c in validated]
+                record['validated_counts'] = validated
         if (
             probs['six_plus'] is not None
             and probs['six_plus'] >= 0.95
@@ -260,6 +325,7 @@ def jev_sources(rows, mentions, websites, models, output, workers):
             )
         elif (
             s['kind'] == 'S5'
+            and s['official_source']
             and probs['complete_small_total'] is not None
             and probs['complete_small_total'] >= 0.95
             and len(set(counts)) == 1
@@ -276,6 +342,7 @@ def jev_sources(rows, mentions, websites, models, output, workers):
                 }
             )
         r['evidence'].append(record)
+    write_json(output / 'jev-sources.json', results)
     for r in rows:
         r.update(decide(r['evidence']))
     return contexts
@@ -364,10 +431,12 @@ def gemma_unresolved(rows, contexts, models, output):
                 e['complete'] = (
                     e['complete']
                     and source['kind'] == 'S5'
+                    and source.get('official_source') is True
                     and not source.get('truncated')
                     and len(source['text']) <= 5000
                 )
                 e['url'] = chosen[e['source']].get('url')
+                e['official_source'] = source.get('official_source') is True
             r['evidence'] += evidence
             r.update(decide(r['evidence']))
         results.append(rec)
@@ -413,6 +482,30 @@ def run(args):
     jev_generic_names(rows, global_rows, models)
     write_json(output / 'pre-gemma-rows.json', rows)
     write_json(output / 'contexts.json', contexts)
+    if args.prepare_only:
+        after = snapshot(args.scratch_dsn)
+        if before['fingerprint'] != after['fingerprint']:
+            raise RuntimeError('Scratch database changed during preparation')
+        write_json(
+            output / 'preparation-summary.json',
+            {
+                'stage': 'prepared',
+                'evaluation_complete': False,
+                'remaining': 'Gemma fallback, final comparison, acceptance report',
+                'active': summarize([r for r in rows if r['status'] == 'active']),
+                'excluded_chains': summarize(
+                    [r for r in rows if r['exclusion_reason'] == 'chain'],
+                    {r['id'] for r in rows if r['exclusion_reason'] == 'chain'},
+                ),
+                'database_unchanged': True,
+                'fingerprint': after['fingerprint'],
+            },
+        )
+        print(
+            'Prepared source evidence; Gemma was not called. Evaluation remains incomplete.',
+            flush=True,
+        )
+        return
     gemma_results = gemma_unresolved(rows, contexts, models, output)
     write_json(output / 'results.json', rows)
     with (output / 'results.jsonl').open('w') as f:
@@ -454,6 +547,11 @@ def main():
     p.add_argument('--output', required=True)
     p.add_argument('--atp-zip')
     p.add_argument('--workers', type=int, default=8)
+    p.add_argument(
+        '--prepare-only',
+        action='store_true',
+        help='Prepare deterministic and Jev evidence, verify DB unchanged, and stop before any Gemma call',
+    )
     args = p.parse_args()
     if not 1 <= args.workers <= 16:
         p.error('--workers must be between 1 and 16')
@@ -520,43 +618,7 @@ def comparison_report(rows, models, output, probe_path):
             'gemma_error': gr.get('error'),
         }
         results.append(record)
-    metrics = {}
-    for model in ['jev', 'gemma']:
-        labeled = [r for r in results if r['proxy_label'] is not None]
-
-        def answer(r):
-            if model == 'jev':
-                return (
-                    None
-                    if r['jev_probability'] is None
-                    else r['jev_probability'] >= 0.5
-                )
-            return r['gemma_answer'] if isinstance(r['gemma_answer'], bool) else None
-
-        answered = [r for r in labeled if answer(r) is not None]
-        positives = [r for r in answered if r['proxy_label']]
-        negatives = [r for r in answered if not r['proxy_label']]
-        metrics[model] = {
-            'labeled': len(labeled),
-            'answered': len(answered),
-            'positive_labels': len(positives),
-            'negative_labels': len(negatives),
-            'true_positives': sum(answer(r) for r in positives),
-            'false_positives': sum(answer(r) for r in negatives),
-            'accuracy': (
-                sum(answer(r) == r['proxy_label'] for r in answered) / len(answered)
-                if answered
-                else None
-            ),
-            'recall': (
-                sum(answer(r) for r in positives) / len(positives)
-                if positives
-                else None
-            ),
-            'disagreements': [
-                r['id'] for r in answered if answer(r) != r['proxy_label']
-            ],
-        }
+    metrics = comparison_metrics(results)
     report = {
         'threshold': 6,
         'scope': 'worldwide',
@@ -570,6 +632,57 @@ def comparison_report(rows, models, output, probe_path):
     }
     write_json(output / 'comparison.json', report)
     return report
+
+
+def comparison_metrics(results):
+    metrics = {}
+    labeled = [r for r in results if r['proxy_label'] is not None]
+    for model in ['jev', 'gemma']:
+
+        def answer(r):
+            if model == 'jev':
+                return (
+                    None
+                    if r['jev_probability'] is None
+                    else r['jev_probability'] >= 0.5
+                )
+            return r['gemma_answer'] if isinstance(r['gemma_answer'], bool) else None
+
+        answered = [r for r in labeled if answer(r) is not None]
+        positives = [r for r in labeled if r['proxy_label']]
+        negatives = [r for r in labeled if not r['proxy_label']]
+        answered_positives = [r for r in positives if answer(r) is not None]
+        tp = sum(answer(r) is True for r in positives)
+        correct = sum(answer(r) == r['proxy_label'] for r in answered)
+        metrics[model] = {
+            'labeled': len(labeled),
+            'answered': len(answered),
+            'response_coverage': len(answered) / len(labeled) if labeled else None,
+            'positive_labels': len(positives),
+            'negative_labels': len(negatives),
+            'true_positives': tp,
+            'false_positives': sum(answer(r) is True for r in negatives),
+            'accuracy': correct / len(labeled) if labeled else None,
+            'conditional_accuracy': correct / len(answered) if answered else None,
+            'recall': tp / len(positives) if positives else None,
+            'conditional_recall': (
+                tp / len(answered_positives) if answered_positives else None
+            ),
+            'abstentions': [r['id'] for r in labeled if answer(r) is None],
+            'disagreements': [
+                r['id'] for r in labeled if answer(r) != r['proxy_label']
+            ],
+        }
+        if model == 'gemma':
+            metrics[model]['zero_confidence_false_ids'] = [
+                r['id']
+                for r in results
+                if r['gemma_answer'] is False and r['gemma_confidence'] == 0
+            ]
+            metrics[model]['zero_confidence_ids'] = [
+                r['id'] for r in results if r['gemma_confidence'] == 0
+            ]
+    return metrics
 
 
 if __name__ == '__main__':

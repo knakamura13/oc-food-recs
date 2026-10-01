@@ -170,6 +170,9 @@ def noul(instructions):
 
 
 EVIDENCE_QUESTIONS = {
+    'official_source': noul(
+        'Do `source.url` and `source.text` clearly identify the publisher as the official business or official brand website for `restaurant.name` at `restaurant.city`? Use the page identity, ownership/contact/address claims and supplied local-match provenance. A directory, press article, ordering platform, social profile, fan site, unrelated business or unclear publisher is not an official source. Do not assume that a URL supplied by a places directory proves ownership.'
+    ),
     'six_plus': noul(
         'Does `source.text` explicitly provide evidence that `restaurant.name` operates at least six distinct restaurant locations? Judge this named business, not other businesses mentioned in the source. Do not infer from a bare name or model knowledge.'
     ),

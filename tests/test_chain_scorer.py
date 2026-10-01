@@ -431,6 +431,7 @@ class PrecisionGuardTest(unittest.TestCase):
         source = {
             'kind': 'S5',
             'text': 'We have 5 locations worldwide.' + 'x' * 6000,
+            'official_source': True,
             'truncated': False,
             'url': 'https://example.com/',
         }
@@ -485,6 +486,330 @@ class SharedCacheTest(unittest.TestCase):
                     )
                 )
         self.assertEqual(len(calls), 1)
+
+
+class ReviewRegressionTest(unittest.TestCase):
+    def test_nearby_high_latitude_pairs_are_three_sites_not_six(self):
+        coords = [(60, lon + d) for lon in (0, 1, 2) for d in (0.00099, 0.00201)]
+        self.assertEqual(cs.distinct_locations(coords), 3)
+
+    def test_antimeridian_neighbors_are_one_site(self):
+        self.assertEqual(cs.distinct_locations([(0, 179.9999), (0, -179.9999)]), 1)
+
+    def test_unverified_publisher_cannot_establish_independence(self):
+        import chain_evaluate as ce
+        import tempfile
+
+        class Model:
+            def jev(self, state, questions):
+                values = {
+                    'complete_small_total': 0.99,
+                    'official_source': 0.1,
+                    'count_0': 0.99,
+                }
+                return {
+                    'response': {
+                        'answers': {q: {'noul': values.get(q, 0.01)} for q in questions}
+                    }
+                }
+
+        row = {
+            'id': 1,
+            'name': 'Synthetic Grill',
+            'location': 'Tustin',
+            'evidence': [],
+            'overture_matches': [{'websites': ['https://example.com/']}],
+            'decision': 'unknown',
+        }
+        website = {
+            'requested_url': 'https://example.com/',
+            'url': 'https://example.com/',
+            'text': 'Synthetic Grill has exactly five locations worldwide.',
+            'truncated': False,
+        }
+        with tempfile.TemporaryDirectory() as folder:
+            ce.jev_sources([row], [], [website], Model(), Path(folder), 1)
+        self.assertEqual(row['decision'], 'unknown')
+
+    def test_gemma_small_total_requires_verified_official_source(self):
+        import chain_evaluate as ce
+        import tempfile
+
+        class Model:
+            def gemma(self, prompt):
+                return {
+                    'seconds': 0,
+                    'response': {
+                        'done': True,
+                        'message': {
+                            'content': '{"decision":"independent","count":5,"complete":true,"identity_verified":true,"source":0,"quote":"We have 5 locations worldwide."}'
+                        },
+                    },
+                }
+
+        for official, expected in [(False, 'unknown'), (True, 'independent')]:
+            row = {
+                'id': 1,
+                'name': 'Synthetic Grill',
+                'location': 'Tustin',
+                'evidence': [],
+                'decision': 'unknown',
+            }
+            source = {
+                'kind': 'S5',
+                'url': 'https://example.com/',
+                'text': 'We have 5 locations worldwide.',
+                'official_source': official,
+                'truncated': False,
+            }
+            with tempfile.TemporaryDirectory() as folder:
+                ce.gemma_unresolved([row], {1: [source]}, Model(), Path(folder))
+            self.assertEqual(row['decision'], expected)
+
+    def test_postcode_before_locations_heading_is_not_a_count(self):
+        import chain_sources as src
+
+        self.assertEqual(
+            src.explicit_location_counts(
+                'Mountain Mikes, Dixon CA 95620 Locations Menu'
+            ),
+            [],
+        )
+        self.assertEqual(
+            src.explicit_location_counts('We operate 38,000 restaurants worldwide.'),
+            [38000],
+        )
+
+    def test_positive_abstention_is_a_miss_in_overall_recall(self):
+        import chain_evaluate as ce
+        import tempfile, json
+
+        class Model:
+            def jev(self, state, questions):
+                return {'response': {'answers': {'six_plus': {'noul': 0.9}}}}
+
+            def gemma(self, prompt, probe=False):
+                result = {
+                    'six_plus': True if 'First' in prompt else None,
+                    'confidence': 0.8 if 'First' in prompt else 0,
+                }
+                return {
+                    'response': {
+                        'done': True,
+                        'message': {'content': json.dumps(result)},
+                    }
+                }
+
+        rows = [
+            {
+                'id': i,
+                'name': name,
+                'location': 'Tustin',
+                'evidence': [{'source': 'Overture', 'count': 6}],
+            }
+            for i, name in [(1, 'First'), (2, 'Second')]
+        ]
+        with tempfile.TemporaryDirectory() as folder:
+            probes = Path(folder) / 'probes.json'
+            probes.write_text(
+                json.dumps(
+                    [
+                        {'id': r['id'], 'name': r['name'], 'city': r['location']}
+                        for r in rows
+                    ]
+                )
+            )
+            report = ce.comparison_report(rows, Model(), Path(folder), probes)
+        self.assertEqual(report['metrics']['gemma']['positive_labels'], 2)
+        self.assertEqual(report['metrics']['gemma']['recall'], 0.5)
+
+
+class SourceValidationTest(unittest.TestCase):
+    def test_known_ordering_and_directory_domains_are_ineligible(self):
+        for host in [
+            'olo.com',
+            'twitter.com',
+            'hub.biz',
+            'poi.place',
+            'ocregister.com',
+            'eatchownow.com',
+        ]:
+            self.assertIsNone(cs.website_domain('https://' + host + '/synthetic'))
+
+    def test_verified_official_total_can_confirm_small_business(self):
+        import chain_evaluate as ce
+        import tempfile
+
+        states = []
+
+        class Model:
+            def jev(self, state, questions):
+                states.append(state)
+                values = {
+                    'official_source': 0.99,
+                    'complete_small_total': 0.99,
+                    'count_0': 0.99,
+                }
+                return {
+                    'response': {
+                        'answers': {q: {'noul': values.get(q, 0.01)} for q in questions}
+                    }
+                }
+
+        row = {
+            'id': 1,
+            'name': 'Synthetic Grill',
+            'location': 'Tustin',
+            'evidence': [],
+            'decision': 'unknown',
+            'overture_matches': [
+                {
+                    'name': 'Synthetic Grill',
+                    'city': 'Tustin',
+                    'websites': ['https://example.com/'],
+                }
+            ],
+        }
+        page = {
+            'requested_url': 'https://example.com/',
+            'url': 'https://example.com/',
+            'text': 'Synthetic Grill has exactly five locations worldwide.',
+            'truncated': False,
+        }
+        with tempfile.TemporaryDirectory() as folder:
+            contexts = ce.jev_sources([row], [], [page], Model(), Path(folder), 1)
+        self.assertEqual(row['decision'], 'independent')
+        self.assertTrue(contexts[1][0]['official_source'])
+        self.assertEqual(states[0]['restaurant']['city'], 'Tustin')
+        self.assertEqual(states[0]['source']['url'], 'https://example.com/')
+        self.assertEqual(
+            states[0]['restaurant']['local_matches'][0]['name'], 'Synthetic Grill'
+        )
+
+    def test_chain_probability_cannot_validate_an_unrelated_numeric_phrase(self):
+        import chain_evaluate as ce
+        import tempfile
+
+        class Model:
+            def jev(self, state, questions):
+                values = {'official_source': 0.99, 'six_plus': 0.99, 'count_0': 0.01}
+                return {
+                    'response': {
+                        'answers': {q: {'noul': values.get(q, 0.01)} for q in questions}
+                    }
+                }
+
+        row = {
+            'id': 1,
+            'name': 'Synthetic Grill',
+            'location': 'Tustin',
+            'evidence': [],
+            'decision': 'unknown',
+            'overture_matches': [{'websites': ['https://example.com/']}],
+        }
+        page = {
+            'requested_url': 'https://example.com/',
+            'url': 'https://example.com/',
+            'text': 'Competitor Grill has seven locations. Synthetic Grill serves Tustin.',
+            'truncated': False,
+        }
+        with tempfile.TemporaryDirectory() as folder:
+            ce.jev_sources([row], [], [page], Model(), Path(folder), 1)
+        self.assertEqual(row['decision'], 'unknown')
+
+    def test_global_cache_only_reuses_a_hash_verified_superset(self):
+        import chain_sources as src
+        import hashlib, json
+
+        old = {
+            'domains': ['a.com', 'b.com'],
+            'names': ['synthetic grill'],
+            'phones': ['123'],
+        }
+        meta = {
+            'release': src.RELEASE,
+            'scope': 'worldwide',
+            'selection': old,
+            'signature': hashlib.sha256(
+                json.dumps(
+                    [
+                        src.RELEASE,
+                        'static-domain-v2',
+                        old['domains'],
+                        old['names'],
+                        old['phones'],
+                    ]
+                ).encode()
+            ).hexdigest(),
+        }
+        new = {**old, 'domains': ['a.com']}
+        self.assertTrue(src.global_cache_matches(meta, new))
+        self.assertFalse(
+            src.global_cache_matches(meta, {**new, 'names': ['new business']})
+        )
+        self.assertFalse(src.global_cache_matches({**meta, 'signature': 'bad'}, new))
+        self.assertFalse(src.global_cache_matches({**meta, 'release': 'old'}, new))
+
+    def test_prepare_only_finishes_before_any_gemma_call(self):
+        import chain_evaluate as ce
+        from contextlib import ExitStack
+        from unittest.mock import patch
+        from types import SimpleNamespace
+        import tempfile, json
+
+        row = {
+            'id': 1,
+            'status': 'active',
+            'exclusion_reason': None,
+            'decision': 'unknown',
+            'signals': [],
+        }
+        snap = {'restaurants': [], 'mentions': [], 'fingerprint': {'unchanged': True}}
+        with tempfile.TemporaryDirectory() as folder, ExitStack() as stack:
+            replacements = {
+                'snapshot': snap,
+                'download_nsi': {},
+                'local_places': [],
+                'match_places': {},
+                'global_places': [],
+                'atp_places': {'parse_errors': []},
+                'deterministic_rows': [row],
+                'fetch_websites': [],
+                'jev_sources': {},
+                'jev_generic_names': None,
+            }
+            for name, result in replacements.items():
+                stack.enter_context(patch.object(ce, name, return_value=result))
+            gemma = stack.enter_context(
+                patch.object(
+                    ce,
+                    'gemma_unresolved',
+                    side_effect=AssertionError('Gemma forbidden'),
+                )
+            )
+            comparison = stack.enter_context(
+                patch.object(
+                    ce,
+                    'comparison_report',
+                    side_effect=AssertionError('Gemma comparison forbidden'),
+                )
+            )
+            ce.run(
+                SimpleNamespace(
+                    output=folder,
+                    cache=folder,
+                    atp_zip='unused',
+                    scratch_dsn='unused',
+                    workers=1,
+                    prepare_only=True,
+                )
+            )
+            report = json.loads((Path(folder) / 'preparation-summary.json').read_text())
+            gemma.assert_not_called()
+            comparison.assert_not_called()
+            self.assertFalse(report['evaluation_complete'])
+            self.assertTrue(report['database_unchanged'])
+            self.assertFalse((Path(folder) / 'summary.json').exists())
 
 
 if __name__ == '__main__':

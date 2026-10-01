@@ -64,6 +64,24 @@ PLATFORM_DOMAINS = {
     'business.site',
     'mapquest.com',
     'foursquare.com',
+    'olo.com',
+    'eatchownow.com',
+    'singleplatform.com',
+    'eat24hour.com',
+    'skytab.com',
+    'twitter.com',
+    'x.com',
+    'poi.place',
+    'hub.biz',
+    'areaguides.net',
+    'cafe-inspector.com',
+    'cafes-guide.com',
+    'cafes-nearby.com',
+    'cafes-usa.com',
+    'ocregister.com',
+    'yahoo.com',
+    'telemundo.com',
+    'visitnewportbeach.com',
 }
 _SUFFIX = tldextract.TLDExtract(suffix_list_urls=(), include_psl_private_domains=True)
 
@@ -132,16 +150,25 @@ def distance_m(a: tuple[float, float], b: tuple[float, float]) -> float:
 
 
 def distinct_locations(coords: list[tuple[float, float]], radius_m: float = 60) -> int:
-    """Collapse spatial duplicates including points across rounding-cell boundaries."""
+    """Use meter-sized spherical Cartesian cells, including poles and antimeridian."""
+    if radius_m <= 0:
+        raise ValueError('Location deduplication radius must be positive')
     centers: list[tuple[float, float]] = []
-    cells: dict[tuple[int, int], list[tuple[float, float]]] = {}
+    cells: dict[tuple[int, int, int], list[tuple[float, float]]] = {}
     for coord in sorted(set(coords)):
-        cell = (math.floor(coord[0] * 1000), math.floor(coord[1] * 1000))
+        lat, lon = (math.radians(v) for v in coord)
+        xyz = (
+            6371000 * math.cos(lat) * math.cos(lon),
+            6371000 * math.cos(lat) * math.sin(lon),
+            6371000 * math.sin(lat),
+        )
+        cell = tuple(math.floor(v / radius_m) for v in xyz)
         neighbors = [
             p
+            for dz in (-1, 0, 1)
             for dy in (-1, 0, 1)
             for dx in (-1, 0, 1)
-            for p in cells.get((cell[0] + dy, cell[1] + dx), [])
+            for p in cells.get((cell[0] + dx, cell[1] + dy, cell[2] + dz), [])
         ]
         if any(distance_m(coord, p) <= radius_m for p in neighbors):
             continue
