@@ -1149,6 +1149,28 @@ class WriteToDbDedupTest(WriteToDbTest):
         self.assertEqual(len(restaurant_upserts), 1)
         self.assertEqual(restaurant_upserts[0][1], "mo-ran-gak")
 
+    def test_assign_slugs_resolves_merge_alias_to_winner_slug(self):
+        # A merged-away "TK" is fed back as an alias row projected as the winner
+        # (alias name, winner slug/coords). is_match fails on TK vs TK Burger alone.
+        tk = {"name": "TK", "location": "Irvine", "lat": 33.68, "lng": -117.82}
+        winner = {
+            "name": "TK Burger",
+            "slug": "tk-burger",
+            "location": "Irvine",
+            "street": None,
+            "lat": 33.68,
+            "lng": -117.82,
+        }
+        alias = {**winner, "name": "TK"}
+
+        without_alias = self.pipeline.assign_slugs([dict(tk)], existing=[dict(winner)])
+        with_alias = self.pipeline.assign_slugs(
+            [dict(tk)], existing=[dict(winner), dict(alias)]
+        )
+
+        self.assertEqual(without_alias[0][1], "tk")
+        self.assertEqual(with_alias[0][1], "tk-burger")
+
     def test_write_to_db_collapses_batch_duplicates(self):
         parsed_thread = {
             "post": {"id": "x", "subreddit": "oc", "title": "t", "url": "u"},
