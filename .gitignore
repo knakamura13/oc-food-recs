@@ -38,6 +38,13 @@ data/uningested-threads/*
 # archived HTML exports moved here after a successful ingest (derived, not committed)
 data/threads/*.html
 
+# per-thread working dirs from init-thread/build-thread and the A/B harness
+# (raw/, processed/, review/, ab-test/: real comment data, never committed)
+data/threads/*/
+
+# Reddit page saves dropped at the repo root (real comment data, never committed)
+/*reddit-thread*.html
+
 # local DB backups + input snapshots (may contain data; never commit)
 data/backups/
 data/geocode-cache.json
