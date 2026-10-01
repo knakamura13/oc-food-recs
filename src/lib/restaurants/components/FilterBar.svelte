@@ -190,10 +190,14 @@
 		)
 	);
 	let primaryCuisines = $derived.by(() => {
+		// A roster too small for any cuisine to reach the threshold has no "long tail" to tuck away.
+		const hasPopular = cuisineItems.some((c) => c.total >= MIN_PRIMARY_CUISINE_TOTAL);
 		const list = cuisineItems.filter(
 			(c) =>
 				c.name !== UNCATEGORIZED_CUISINE &&
-				(c.total >= MIN_PRIMARY_CUISINE_TOTAL || appState.activeCuisines.includes(c.name))
+				(!hasPopular ||
+					c.total >= MIN_PRIMARY_CUISINE_TOTAL ||
+					appState.activeCuisines.includes(c.name))
 		);
 		const uncategorized = cuisineItems.find((c) => c.name === UNCATEGORIZED_CUISINE);
 		return uncategorized ? [...list, uncategorized] : list;

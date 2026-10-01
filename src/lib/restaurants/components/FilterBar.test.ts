@@ -132,6 +132,20 @@ describe("FilterBar", () => {
     expect(appState.activeCuisines).toEqual(["Ethiopian"]);
   });
 
+  it("lists every cuisine when the roster is too small to have a long tail", async () => {
+    const user = userEvent.setup();
+    render(FilterBar, {
+      restaurants,
+      threadSubreddit,
+      restaurantsForHistogram: restaurants,
+      dateExtent,
+    });
+    await user.click(screen.getByRole("button", { name: /^cuisine$/i }));
+    expect(screen.getByRole("option", { name: /mexican/i })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: /japanese/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /more cuisines/i })).toBeNull();
+  });
+
   it("closes the cuisine menu after a selection on compact viewports", async () => {
     const user = userEvent.setup();
     Object.defineProperty(window, "innerWidth", {
