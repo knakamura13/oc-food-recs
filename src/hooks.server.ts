@@ -12,6 +12,26 @@ function safeCompare(a: string, b: string): boolean {
 	return timingSafeEqual(bufA, bufB);
 }
 
+// Self-hosted fonts live in src/lib/assets/fonts so Vite emits them as content-hashed files under
+// /_app/immutable/, which adapter-node serves with `max-age=31536000, immutable`. Files in
+// static/ only get ETag revalidation. app.html keeps stable `/fonts/<name>.woff2` placeholders;
+// they are rewritten to the hashed URLs below.
+const fontUrls = new Map(
+	Object.entries(
+		import.meta.glob<string>('$lib/assets/fonts/*.woff2', {
+			eager: true,
+			query: '?url',
+			import: 'default'
+		})
+	).map(([path, url]) => [path.slice(path.lastIndexOf('/') + 1), url])
+);
+
+export function rewriteFontUrls(html: string): string {
+	return html.replace(/\/fonts\/([\w-]+\.woff2)/g, (match, file: string) => fontUrls.get(file) ?? match);
+}
+
+const NO_STORE = 'private, no-store';
+
 export const handle: Handle = async ({ event, resolve }) => {
 	const pathname = event.url.pathname;
 	const isAdminRoute = pathname === '/admin' || pathname.startsWith('/admin/');
@@ -29,13 +49,21 @@ export const handle: Handle = async ({ event, resolve }) => {
 			return new Response('Authentication required', {
 				status: 401,
 				headers: {
+					'cache-control': NO_STORE,
 					'www-authenticate': 'Basic realm="admin", charset="UTF-8"'
 				}
 			});
 		}
 	}
 
-	return resolve(event);
+	const response = await resolve(event, { transformPageChunk: ({ html }) => rewriteFontUrls(html) });
+
+	// Never let a shared cache (Railway CDN) keep admin pages or anything but GET/HEAD.
+	if (isAdminRoute || (event.request.method !== 'GET' && event.request.method !== 'HEAD')) {
+		response.headers.set('cache-control', NO_STORE);
+	}
+
+	return response;
 };
 
 // Unexpected errors, including rejected streamed promises on `/`, which arrive after
