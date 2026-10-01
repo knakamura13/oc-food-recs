@@ -16,7 +16,7 @@
 		type VirtualItem
 	} from '@tanstack/virtual-core';
 	import { TableHandler } from '@vincjo/datatables';
-	import type { Mention, Restaurant, SortKey } from '$lib/restaurants/types';
+	import type { Mention, Restaurant, SortKey, ThreadSummary } from '$lib/restaurants/types';
 	import {
 		nextSortState,
 		sortButtonAccessibleName,
@@ -41,9 +41,11 @@
 		/** Full roster size, so the header can read "916 of 1,229". */
 		totalCount?: number;
 		onShowOnMap?: (opener: HTMLButtonElement) => void;
+		/** Thread metadata by id, for the "r/sub · title" attribution on each comment. */
+		threadsById?: Record<string, ThreadSummary>;
 	}
 
-	let { restaurants, totalCount, onShowOnMap }: Props = $props();
+	let { restaurants, totalCount, onShowOnMap, threadsById = {} }: Props = $props();
 
 	let priorVisitMs = $state<number | null>(null);
 
@@ -67,6 +69,7 @@
 	let details = $state<Record<string, Mention[] | undefined>>({});
 	let detailErrors = $state<Record<string, boolean>>({});
 	let openScoreTipSlug = $state<string | null>(null);
+	let openStatTipSlug = $state<string | null>(null);
 	const PRIMARY_CAP_THRESHOLD = 12;
 	const PRIMARY_SHOWN = 5;
 	let allPrimariesOpen = $state<Record<string, boolean>>({});
@@ -288,7 +291,6 @@
 		const parts = [restaurant.name];
 		if (restaurant.cuisine) parts.push(normalizeCuisine(restaurant.cuisine));
 		if (restaurant.location) parts.push(restaurant.location);
-		if (restaurant.endorsement_count >= 15) parts.push('popular');
 		if (hasNewMentions(restaurant)) parts.push('new since last visit');
 		if (isUnmappedRestaurant(restaurant)) parts.push('not on the map');
 		return parts.join(', ');
@@ -358,6 +360,11 @@
 	function toggleScoreTip(slug: string, e: MouseEvent) {
 		e.stopPropagation();
 		openScoreTipSlug = openScoreTipSlug === slug ? null : slug;
+	}
+
+	function toggleStatTip(slug: string, e: MouseEvent) {
+		e.stopPropagation();
+		openStatTipSlug = openStatTipSlug === slug ? null : slug;
 	}
 
 	function clearHovered(restaurant: Restaurant) {
@@ -514,6 +521,21 @@
 	}
 </script>
 
+{#snippet threadLink(threadId: string)}
+	{@const thread = threadsById[threadId]}
+	{#if thread}
+		<a
+			class="comment-thread"
+			href={thread.url}
+			target="_blank"
+			rel="noopener noreferrer"
+			title={thread.title}
+		>
+			r/{thread.subreddit} · {thread.title}
+		</a>
+	{/if}
+{/snippet}
+
 <div class="restaurant-list">
 	<div class="sort-bar" role="toolbar" aria-label="Sort options">
 		<span class="sort-label" id="sort-label">Sort by:</span>
@@ -591,10 +613,14 @@
 					{#if restaurant}
 					{@const slug = restaurant.slug}
 					{@const isOpen = appState.selectedRestaurantSlug === slug}
+					{@const people = restaurant.mention_count}
+					{@const threadTotal = restaurant.source_threads.length}
+					{@const strongest = Math.max(0, ...restaurant.mentions.map((m) => m.score))}
 
 					<div
 						class="virtual-row"
 						style:transform="translateY({virtualRow.start}px)"
+						style:z-index={openStatTipSlug === slug ? 5 : undefined}
 						{@attach bindRowElement(virtualRow.index)}
 					>
 						<div
@@ -630,11 +656,11 @@
 												<div class="row-street">{restaurant.street}</div>
 											{/if}
 											<div class="row-tags">
-												{#if restaurant.endorsement_count >= 15}
-													<span class="tag popular-tag" aria-label="Highly endorsed community favorite">🔥 Popular</span>
-												{/if}
 												{#if restaurant.cuisine}
 													<span class="tag cuisine-tag">{normalizeCuisine(restaurant.cuisine)}</span>
+												{/if}
+												{#if restaurant.dish_rec_count > 0}
+													<span class="tag dish-tag">{restaurant.dish_rec_count} dish rec{restaurant.dish_rec_count === 1 ? '' : 's'}</span>
 												{/if}
 												{#if restaurant.location}
 													<span class="tag location-tag">{restaurant.location}</span>
@@ -653,15 +679,40 @@
 									</button>
 								</h2>
 								<div class="row-stats">
-									<span class="stat score">
-										{restaurant.aggregate_score} <small>pts</small>
+									<span class="score-wrap">
+										<span class="stat score">
+											{Math.max(0, restaurant.aggregate_score)} <small>pts</small>
+										</span>
+										<button
+											type="button"
+											class="info-tip"
+											aria-label="How is this score calculated?"
+											aria-expanded={openStatTipSlug === slug}
+											aria-controls="stat-tip-{slug}"
+											onclick={(e) => toggleStatTip(slug, e)}
+										>
+											<span class="info-icon" aria-hidden="true">i</span>
+										</button>
+										<span
+											id="stat-tip-{slug}"
+											class="info-tooltip info-tooltip--link"
+											class:open={openStatTipSlug === slug}
+											role="tooltip"
+										>
+											{people} {people === 1 ? 'person' : 'people'} across {threadTotal}
+											{threadTotal === 1 ? 'thread' : 'threads'} · strongest comment {strongest} upvotes ·
+											repeat mentions by the same person count less.
+											<a href="/about#how-it-works">How scores work</a>
+										</span>
 									</span>
 									<span class="stat">
-										{restaurant.endorsement_count} <small>endorse</small>
+										{people} <small>{people === 1 ? 'person' : 'people'}</small>{' '}<small class="stat-threads">· {threadTotal} {threadTotal === 1 ? 'thread' : 'threads'}</small>
 									</span>
-									<span class="stat">
-										{restaurant.mention_count} <small>mentions</small>
-									</span>
+									{#if restaurant.endorsement_count > 0}
+										<span class="stat">
+											{restaurant.endorsement_count} <small>endorse</small>
+										</span>
+									{/if}
 								</div>
 								<button
 									type="button"
@@ -773,6 +824,7 @@
 															</span>
 														</span>
 													</div>
+													{@render threadLink(primary.thread_id)}
 													<CommentBody body={primary.body} restaurantName={restaurant.name} otherPlaces={primary.other_places} {openableSlugs} onOpenPlace={openPlace} />
 													{#if primary.permalink}
 														<!-- External absolute URLs (Reddit/Maps below): do not wrap in resolve() — that is for in-app routes only. -->
@@ -813,6 +865,7 @@
 											</span>
 											<span class="endorsement-score">{e.score} pts</span>
 										</div>
+										{@render threadLink(e.thread_id)}
 										<CommentBody body={e.body} restaurantName={restaurant.name} otherPlaces={e.other_places} {openableSlugs} onOpenPlace={openPlace} clampable />
 										{#if e.permalink}
 											<a
@@ -840,6 +893,7 @@
 											</span>
 											<span class="endorsement-score">{e.score} pts</span>
 										</div>
+										{@render threadLink(e.thread_id)}
 										<CommentBody body={e.body} restaurantName={restaurant.name} otherPlaces={e.other_places} {openableSlugs} onOpenPlace={openPlace} clampable />
 										{#if e.permalink}
 											<a
@@ -867,6 +921,7 @@
 											</span>
 											<span class="endorsement-score">{e.score} pts</span>
 										</div>
+										{@render threadLink(e.thread_id)}
 										<CommentBody body={e.body} restaurantName={restaurant.name} otherPlaces={e.other_places} {openableSlugs} onOpenPlace={openPlace} clampable />
 										{#if e.permalink}
 											<a
@@ -949,9 +1004,13 @@
 <svelte:window
 	onclick={() => {
 		openScoreTipSlug = null;
+		openStatTipSlug = null;
 	}}
 	onkeydown={(e) => {
-		if (e.key === 'Escape') openScoreTipSlug = null;
+		if (e.key === 'Escape') {
+			openScoreTipSlug = null;
+			openStatTipSlug = null;
+		}
 	}}
 />
 
@@ -1324,12 +1383,9 @@
 		color: #a04430;
 	}
 
-	.popular-tag {
-		background: #fff0eb;
-		color: #c43700;
-		border: 1px solid #ffcca8;
-		font-weight: 600;
-		font-size: 0.68rem;
+	.dish-tag {
+		background: #eef3e8;
+		color: #3d5a45;
 	}
 
 	.unmapped-tag {
@@ -1423,6 +1479,35 @@
 		color: #7a6e63;
 		line-height: 1.35;
 		font-style: italic;
+	}
+
+	.info-tooltip--link {
+		pointer-events: auto;
+		right: auto;
+		left: 0;
+	}
+
+	.info-tooltip--link a {
+		color: #fff;
+		text-decoration: underline;
+		white-space: nowrap;
+	}
+
+	.score-wrap {
+		position: relative;
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+	}
+
+	.score-wrap .info-tip {
+		color: #7a6e63;
+	}
+
+	@media (max-width: 359px) {
+		.stat-threads {
+			display: none;
+		}
 	}
 
 	.stat small {
@@ -1691,6 +1776,23 @@
 		border-radius: 6px;
 		padding: 0.5rem 0.65rem;
 		margin-bottom: 0.35rem;
+	}
+
+	.comment-thread {
+		display: block;
+		max-width: 100%;
+		contain: inline-size;
+		margin-bottom: 0.25rem;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: 0.72rem;
+		color: #7a6e63;
+		text-decoration: none;
+	}
+
+	.comment-thread:hover {
+		text-decoration: underline;
 	}
 
 	.endorsement-meta {

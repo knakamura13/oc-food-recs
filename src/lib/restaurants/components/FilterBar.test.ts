@@ -400,6 +400,22 @@ describe("FilterBar", () => {
     expect(appState.freshnessSource).toBeNull();
   });
 
+  it("hides new-since when no comment is newer than the last visit", () => {
+    localStorage.setItem(
+      "ocFoodRecs_lastVisit",
+      new Date(dateExtent.max + 86_400_000).toISOString(),
+    );
+    render(FilterBar, {
+      restaurants,
+      threadSubreddit,
+      restaurantsForHistogram: restaurants,
+      dateExtent,
+    });
+    expect(
+      screen.queryByRole("button", { name: /new since last visit/i }),
+    ).not.toBeInTheDocument();
+  });
+
   it("marks last-visit active and shows its pill, not Recency, when toggled on", async () => {
     const user = userEvent.setup();
     const priorMs = Date.parse("2024-06-01T00:00:00Z");

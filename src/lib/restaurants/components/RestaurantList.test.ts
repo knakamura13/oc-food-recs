@@ -239,6 +239,108 @@ describe("RestaurantList", () => {
     );
   }
 
+  function listMention(score: number, author = "a"): ListMention {
+    return {
+      comment_date: "2024-06-01",
+      thread_id: "t1",
+      score,
+      author,
+      role: "endorsement",
+      credit: 1,
+    };
+  }
+
+  it("labels the stat row with people and threads, floors the score at 0 and hides a zero endorse count", () => {
+    render(RestaurantList, {
+      restaurants: [
+        makeRestaurant({
+          mention_count: 1,
+          source_threads: ["t1"],
+          endorsement_count: 0,
+          aggregate_score: -11,
+        }),
+      ],
+    });
+
+    expect(document.querySelector(".stat.score")).toHaveTextContent(/^0\s*pts$/);
+    expect(screen.getByText("person")).toBeInTheDocument();
+    expect(screen.getByText(/1 thread$/)).toBeInTheDocument();
+    expect(screen.queryByText("endorse")).not.toBeInTheDocument();
+    expect(screen.queryByText(/popular/i)).not.toBeInTheDocument();
+  });
+
+  it("pluralises people, threads and endorsements", () => {
+    render(RestaurantList, {
+      restaurants: [
+        makeRestaurant({
+          mention_count: 3,
+          source_threads: ["a", "b"],
+          endorsement_count: 2,
+        }),
+      ],
+    });
+
+    expect(screen.getByText("people")).toBeInTheDocument();
+    expect(screen.getByText(/2 threads$/)).toBeInTheDocument();
+    expect(screen.getByText("endorse")).toBeInTheDocument();
+  });
+
+  it("explains the score in a popover with a link to the methodology", async () => {
+    const user = userEvent.setup();
+    render(RestaurantList, {
+      restaurants: [
+        makeRestaurant({
+          mention_count: 3,
+          source_threads: ["a", "b"],
+          mentions: [listMention(12), listMention(40)],
+        }),
+      ],
+    });
+
+    const trigger = screen.getByRole("button", { name: /how is this score calculated/i });
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    await user.click(trigger);
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
+    const tip = screen.getByRole("tooltip");
+    expect(tip).toHaveTextContent(/3 people across 2 threads/);
+    expect(tip).toHaveTextContent(/strongest comment 40 upvotes/);
+    expect(screen.getByRole("link", { name: "How scores work" })).toHaveAttribute(
+      "href",
+      "/about#how-it-works",
+    );
+  });
+
+  it("shows the thread a comment came from when thread metadata is provided", async () => {
+    stubDrawerMentions([
+      { comment_id: "c1", thread_id: "t1", role: "primary", author: "ann", body: "Tacos", score: 30 },
+    ]);
+    render(RestaurantList, {
+      restaurants,
+      threadsById: {
+        t1: {
+          id: "t1",
+          title: "Best tacos in OC",
+          url: "https://reddit.com/r/orangecounty/comments/t1",
+          subreddit: "orangecounty",
+          post_id: "t1",
+          comment_count: 10,
+          restaurant_count: 5,
+        },
+      },
+    });
+    appState.selectedRestaurantSlug = "la-taco-spot";
+
+    const link = await screen.findByRole("link", { name: /r\/orangecounty · Best tacos in OC/ });
+    expect(link).toHaveAttribute("href", "https://reddit.com/r/orangecounty/comments/t1");
+  });
+
+  it("tags restaurants that have dish recommendations", () => {
+    render(RestaurantList, {
+      restaurants: [makeRestaurant({ dish_rec_count: 3 })],
+    });
+    expect(screen.getByText("3 dish recs")).toBeInTheDocument();
+  });
+
   it("shows every primary comment under a thread-count heading", async () => {
     stubDrawerMentions([
       { comment_id: "c1", thread_id: "t1", role: "primary", author: "ann", body: "Tacos one", score: 30 },

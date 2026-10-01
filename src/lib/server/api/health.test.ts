@@ -18,6 +18,7 @@ describe("GET /api/health", () => {
           restaurant_count: 42,
           thread_count: 3,
           mention_count: 120,
+          newest_comment_date: new Date("2026-06-08T23:18:08.220Z"),
         },
       ],
     });
@@ -33,6 +34,7 @@ describe("GET /api/health", () => {
       restaurant_count: 42,
       thread_count: 3,
       mention_count: 120,
+      newest_comment_date: "2026-06-08T23:18:08.220Z",
     });
     expect(res.headers.get("Cache-Control")).toBe("no-store");
   });

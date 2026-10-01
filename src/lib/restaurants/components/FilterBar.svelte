@@ -59,11 +59,9 @@
 	let showSubredditDropdown = $state(false);
 	let showRecencyDropdown = $state(false);
 	let lastVisitMs = $state<number | null>(null);
-	let hasPriorVisit = $state(false);
 
 	function refreshLastVisit() {
 		lastVisitMs = getPriorVisitMs();
-		hasPriorVisit = lastVisitMs !== null;
 	}
 
 	onMount(() => {
@@ -645,8 +643,8 @@
 			</button>
 		{/if}
 
-		<!-- New-since — only after a prior visit is recorded -->
-		{#if hasPriorVisit}
+		<!-- New-since — only when a prior visit exists and the data has comments newer than it -->
+		{#if isNewSinceVisit || (lastVisitMs !== null && dateExtent.max > lastVisitMs)}
 			<button
 				class="dropdown-trigger mapped-only-toggle"
 				class:has-active={isNewSinceVisit}

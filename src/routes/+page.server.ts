@@ -50,6 +50,7 @@ interface ThreadRow {
 
 interface StatsRow {
   total_comments_processed: number;
+  newest_comment_date: string | Date | null;
 }
 
 async function loadHomePage(
@@ -258,7 +259,11 @@ async function loadHomePage(
 
   // Total comments processed = sum of per-thread comment_count over published threads.
   const statsResult = await db.execute(sql`
-		SELECT COALESCE(SUM(t.comment_count), 0)::int AS total_comments_processed
+		SELECT
+			COALESCE(SUM(t.comment_count), 0)::int AS total_comments_processed,
+			(SELECT MAX(m.comment_date) FROM mentions m
+				JOIN threads t2 ON t2.id = m.thread_id
+				WHERE t2.included_in_publish = true AND m.status = 'published') AS newest_comment_date
 		FROM threads t
 		WHERE t.included_in_publish = true
 	`);
@@ -268,6 +273,9 @@ async function loadHomePage(
   const meta: RestaurantData["meta"] = {
     source_threads: sourceThreads,
     total_comments_processed: statsRow.total_comments_processed ?? 0,
+    newest_comment_date: statsRow.newest_comment_date
+      ? new Date(statsRow.newest_comment_date).toISOString()
+      : null,
   };
 
   return {

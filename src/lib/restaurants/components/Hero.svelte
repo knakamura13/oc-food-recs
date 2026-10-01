@@ -10,6 +10,15 @@
 	let threadCount = $derived(meta.source_threads.length);
 	let subredditCount = $derived(new Set(meta.source_threads.map((t) => t.subreddit)).size);
 	let totalCommentsLabel = $derived(meta.total_comments_processed.toLocaleString());
+	let newestLabel = $derived(
+		meta.newest_comment_date
+			? new Date(meta.newest_comment_date).toLocaleDateString('en-US', {
+					month: 'short',
+					year: 'numeric',
+					timeZone: 'UTC'
+				})
+			: null
+	);
 </script>
 
 <section class="hero">
@@ -17,10 +26,10 @@
 	<p class="summary">
 		{#if threadCount === 1}
 			This interactive explorer is built from one Reddit thread and {totalCommentsLabel} community
-			comments.
+			comments{#if newestLabel}, the newest from {newestLabel}{/if}.
 		{:else}
 			This interactive explorer pulls together {threadCount} Reddit threads{#if subredditCount > 1}{' '}across
-				{subredditCount} subreddits{/if} and {totalCommentsLabel} community comments.
+				{subredditCount} subreddits{/if} and {totalCommentsLabel} community comments{#if newestLabel}, the newest from {newestLabel}{/if}.
 		{/if}
 	</p>
 </section>

@@ -70,6 +70,8 @@ export interface RestaurantData {
   meta: {
     source_threads: ThreadSummary[];
     total_comments_processed: number;
+    /** ISO timestamp of the newest published comment, or null when the dataset has no dated comments. */
+    newest_comment_date: string | null;
   };
 }
 

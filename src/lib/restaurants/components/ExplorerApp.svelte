@@ -2,7 +2,7 @@
 	import { X } from 'lucide-svelte';
 	import { onMount, tick, untrack } from 'svelte';
 	import { replaceState } from '$app/navigation';
-	import type { Restaurant, SortKey } from '$lib/restaurants/types';
+	import type { Restaurant, SortKey, ThreadSummary } from '$lib/restaurants/types';
 	import {
 		appState,
 		normalizeCuisine,
@@ -84,6 +84,12 @@
 	const threadSubreddit = $derived.by(() => {
 		const lookup: Record<string, string> = {};
 		for (const t of data.dataset.meta.source_threads) lookup[t.id] = t.subreddit;
+		return lookup;
+	});
+
+	const threadsById = $derived.by(() => {
+		const lookup: Record<string, ThreadSummary> = {};
+		for (const t of data.dataset.meta.source_threads) lookup[t.id] = t;
 		return lookup;
 	});
 
@@ -743,6 +749,7 @@
 					restaurants={filteredRestaurants}
 					totalCount={allRestaurants.length}
 					onShowOnMap={openMobileMap}
+					threadsById={threadsById}
 				/>
 			</div>
 		</div>
