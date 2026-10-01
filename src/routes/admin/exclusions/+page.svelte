@@ -13,7 +13,8 @@
 		many_locations: 'Many global locations',
 		multi_city_density: 'Same name across many cities',
 		user_reported_chain: 'Reported as a chain',
-		duplicate_candidate: 'Likely duplicate at same location'
+		duplicate_candidate: 'Likely duplicate at same location',
+		closed: 'Closed'
 	};
 
 	function reasonLabel(reason: string | null): string {
@@ -120,6 +121,7 @@
 										<select name="reason" aria-label="Exclusion reason for {r.name}">
 											<option value="chain">Chain</option>
 											<option value="corporate_group">Corporate group</option>
+											<option value="closed">Closed</option>
 										</select>
 										<label class="checkbox">
 											<input type="checkbox" name="addToRegistry" />
