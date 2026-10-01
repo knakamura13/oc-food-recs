@@ -41,6 +41,17 @@ const restaurants = [
     location: "Fullerton",
   }),
 ];
+// Enough rows per cuisine to stay out of the "More cuisines" disclosure.
+const broadRoster = ["Mexican", "Japanese"].flatMap((cuisine) =>
+  [1, 2, 3].map((n) =>
+    makeRestaurant({
+      name: `${cuisine} ${n}`,
+      slug: `${cuisine.toLowerCase()}-${n}`,
+      cuisine,
+      location: "Irvine",
+    }),
+  ),
+);
 const threadSubreddit = { "thread-1": "orangecounty" };
 const dateExtent = {
   min: Date.parse("2024-01-01"),
@@ -63,9 +74,9 @@ describe("FilterBar", () => {
   it("toggles a cuisine filter from the dropdown", async () => {
     const user = userEvent.setup();
     render(FilterBar, {
-      restaurants,
+      restaurants: broadRoster,
       threadSubreddit,
-      restaurantsForHistogram: restaurants,
+      restaurantsForHistogram: broadRoster,
       dateExtent,
     });
     await user.click(screen.getByRole("button", { name: /^cuisine$/i }));
@@ -82,6 +93,45 @@ describe("FilterBar", () => {
     ).toBeInTheDocument();
   });
 
+  it("greys out zero-count options, keeps them visible, and ignores clicks on them", async () => {
+    const user = userEvent.setup();
+    render(FilterBar, {
+      restaurants: broadRoster,
+      cuisineFacetRestaurants: broadRoster.filter((r) => r.cuisine === "Mexican"),
+      threadSubreddit,
+      restaurantsForHistogram: broadRoster,
+      dateExtent,
+    });
+    await user.click(screen.getByRole("button", { name: /^cuisine$/i }));
+    const japanese = screen.getByRole("option", { name: /japanese/i });
+    expect(japanese).toHaveAttribute("aria-disabled", "true");
+    expect(japanese).toHaveTextContent("(0)");
+    expect(screen.getByRole("option", { name: /mexican/i })).toHaveTextContent("(3)");
+    await user.click(japanese);
+    expect(appState.activeCuisines).toEqual([]);
+  });
+
+  it("lists unmapped cuisines as Uncategorized and tucks singletons under More cuisines", async () => {
+    const user = userEvent.setup();
+    const roster = [
+      ...broadRoster,
+      makeRestaurant({ slug: "u1", name: "U1", cuisine: null }),
+      makeRestaurant({ slug: "e1", name: "E1", cuisine: "Ethiopian" }),
+    ];
+    render(FilterBar, {
+      restaurants: roster,
+      threadSubreddit,
+      restaurantsForHistogram: roster,
+      dateExtent,
+    });
+    await user.click(screen.getByRole("button", { name: /^cuisine$/i }));
+    expect(screen.getByRole("option", { name: /uncategorized/i })).toHaveTextContent("(1)");
+    expect(screen.queryByRole("option", { name: /ethiopian/i })).toBeNull();
+    await user.click(screen.getByRole("button", { name: /more cuisines \(1\)/i }));
+    await user.click(screen.getByRole("option", { name: /ethiopian/i }));
+    expect(appState.activeCuisines).toEqual(["Ethiopian"]);
+  });
+
   it("closes the cuisine menu after a selection on compact viewports", async () => {
     const user = userEvent.setup();
     Object.defineProperty(window, "innerWidth", {
@@ -90,9 +140,9 @@ describe("FilterBar", () => {
       value: 390,
     });
     render(FilterBar, {
-      restaurants,
+      restaurants: broadRoster,
       threadSubreddit,
-      restaurantsForHistogram: restaurants,
+      restaurantsForHistogram: broadRoster,
       dateExtent,
     });
     const trigger = screen.getByRole("button", { name: /^cuisine$/i });
@@ -786,9 +836,9 @@ describe("FilterBar", () => {
   it("closes a filter menu when focus leaves the dropdown", async () => {
     const user = userEvent.setup();
     render(FilterBar, {
-      restaurants,
+      restaurants: broadRoster,
       threadSubreddit,
-      restaurantsForHistogram: restaurants,
+      restaurantsForHistogram: broadRoster,
       dateExtent,
     });
     await user.click(screen.getByRole("button", { name: /^cuisine$/i }));

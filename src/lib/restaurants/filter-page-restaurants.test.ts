@@ -3,6 +3,7 @@ import { createSliceCache } from "./filter-restaurants";
 import {
   filterBeforeFreshness,
   applyFreshnessFilter,
+  filterPageFacetPopulations,
   filterPageRestaurantsWithSearch,
 } from "./filter-page-restaurants";
 import { makeRestaurant } from "./test-utils";
@@ -229,5 +230,86 @@ describe("filter-page-restaurants", () => {
       "unmapped",
     ]);
     expect(included.unmappedCount).toBe(1);
+  });
+
+  it("returns search results in relevance order", () => {
+    const restaurants = [
+      makeRestaurant({ slug: "a", name: "Birria Zone Tacos", cuisine: "Mexican" }),
+      makeRestaurant({ slug: "b", name: "Birria", cuisine: "Mexican" }),
+      makeRestaurant({ slug: "c", name: "Best Birria Spot", cuisine: "Mexican" }),
+    ];
+    const { filtered } = filterPageRestaurantsWithSearch(
+      restaurants,
+      {
+        activeSubreddits: [],
+        activeCuisines: [],
+        activeCities: [],
+        showUnmapped: true,
+        freshnessCutoff: null,
+        searchQuery: "birria",
+      },
+      pageFilterCtx,
+    );
+    expect(filtered.map((r) => r.slug)).toEqual(["b", "a", "c"]);
+  });
+
+  describe("filterPageFacetPopulations", () => {
+    const base = {
+      activeSubreddits: [],
+      activeCuisines: [] as string[],
+      activeCities: [] as string[],
+      showUnmapped: false,
+      freshnessCutoff: null,
+      searchQuery: "",
+    };
+    const roster = [
+      makeRestaurant({ slug: "it-irv", cuisine: "Italian", location: "Irvine" }),
+      makeRestaurant({ slug: "it-cm", cuisine: "Italian", location: "Costa Mesa" }),
+      makeRestaurant({ slug: "jp-cm", cuisine: "Japanese", location: "Costa Mesa" }),
+      makeRestaurant({
+        slug: "jp-unmapped",
+        cuisine: "Japanese",
+        location: "Irvine",
+        lat: null,
+        lng: null,
+      }),
+    ];
+
+    it("counts each facet under every filter except its own", () => {
+      const pops = filterPageFacetPopulations(
+        roster,
+        { ...base, activeCuisines: ["Italian"], activeCities: ["Costa Mesa"] },
+        pageFilterCtx,
+      );
+      // Cuisine menu: only the active city applies, so Japanese is still offered.
+      expect(pops.cuisine.map((r) => r.slug).sort()).toEqual(["it-cm", "jp-cm"]);
+      // City menu: only the active cuisine applies.
+      expect(pops.city.map((r) => r.slug).sort()).toEqual(["it-cm", "it-irv"]);
+    });
+
+    it("excludes unmapped rows unless they are shown, and applies the search", () => {
+      const hidden = filterPageFacetPopulations(roster, base, pageFilterCtx);
+      expect(hidden.cuisine.map((r) => r.slug)).not.toContain("jp-unmapped");
+      const shown = filterPageFacetPopulations(
+        roster,
+        { ...base, showUnmapped: true },
+        pageFilterCtx,
+      );
+      expect(shown.cuisine.map((r) => r.slug)).toContain("jp-unmapped");
+    });
+
+    it("folds Unknown and Other into one Uncategorized cuisine filter", () => {
+      const rows = [
+        makeRestaurant({ slug: "x", cuisine: null }),
+        makeRestaurant({ slug: "y", cuisine: "Polynesian" }),
+        makeRestaurant({ slug: "z", cuisine: "Italian" }),
+      ];
+      const { filtered } = filterPageRestaurantsWithSearch(
+        rows,
+        { ...base, activeCuisines: ["Uncategorized"] },
+        pageFilterCtx,
+      );
+      expect(filtered.map((r) => r.slug).sort()).toEqual(["x", "y"]);
+    });
   });
 });

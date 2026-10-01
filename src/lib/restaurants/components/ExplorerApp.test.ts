@@ -206,7 +206,7 @@ describe("ExplorerApp page search debounce", () => {
     vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS);
     flushSync();
     expect(document.querySelector(".result-count")).toHaveTextContent(
-      "1 restaurant",
+      "1 of 2 restaurants",
     );
 
     appState.searchQuery = "";

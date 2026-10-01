@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { X } from 'lucide-svelte';
-	import { onMount, tick } from 'svelte';
+	import { onMount, tick, untrack } from 'svelte';
 	import { replaceState } from '$app/navigation';
-	import type { Restaurant } from '$lib/restaurants/types';
+	import type { Restaurant, SortKey } from '$lib/restaurants/types';
 	import {
 		appState,
 		normalizeCuisine,
@@ -14,7 +14,10 @@
 		createSliceCache
 	} from '$lib/restaurants/filter-restaurants';
 	import { SEARCH_DEBOUNCE_MS, scheduleDebounced } from '$lib/debounce';
-	import { filterPageRestaurantsWithSearch } from '$lib/restaurants/filter-page-restaurants';
+	import {
+		filterPageFacetPopulations,
+		filterPageRestaurantsWithSearch
+	} from '$lib/restaurants/filter-page-restaurants';
 	import { coordsForFitBounds } from '$lib/restaurants/explorer-bounds';
 	import {
 		buildPageTitle,
@@ -473,6 +476,31 @@
 		}, SEARCH_DEBOUNCE_MS);
 	});
 
+	// Searching switches the list to Relevance; clearing the search restores the prior sort.
+	let sortBeforeSearch: { key: SortKey; direction: 'asc' | 'desc' } | null = null;
+	let hadSearchQuery: boolean | null = null;
+	$effect(() => {
+		const hasQuery = appState.searchQuery.trim().length > 0;
+		untrack(() => {
+			if (hadSearchQuery !== null && hasQuery !== hadSearchQuery) {
+				if (hasQuery) {
+					if (appState.sortKey !== 'relevance') {
+						sortBeforeSearch = { key: appState.sortKey, direction: appState.sortDirection };
+						appState.sortKey = 'relevance';
+						appState.sortDirection = 'desc';
+					}
+				} else {
+					if (appState.sortKey === 'relevance') {
+						appState.sortKey = sortBeforeSearch?.key ?? 'score';
+						appState.sortDirection = sortBeforeSearch?.direction ?? 'desc';
+					}
+					sortBeforeSearch = null;
+				}
+			}
+			hadSearchQuery = hasQuery;
+		});
+	});
+
 	const pageFilterState = $derived({
 		activeSubreddits: appState.activeSubreddits,
 		activeCuisines: appState.activeCuisines,
@@ -493,6 +521,16 @@
 
 	const pageFilterResult = $derived.by(() =>
 		filterPageRestaurantsWithSearch(baseRestaurants, pageFilterState, {
+			threadSubreddit,
+			dateExtent,
+			subredditSliceCache,
+			recencySliceCache
+		})
+	);
+
+	// Facet menus count what each option would return given every OTHER active filter.
+	const facetPopulations = $derived.by(() =>
+		filterPageFacetPopulations(baseRestaurants, pageFilterState, {
 			threadSubreddit,
 			dateExtent,
 			subredditSliceCache,
@@ -653,6 +691,9 @@
 			<SearchBar restaurants={allRestaurants} {cuisineNames} {cityNames} />
 			<FilterBar
 				restaurants={allRestaurants}
+				cuisineFacetRestaurants={facetPopulations.cuisine}
+				cityFacetRestaurants={facetPopulations.city}
+				subredditFacetRestaurants={facetPopulations.subreddit}
 				{threadSubreddit}
 				restaurantsForHistogram={restaurantsBeforeFreshness}
 				{dateExtent}
@@ -698,6 +739,7 @@
 			<div class="list-pane" inert={mapExpanded && isMobileViewport() ? true : undefined}>
 				<RestaurantList
 					restaurants={filteredRestaurants}
+					totalCount={allRestaurants.length}
 					onShowOnMap={openMobileMap}
 				/>
 			</div>
