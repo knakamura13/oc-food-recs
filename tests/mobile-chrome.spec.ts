@@ -306,7 +306,7 @@ test('320px search placeholder fits without clipping', async ({ page }, testInfo
 	expect(metrics.overflowPx).toBeLessThanOrEqual(0);
 });
 
-test('desktop drawer keeps comments above conversion actions', async ({ page }, testInfo) => {
+test('desktop drawer keeps actions above comments', async ({ page }, testInfo) => {
 	test.skip(testInfo.project.name !== 'Desktop Chrome', 'Desktop viewport only');
 	test.setTimeout(60_000);
 	await page.setViewportSize({ width: 1280, height: 800 });
@@ -331,12 +331,12 @@ test('desktop drawer keeps comments above conversion actions', async ({ page }, 
 			Math.round(el.getBoundingClientRect().height)
 		);
 		return {
-			commentsAboveActions: commentBox.bottom <= actionBox.top + 1,
+			actionsAboveComments: actionBox.bottom <= commentBox.top + 1,
 			buttonHeights: buttons
 		};
 	});
 
-	expect(order.commentsAboveActions).toBe(true);
+	expect(order.actionsAboveComments).toBe(true);
 	for (const height of order.buttonHeights) {
 		expect(height).toBeLessThan(44);
 	}
