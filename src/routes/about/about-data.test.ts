@@ -34,6 +34,7 @@ describe('scoringExample', () => {
 	it('shows the half-decay arithmetic that the server applies', () => {
 		const { lines } = scoringExample();
 		expect(lines[0]).toContain('40 + 30 × 0.5 = 55');
-		expect(lines[1]).toContain('55 + 20 = 75');
+		expect(lines[1]).toContain('55 + 20 = 75')
+		expect(lines[1]).toContain('score is 38');
 	});
 });
