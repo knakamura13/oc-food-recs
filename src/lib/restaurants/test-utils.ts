@@ -28,6 +28,7 @@ export function makeRestaurant(
     name: "Test Restaurant",
     slug: "test-restaurant",
     location: "Irvine",
+    street: null,
     cuisine: "American",
     aggregate_score: 10,
     mention_count: 2,
