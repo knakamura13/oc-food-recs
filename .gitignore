@@ -44,3 +44,7 @@ data/geocode-cache.json
 
 .playwright-mcp
 
+
+# audit/QA capture artifacts (evidence, kept locally; never committed)
+output/
+test-results/
