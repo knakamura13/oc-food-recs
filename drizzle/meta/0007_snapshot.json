@@ -1,5 +1,5 @@
 {
-  "id": "cb993758-8f01-4eeb-ac3a-e202abb5b88c",
+  "id": "90d27f0a-ad54-45f1-b0db-1075d9b21e50",
   "prevId": "19b80768-3c48-4e60-9cf7-b758a5b3492b",
   "version": "7",
   "dialect": "postgresql",
@@ -422,9 +422,9 @@
       "name": "restaurant_aliases",
       "schema": "",
       "columns": {
-        "slug": {
-          "name": "slug",
-          "type": "text",
+        "id": {
+          "name": "id",
+          "type": "bigserial",
           "primaryKey": true,
           "notNull": true
         },
@@ -439,6 +439,30 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true
+        },
+        "location": {
+          "name": "location",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "street": {
+          "name": "street",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "lat": {
+          "name": "lat",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "lng": {
+          "name": "lng",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
         },
         "source": {
           "name": "source",

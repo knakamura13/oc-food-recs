@@ -149,16 +149,21 @@ export const excludedBrands = pgTable('excluded_brands', {
 });
 
 /**
- * Slugs that no longer have their own restaurants row (merged away) but must keep resolving
- * to a surviving one. The Python ingest feeds these to `assign_slugs` as extra `existing`
- * entries (alias name, winner's slug/coords) so a re-ingest does not re-mint the loser.
+ * Pre-merge snapshots of restaurant rows, each pointing at the surviving restaurant. The Python
+ * ingest feeds them to `assign_slugs` as extra `existing` entries (snapshot name/location/coords,
+ * survivor's slug), so a re-ingest matches exactly what it matched before the merge instead of
+ * re-minting the loser or forking the renamed winner.
  */
 export const restaurantAliases = pgTable('restaurant_aliases', {
-	slug: text('slug').primaryKey(),
+	id: bigserial('id', { mode: 'number' }).primaryKey(),
 	restaurantId: bigint('restaurant_id', { mode: 'number' })
 		.notNull()
 		.references(() => restaurants.id, { onDelete: 'cascade' }),
 	name: text('name').notNull(),
+	location: text('location'),
+	street: text('street'),
+	lat: real('lat'),
+	lng: real('lng'),
 	source: text('source').notNull(), // 'merge'
 	createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });

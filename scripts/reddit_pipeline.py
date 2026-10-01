@@ -2695,14 +2695,15 @@ def write_to_db(
             )
 
             # Fetch existing restaurants for cross-thread deduplication. Merge aliases
-            # (restaurant_aliases) are projected as the winner's row under the alias name,
-            # so a merged-away name still resolves to the winner's slug instead of
-            # re-minting the freed one. Two entries may share a slug; the upsert is by slug.
+            # (restaurant_aliases) are pre-merge snapshots: each keeps the old row's name,
+            # location and coords but carries the surviving row's slug, so a re-ingest
+            # matches what it matched before the merge and lands on the survivor.
+            # Several entries may share a slug; the upsert is by slug.
             cur.execute(
                 """
                 SELECT name, slug, location, street, lat, lng FROM restaurants
                 UNION ALL
-                SELECT a.name, r.slug, r.location, r.street, r.lat, r.lng
+                SELECT a.name, r.slug, a.location, a.street, a.lat, a.lng
                 FROM restaurant_aliases a
                 JOIN restaurants r ON r.id = a.restaurant_id
                 """

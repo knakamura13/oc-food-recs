@@ -98,17 +98,18 @@ export async function mergeRestaurants(
       .where(eq(mentions.restaurantId, loserId))
       .returning({ id: mentions.id });
 
-    const mergedName =
-      loser.name.length > winner.name.length ? loser.name : winner.name;
+    const merged = {
+      name: loser.name.length > winner.name.length ? loser.name : winner.name,
+      location: winner.location ?? loser.location,
+      lat: winner.lat ?? loser.lat,
+      lng: winner.lng ?? loser.lng,
+    };
 
     await tx
       .update(restaurants)
       .set({
-        name: mergedName,
-        location: winner.location ?? loser.location,
+        ...merged,
         cuisine: winner.cuisine ?? loser.cuisine,
-        lat: winner.lat ?? loser.lat,
-        lng: winner.lng ?? loser.lng,
         status: "active",
         exclusionReason: null,
         chainConfidence: "independent",
@@ -117,8 +118,8 @@ export async function mergeRestaurants(
       })
       .where(eq(restaurants.id, winnerId));
 
-    // Undo record + alias so a re-ingest resolves the loser's name to the winner
-    // instead of re-minting the freed slug (#152).
+    // Undo record + aliases so a re-ingest resolves both pre-merge rows to the winner
+    // instead of re-minting the loser or forking the renamed winner (#152).
     await tx.insert(mergeLog).values({
       winnerId,
       loserId,
@@ -139,18 +140,24 @@ export async function mergeRestaurants(
       .set({ restaurantId: winnerId })
       .where(eq(restaurantAliases.restaurantId, loserId));
 
-    await tx
-      .insert(restaurantAliases)
-      .values({
-        slug: loser.slug,
+    // Snapshot of each pre-merge row as the ingest would match it. The winner's snapshot
+    // is only needed when the merge changed its match features.
+    const winnerChanged =
+      merged.name !== winner.name ||
+      merged.location !== winner.location ||
+      merged.lat !== winner.lat ||
+      merged.lng !== winner.lng;
+    await tx.insert(restaurantAliases).values(
+      (winnerChanged ? [loser, winner] : [loser]).map((r) => ({
         restaurantId: winnerId,
-        name: loser.name,
+        name: r.name,
+        location: r.location,
+        street: r.street,
+        lat: r.lat,
+        lng: r.lng,
         source: "merge",
-      })
-      .onConflictDoUpdate({
-        target: restaurantAliases.slug,
-        set: { restaurantId: winnerId, name: loser.name, source: "merge" },
-      });
+      })),
+    );
 
     await tx.delete(restaurants).where(eq(restaurants.id, loserId));
   });

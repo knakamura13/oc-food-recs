@@ -14,9 +14,13 @@ CREATE TABLE "merge_log" (
 );
 --> statement-breakpoint
 CREATE TABLE "restaurant_aliases" (
-	"slug" text PRIMARY KEY NOT NULL,
+	"id" bigserial PRIMARY KEY NOT NULL,
 	"restaurant_id" bigint NOT NULL,
 	"name" text NOT NULL,
+	"location" text,
+	"street" text,
+	"lat" real,
+	"lng" real,
 	"source" text NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
