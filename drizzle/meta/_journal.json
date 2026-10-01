@@ -50,6 +50,13 @@
       "when": 1789668402843,
       "tag": "0006_add_chain_confidence",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790816864092,
+      "tag": "0007_add_restaurant_aliases_merge_log",
+      "breakpoints": true
     }
   ]
 }

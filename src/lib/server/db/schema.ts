@@ -148,6 +148,48 @@ export const excludedBrands = pgTable('excluded_brands', {
 	createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
+/**
+ * Pre-merge snapshots of restaurant rows, each pointing at the surviving restaurant. The Python
+ * ingest feeds them to `assign_slugs` as extra `existing` entries (snapshot name/location/coords,
+ * survivor's slug), so a re-ingest matches exactly what it matched before the merge instead of
+ * re-minting the loser or forking the renamed winner.
+ */
+export const restaurantAliases = pgTable('restaurant_aliases', {
+	id: bigserial('id', { mode: 'number' }).primaryKey(),
+	restaurantId: bigint('restaurant_id', { mode: 'number' })
+		.notNull()
+		.references(() => restaurants.id, { onDelete: 'cascade' }),
+	name: text('name').notNull(),
+	location: text('location'),
+	street: text('street'),
+	lat: real('lat'),
+	lng: real('lng'),
+	source: text('source').notNull(), // 'merge'
+	createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+/**
+ * Undo record for admin merges. winner_id/loser_id are deliberately not FKs: the loser row is
+ * deleted by the merge, and the log must outlive either restaurant.
+ */
+export const mergeLog = pgTable('merge_log', {
+	id: bigserial('id', { mode: 'number' }).primaryKey(),
+	winnerId: bigint('winner_id', { mode: 'number' }).notNull(),
+	loserId: bigint('loser_id', { mode: 'number' }).notNull(),
+	loserSlug: text('loser_slug').notNull(),
+	loserName: text('loser_name').notNull(),
+	loserLocation: text('loser_location'),
+	loserStreet: text('loser_street'),
+	loserLat: real('loser_lat'),
+	loserLng: real('loser_lng'),
+	movedMentionIds: bigint('moved_mention_ids', { mode: 'number' }).array().notNull(),
+	deletedMentionIds: bigint('deleted_mention_ids', { mode: 'number' }).array().notNull(),
+	createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export type RestaurantAlias = typeof restaurantAliases.$inferSelect;
+export type MergeLogEntry = typeof mergeLog.$inferSelect;
+
 export type Thread = typeof threads.$inferSelect;
 export type NewThread = typeof threads.$inferInsert;
 export type Restaurant = typeof restaurants.$inferSelect;

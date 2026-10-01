@@ -1,6 +1,12 @@
 import { normalizeSearchText } from "$lib/restaurants/normalize-name";
 import { db } from "$lib/server/db";
-import { excludedBrands, mentions, restaurants } from "$lib/server/db/schema";
+import {
+  excludedBrands,
+  mentions,
+  mergeLog,
+  restaurantAliases,
+  restaurants,
+} from "$lib/server/db/schema";
 import { and, eq, ne, sql } from "drizzle-orm";
 
 export type ExclusionReason = "chain" | "corporate_group";
@@ -74,7 +80,7 @@ export async function mergeRestaurants(
       .limit(1);
     if (!winner || !loser) throw new Error("Restaurant not found.");
 
-    await tx.execute(sql`
+    const deleted = await tx.execute<{ id: number | string }>(sql`
       DELETE FROM mentions m1
       WHERE m1.restaurant_id = ${loserId}
       AND EXISTS (
@@ -83,24 +89,27 @@ export async function mergeRestaurants(
         AND m2.thread_id = m1.thread_id
         AND m2.comment_id = m1.comment_id
       )
+      RETURNING m1.id
     `);
 
-    await tx
+    const moved = await tx
       .update(mentions)
       .set({ restaurantId: winnerId })
-      .where(eq(mentions.restaurantId, loserId));
+      .where(eq(mentions.restaurantId, loserId))
+      .returning({ id: mentions.id });
 
-    const mergedName =
-      loser.name.length > winner.name.length ? loser.name : winner.name;
+    const merged = {
+      name: loser.name.length > winner.name.length ? loser.name : winner.name,
+      location: winner.location ?? loser.location,
+      lat: winner.lat ?? loser.lat,
+      lng: winner.lng ?? loser.lng,
+    };
 
     await tx
       .update(restaurants)
       .set({
-        name: mergedName,
-        location: winner.location ?? loser.location,
+        ...merged,
         cuisine: winner.cuisine ?? loser.cuisine,
-        lat: winner.lat ?? loser.lat,
-        lng: winner.lng ?? loser.lng,
         status: "active",
         exclusionReason: null,
         chainConfidence: "independent",
@@ -108,6 +117,47 @@ export async function mergeRestaurants(
         updatedAt: sql`now()`,
       })
       .where(eq(restaurants.id, winnerId));
+
+    // Undo record + aliases so a re-ingest resolves both pre-merge rows to the winner
+    // instead of re-minting the loser or forking the renamed winner (#152).
+    await tx.insert(mergeLog).values({
+      winnerId,
+      loserId,
+      loserSlug: loser.slug,
+      loserName: loser.name,
+      loserLocation: loser.location,
+      loserStreet: loser.street,
+      loserLat: loser.lat,
+      loserLng: loser.lng,
+      movedMentionIds: moved.map((m) => m.id),
+      deletedMentionIds: deleted.rows.map((r) => Number(r.id)),
+    });
+
+    // Chained merges: aliases that pointed at the loser must follow it to the winner
+    // (the FK would otherwise cascade-delete them with the loser row).
+    await tx
+      .update(restaurantAliases)
+      .set({ restaurantId: winnerId })
+      .where(eq(restaurantAliases.restaurantId, loserId));
+
+    // Snapshot of each pre-merge row as the ingest would match it. The winner's snapshot
+    // is only needed when the merge changed its match features.
+    const winnerChanged =
+      merged.name !== winner.name ||
+      merged.location !== winner.location ||
+      merged.lat !== winner.lat ||
+      merged.lng !== winner.lng;
+    await tx.insert(restaurantAliases).values(
+      (winnerChanged ? [loser, winner] : [loser]).map((r) => ({
+        restaurantId: winnerId,
+        name: r.name,
+        location: r.location,
+        street: r.street,
+        lat: r.lat,
+        lng: r.lng,
+        source: "merge",
+      })),
+    );
 
     await tx.delete(restaurants).where(eq(restaurants.id, loserId));
   });
