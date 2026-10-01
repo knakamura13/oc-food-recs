@@ -630,6 +630,7 @@ describe("FilterBar", () => {
             score: 5,
             author: "alice",
             role: "primary",
+            credit: 1,
           },
         ],
       }),
