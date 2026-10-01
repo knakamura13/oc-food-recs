@@ -1,0 +1,1 @@
+ALTER TABLE "mentions" ADD COLUMN "names_restaurant" boolean;

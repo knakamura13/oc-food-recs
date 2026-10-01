@@ -57,6 +57,13 @@
       "when": 1790816864092,
       "tag": "0007_add_restaurant_aliases_merge_log",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790825957977,
+      "tag": "0008_nasty_wasp",
+      "breakpoints": true
     }
   ]
 }

@@ -19,6 +19,7 @@
 		"pipeline:audit-comment-dates": "python3 scripts/audit_comment_dates.py",
 		"pipeline:backfill-comment-dates": "python3 scripts/backfill_comment_dates.py",
 		"pipeline:backfill-permalinks": "python3 scripts/backfill_permalinks.py",
+		"pipeline:backfill-names-restaurant": "python3 scripts/backfill_names_restaurant.py",
 		"db:generate": "drizzle-kit generate",
 		"db:migrate": "drizzle-kit migrate",
 		"db:push": "drizzle-kit push",
