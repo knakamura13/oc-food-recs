@@ -17,7 +17,18 @@ export const GET: RequestHandler = async ({ params }) => {
 			m.score,
 			m.role,
 			m.classification,
-			m.comment_date
+			m.comment_date,
+			COALESCE((
+				SELECT json_agg(json_build_object('slug', r2.slug, 'name', r2.name) ORDER BY r2.name)
+				FROM mentions m2
+				JOIN restaurants r2 ON r2.id = m2.restaurant_id
+				WHERE m2.thread_id = m.thread_id
+					AND m2.comment_id = m.comment_id
+					AND m2.restaurant_id <> m.restaurant_id
+					AND r2.status <> 'excluded'
+					AND m2.status = 'published'
+					AND ${countsTowardScore('m2')}
+			), '[]'::json) AS other_places
 		FROM mentions m
 		JOIN restaurants r ON r.id = m.restaurant_id
 		JOIN threads t ON t.id = m.thread_id

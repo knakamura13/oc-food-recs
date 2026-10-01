@@ -223,6 +223,117 @@ describe("RestaurantList", () => {
     });
   });
 
+  function stubDrawerMentions(mentions: Record<string, unknown>[]) {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () =>
+          mentions.map((m) => ({
+            permalink: null,
+            classification: null,
+            comment_date: "2024-06-01",
+            ...m,
+          })),
+      }),
+    );
+  }
+
+  it("shows every primary comment under a thread-count heading", async () => {
+    stubDrawerMentions([
+      { comment_id: "c1", thread_id: "t1", role: "primary", author: "ann", body: "Tacos one", score: 30 },
+      { comment_id: "c2", thread_id: "t2", role: "primary", author: "bob", body: "Tacos two", score: 10 },
+    ]);
+    render(RestaurantList, { restaurants });
+    appState.selectedRestaurantSlug = "la-taco-spot";
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("heading", { level: 3, name: "Recommended in 2 threads" }),
+      ).toBeInTheDocument();
+    });
+    expect(screen.getByText("Tacos one")).toBeInTheDocument();
+    expect(screen.getByText("Tacos two")).toBeInTheDocument();
+    expect(screen.getByText(/u\/ann/)).toBeInTheDocument();
+    expect(screen.getByText(/u\/bob/)).toBeInTheDocument();
+  });
+
+  it("focuses a multi-restaurant comment on this place and jumps to the others", async () => {
+    const user = userEvent.setup();
+    render(RestaurantList, {
+      restaurants: [
+        makeRestaurant({ name: "Irvine Grill", slug: "irvine-grill" }),
+        makeRestaurant({ name: "Forn Al Hara", slug: "forn-al-hara" }),
+      ],
+    });
+    stubDrawerMentions([
+      {
+        comment_id: "c1",
+        thread_id: "t1",
+        role: "primary",
+        author: "ann",
+        body: "Forn Al Hara is great\nIrvine Grill is the best",
+        score: 30,
+        other_places: [{ slug: "forn-al-hara", name: "Forn Al Hara" }],
+      },
+    ]);
+    appState.selectedRestaurantSlug = "irvine-grill";
+
+    await waitFor(() => {
+      expect(screen.getByText("Irvine Grill is the best")).toBeInTheDocument();
+    });
+    expect(screen.queryByText("Forn Al Hara is great")).not.toBeInTheDocument();
+    expect(screen.getByText(/and 1 other place in this comment/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Show full comment" }));
+    expect(screen.getByText(/Forn Al Hara is great/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Forn Al Hara" }));
+    await waitFor(() => {
+      expect(appState.selectedRestaurantSlug).toBe("forn-al-hara");
+    });
+  });
+
+  it("collapses a very long list of primary comments behind a toggle", async () => {
+    const user = userEvent.setup();
+    stubDrawerMentions(
+      Array.from({ length: 13 }, (_, i) => ({
+        comment_id: `c${i}`,
+        thread_id: `t${i}`,
+        role: "primary",
+        author: `user${i}`,
+        body: `Rec number ${i}`,
+        score: 100 - i,
+      })),
+    );
+    render(RestaurantList, { restaurants });
+    appState.selectedRestaurantSlug = "la-taco-spot";
+
+    await screen.findByText("Rec number 0");
+    expect(screen.queryByText("Rec number 5")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Show 8 more recommendations" }));
+    expect(screen.getByText("Rec number 12")).toBeInTheDocument();
+  });
+
+  it("renders markdown links and bold text in comment bodies", async () => {
+    stubDrawerMentions([
+      {
+        comment_id: "c1",
+        thread_id: "t1",
+        role: "primary",
+        author: "ann",
+        body: "[map](https://maps.apple.com/?q=a%20b) and **great** food",
+        score: 5,
+      },
+    ]);
+    render(RestaurantList, { restaurants });
+    appState.selectedRestaurantSlug = "la-taco-spot";
+
+    const link = await screen.findByRole("link", { name: "map" });
+    expect(link).toHaveAttribute("href", "https://maps.apple.com/?q=a%20b");
+    expect(screen.getByText("great").tagName).toBe("STRONG");
+  });
+
   it("shows a clear-filters action when the list is empty", async () => {
     const { getByRole } = render(RestaurantList, { restaurants: [] });
     appState.activeCuisines = ["Mexican"];

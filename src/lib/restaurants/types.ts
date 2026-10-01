@@ -17,6 +17,8 @@ export interface Mention {
     | null;
   /** ISO 8601 timestamp the Reddit comment was authored, or null for legacy rows without a source date. */
   comment_date: string | null;
+  /** Other restaurants named by the same comment (published, counting, not excluded). Absent on payloads that predate it. */
+  other_places?: { slug: string; name: string }[];
 }
 
 /**
