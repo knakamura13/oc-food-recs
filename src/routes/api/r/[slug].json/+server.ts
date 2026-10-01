@@ -2,25 +2,7 @@ import { db } from '$lib/server/db';
 import { sql } from 'drizzle-orm';
 import { json } from '@sveltejs/kit';
 import type { Mention } from '$lib/restaurants/types';
-import type { EntryGenerator, RequestHandler } from './$types';
-
-// Prerendered at build time: one static JSON per restaurant slug. Holds the full
-// per-restaurant mentions (comment bodies, permalinks, classifications) that are only
-// shown when a card is expanded, so they stay out of the initial prerendered page payload.
-export const prerender = process.env.SITES_BUILD === '1';
-
-export const entries: EntryGenerator = async () => {
-	if (process.env.SITES_BUILD !== '1') return [];
-	const res = await db.execute(sql`
-		SELECT DISTINCT r.slug
-		FROM restaurants r
-		JOIN mentions m ON m.restaurant_id = r.id
-		JOIN threads t ON t.id = m.thread_id
-		WHERE t.included_in_publish = true
-			AND r.status <> 'excluded'
-	`);
-	return (res.rows as unknown as { slug: string }[]).map((r) => ({ slug: r.slug }));
-};
+import type { RequestHandler } from './$types';
 
 export const GET: RequestHandler = async ({ params }) => {
 	const res = await db.execute(sql`
