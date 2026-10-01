@@ -35,10 +35,12 @@
 
 	interface Props {
 		restaurants: Restaurant[];
+		/** Full roster size, so the header can read "916 of 1,229". */
+		totalCount?: number;
 		onShowOnMap?: (opener: HTMLButtonElement) => void;
 	}
 
-	let { restaurants, onShowOnMap }: Props = $props();
+	let { restaurants, totalCount, onShowOnMap }: Props = $props();
 
 	let priorVisitMs = $state<number | null>(null);
 
@@ -120,12 +122,26 @@
 	// Restaurants with no dated mentions sort last in either direction (null comparator rule).
 	const recencySort = table.createSort((r: Restaurant) => latestMentionMs(r));
 	const nameSort = table.createSort('name');
+	// `restaurants` arrives in search-relevance order while a query is active (see
+	// filterPageRestaurantsWithSearch); re-sorting by position keeps that order. Higher value =
+	// better match, so the default `desc` direction reads best-first like the other sorts.
+	let relevanceRank = new Map<string, number>();
+	const relevanceSort = table.createSort((r: Restaurant) => {
+		const rank = relevanceRank.get(r.slug);
+		return rank === undefined ? null : -rank;
+	});
 
 	const sortOptions = [
 		{ key: 'score' as const, label: 'Score', sort: scoreSort },
 		{ key: 'recency' as const, label: 'Recent', sort: recencySort },
-		{ key: 'name' as const, label: 'Name', sort: nameSort }
+		{ key: 'name' as const, label: 'Name', sort: nameSort },
+		{ key: 'relevance' as const, label: 'Relevance', sort: relevanceSort }
 	] as const;
+
+	// Relevance only means something while searching.
+	const visibleSortOptions = $derived(
+		appState.searchQuery.trim() ? sortOptions : sortOptions.filter((o) => o.key !== 'relevance')
+	);
 
 	function optionFor(key: SortKey) {
 		return sortOptions.find((o) => o.key === key);
@@ -138,6 +154,7 @@
 	}
 
 	$effect(() => {
+		relevanceRank = new Map(restaurants.map((r, i) => [r.slug, i]));
 		table.setRows(restaurants);
 		const opt = optionFor(appState.sortKey);
 		// Named two-state sort: restore() after setRows can leave the wrong key
@@ -493,7 +510,7 @@
 <div class="restaurant-list">
 	<div class="sort-bar" role="toolbar" aria-label="Sort options">
 		<span class="sort-label" id="sort-label">Sort by:</span>
-		{#each sortOptions as opt (opt.key)}
+		{#each visibleSortOptions as opt (opt.key)}
 			<button
 				type="button"
 				class="sort-btn"
@@ -514,8 +531,13 @@
 			</button>
 		{/each}
 		<span class="result-count" aria-live="polite">
-			{restaurants.length}
-			<span class="result-count-noun">{restaurants.length === 1 ? 'restaurant' : 'restaurants'}</span>
+			{#if totalCount !== undefined && totalCount !== restaurants.length}
+				{restaurants.length.toLocaleString('en-US')} of {totalCount.toLocaleString('en-US')}
+				<span class="result-count-noun">restaurants</span>
+			{:else}
+				{restaurants.length.toLocaleString('en-US')}
+				<span class="result-count-noun">{restaurants.length === 1 ? 'restaurant' : 'restaurants'}</span>
+			{/if}
 		</span>
 	</div>
 

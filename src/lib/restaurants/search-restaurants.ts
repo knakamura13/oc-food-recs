@@ -16,7 +16,7 @@ export const FUSE_SEARCH_OPTIONS: IFuseOptions<SearchableRestaurant> = {
     { name: "cuisineNormalized", weight: 0.12 },
     { name: "locationNormalized", weight: 0.08 },
   ],
-  threshold: 0.4,
+  threshold: 0.3,
   distance: 200,
   includeScore: true,
 };
@@ -98,6 +98,22 @@ export function resetRestaurantFuseCache(): void {
   cachedRestaurants = null;
   cachedSlugKey = null;
   cachedFuse = null;
+}
+
+/**
+ * Slug -> relevance rank (0 = best) for a non-blank query, or null when the query is blank.
+ * Ranking depends only on each restaurant, never on the rest of the list, so searching the
+ * full population once is equivalent to searching any filtered subset.
+ */
+export function searchRankBySlug(
+  restaurants: Restaurant[],
+  query: string,
+): Map<string, number> | null {
+  const q = query.trim();
+  if (!q) return null;
+  const fuse = getCachedRestaurantFuse(restaurants);
+  const ranked = rankSearchResults(fuse.search(q), q);
+  return new Map(ranked.map((r, i) => [r.item.slug, i]));
 }
 
 export function filterRestaurantsByQuery(

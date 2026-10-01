@@ -28,7 +28,7 @@ export function buildPageTitle(
   if (restaurantName) parts.push(restaurantName);
   else if (state.selectedRestaurantSlug)
     parts.push(state.selectedRestaurantSlug);
-  if (state.sortKey && state.sortKey !== "score") {
+  if (state.sortKey && state.sortKey !== "score" && state.sortKey !== "relevance") {
     parts.push(state.sortKey === "name" ? "by name" : "by recency");
   }
   if (state.showUnmapped) parts.push("unmapped");
@@ -92,7 +92,7 @@ export function buildCanonicalShareUrl(
     freshnessSource: state.freshnessSource ?? null,
     showUnmapped: state.showUnmapped ?? false,
     showMomAndPop: state.showMomAndPop ?? true,
-    sortKey: state.sortKey ?? "score",
+    sortKey: state.sortKey ?? (state.searchQuery ? "relevance" : "score"),
     sortDirection: state.sortDirection ?? "desc",
     selectedRestaurantSlug: state.selectedRestaurantSlug ?? null,
   };
