@@ -122,7 +122,7 @@ For ingest and maintenance scripts:
 pip install -e .
 
 # Pull the default extraction model (or set OC_FOOD_RECS_OLLAMA_MODEL)
-ollama pull gemma4:latest
+ollama pull gemma4:e4b
 
 # Run pipeline unit tests
 npm run test:pipeline

@@ -55,11 +55,11 @@ def _env(name: str, legacy: str, default: str) -> str:
 OLLAMA_URL = _env(
     "OC_FOOD_RECS_OLLAMA_URL", "OLLAMA_URL", "http://127.0.0.1:11434/api/chat"
 )
-OLLAMA_MODEL = _env("OC_FOOD_RECS_OLLAMA_MODEL", "OLLAMA_MODEL", "gemma4:latest")
+OLLAMA_MODEL = _env("OC_FOOD_RECS_OLLAMA_MODEL", "OLLAMA_MODEL", "gemma4:e4b")
 # Reasoning-capable tags (e.g. gemma4:26b) emit a chain-of-thought that consumes the
 # num_predict budget and leaves the JSON answer empty -- silently dropping the record.
 # Sending think=false makes every model answer directly; it is a no-op on non-thinking
-# tags like gemma4:latest. Override with OC_FOOD_RECS_OLLAMA_THINK=true|false|omit.
+# tags like gemma4:e4b. Override with OC_FOOD_RECS_OLLAMA_THINK=true|false|omit.
 _THINK_ENV = os.environ.get("OC_FOOD_RECS_OLLAMA_THINK", "false").strip().lower()
 OLLAMA_THINK = {"true": True, "false": False, "omit": None, "": None}.get(
     _THINK_ENV, False
@@ -2743,7 +2743,7 @@ def write_to_db(
                     INSERT INTO restaurants (name, slug, location, street, cuisine, lat, lng, status, exclusion_reason, chain_confidence)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (slug) DO UPDATE SET
-                        name = CASE WHEN length(EXCLUDED.name) > length(restaurants.name) THEN EXCLUDED.name ELSE restaurants.name END,
+                        name = CASE WHEN restaurants.reviewed_at IS NOT NULL THEN restaurants.name WHEN length(EXCLUDED.name) > length(restaurants.name) THEN EXCLUDED.name ELSE restaurants.name END,
                         location = COALESCE(restaurants.location, EXCLUDED.location),
                         street = COALESCE(restaurants.street, EXCLUDED.street),
                         cuisine = COALESCE(restaurants.cuisine, EXCLUDED.cuisine),
@@ -3084,17 +3084,20 @@ def ingest_batch(
 def reingest_all(
     *, limit: int | None = None, dry_run: bool = False, confirmed: bool = False
 ) -> int:
-    """Back up, purge, and re-ingest every archived thread HTML file.
+    """Back up, then re-ingest every archived thread HTML file in place.
 
     Steps (when not dry-run):
       1. Discover HTML files: prefer THREADS_ROOT, fall back to UNINGESTED_ROOT.
       2. Create a DB backup via db_backup.backup().
       3. Move files from THREADS_ROOT -> UNINGESTED_ROOT (if sourced from THREADS_ROOT).
-      4. TRUNCATE threads, restaurants, and mentions.
-      5. Ingest each file; archive it back to THREADS_ROOT on success.
-         Stops on the first failure and prints the restore command.
+      4. Ingest each file; archive it back to THREADS_ROOT on success.
+         Stops on the first failure. Nothing is purged first: ``write_to_db``
+         upserts per thread (restaurants on ``slug``, mentions on
+         ``(thread_id, comment_id, restaurant_id)``) and sweeps that thread's
+         orphaned mentions, so rows from earlier threads stay intact and the
+         run can simply be repeated.
 
-    Requires ``confirmed=True`` (``--yes``) to perform any destructive steps.
+    Requires ``confirmed=True`` (``--yes``) to modify the database.
     """
     import db_backup as b  # local import — db_backup is a sibling script, not a package dep
 
@@ -3115,7 +3118,7 @@ def reingest_all(
             print(f"  {p.name}")
 
     if dry_run:
-        print("Dry run — no backup, purge, or ingest performed.")
+        print("Dry run — no backup or ingest performed.")
         return 0
 
     if not confirmed:
@@ -3147,18 +3150,6 @@ def reingest_all(
         ]
         print(f"Staged {staged} thread(s) into uningested-threads/.")
 
-    print("\nPurging ingest tables...")
-    conn = b._connect()
-    try:
-        with conn.cursor() as cur:
-            cur.execute(
-                "TRUNCATE mentions, restaurants, threads RESTART IDENTITY CASCADE"
-            )
-        conn.commit()
-    finally:
-        conn.close()
-    print("Purge complete.")
-
     print()
     successes: list[str] = []
     pbar = tqdm.tqdm(html_files, desc="Re-ingesting", unit="thread")
@@ -3171,8 +3162,9 @@ def reingest_all(
             pbar.close()
             print(f"\nERROR ingesting {html_path.name}: {exc}", file=sys.stderr)
             print(
-                f"\nIngest stopped after {len(successes)} success(es). "
-                f"Restore from backup:\n"
+                f"\nIngest stopped after {len(successes)} success(es); "
+                f"existing database rows were not purged. "
+                f"To roll back, restore from backup:\n"
                 f"  python3 scripts/db_backup.py restore {backup_path}",
                 file=sys.stderr,
             )
@@ -3241,14 +3233,14 @@ def main(argv: list[str] | None = None) -> int:
         help=(
             "Re-ingest all previously archived threads. Moves every *.html file from "
             "./data/threads/ back into ./data/uningested-threads/, then runs a full "
-            "ingest pass. Successfully re-ingested files are archived back to "
+            "ingest pass (upserting; existing rows are not truncated). Successfully re-ingested files are archived back to "
             "./data/threads/; failures stay in ./data/uningested-threads/ for inspection."
         ),
     )
     reingest_parser.add_argument(
         "--yes",
         action="store_true",
-        help="Required to perform backup, purge, and ingest (safety gate)",
+        help="Required to perform backup and ingest (safety gate)",
     )
     reingest_parser.add_argument(
         "--limit",
@@ -3259,7 +3251,7 @@ def main(argv: list[str] | None = None) -> int:
     reingest_parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="List files without backup, purge, or ingest",
+        help="List files without backup or ingest",
     )
 
     args = parser.parse_args(argv)
