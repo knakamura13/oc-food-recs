@@ -104,6 +104,7 @@ describe("filter-page-restaurants", () => {
             score: 5,
             role: "primary",
             comment_date: "2024-01-01",
+            credit: 1,
           },
           {
             thread_id: "t1",
@@ -111,6 +112,7 @@ describe("filter-page-restaurants", () => {
             score: 3,
             role: "endorsement",
             comment_date: "2025-06-01",
+            credit: 1,
           },
         ],
       }),

@@ -366,6 +366,7 @@ function mentionOn(date: string): ListMention {
     comment_date: date,
     thread_id: "thread-1",
     role: "primary",
+    credit: 1,
   };
 }
 

@@ -259,16 +259,23 @@ export const FILTER_SYNONYMS: Record<string, string[]> = {
   Placentia: ["placentia"],
 };
 
-export const REPEAT_AUTHOR_DECAY = 0.5; // must match the literal in +page.server.ts
+// Must match the literals in +page.server.ts: the 0.5 in POWER(0.5, author_rank - 1), the
+// `credit` (1/co_mentions) multiplier, and the `+ 2.0` in voices/(voices+2.0).
+export const REPEAT_AUTHOR_DECAY = 0.5;
+export const VOICE_SHRINK_PRIOR = 2;
 const ANONYMOUS_AUTHORS = new Set(["[deleted]", "[removed]", ""]);
 
 /**
- * Weighted aggregates for a set of mentions. An author's highest-scoring
+ * Weighted aggregates for a set of mentions. Each mention is worth
+ * `score * credit` (credit = 1/n for a comment naming n restaurants, so one
+ * upvoted list doesn't pay every place in full). An author's highest-scoring
  * mention of a restaurant counts in full; each additional mention by the same
  * author is devalued geometrically (REPEAT_AUTHOR_DECAY^rank) so one person's
  * repetition can't read as broad consensus. Anonymous authors
  * ([deleted]/[removed]/blank) are each treated as a distinct voice.
- * mention_count = number of distinct contributors (rank-1 mentions).
+ * mention_count = number of distinct contributors (rank-1 mentions = voices).
+ * The total is shrunk by voices/(voices + VOICE_SHRINK_PRIOR) so a
+ * single-voice row can't outrank broadly recommended places.
  */
 export function weightedAggregates(mentions: ListMention[]): {
   aggregate_score: number;
@@ -280,7 +287,7 @@ export function weightedAggregates(mentions: ListMention[]): {
   for (const m of mentions) {
     const author = (m.author ?? "").trim();
     if (ANONYMOUS_AUTHORS.has(author)) {
-      score += m.score; // each anonymous mention: full value, own voice
+      score += m.score * m.credit; // each anonymous mention: full value, own voice
       count += 1;
       continue;
     }
@@ -291,11 +298,12 @@ export function weightedAggregates(mentions: ListMention[]): {
   for (const list of byAuthor.values()) {
     list.sort((a, b) => b.score - a.score); // best first
     list.forEach((m, i) => {
-      score += m.score * Math.pow(REPEAT_AUTHOR_DECAY, i);
+      score += m.score * m.credit * Math.pow(REPEAT_AUTHOR_DECAY, i);
     });
     count += 1; // one distinct contributor
   }
-  return { aggregate_score: Math.round(score), mention_count: count };
+  const shrunk = (score * count) / (count + VOICE_SHRINK_PRIOR);
+  return { aggregate_score: Math.round(shrunk), mention_count: count };
 }
 
 function containsWord(haystack: string, needle: string): boolean {
