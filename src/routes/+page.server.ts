@@ -64,6 +64,7 @@ async function loadHomePage(
 			FROM mentions m
 			JOIN threads t ON t.id = m.thread_id
 			WHERE t.included_in_publish = true
+				AND m.status = 'published'
 				AND ${countsTowardScore('m')}
 		),
 		comment_spread AS (

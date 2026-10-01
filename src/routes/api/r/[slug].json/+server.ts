@@ -23,6 +23,7 @@ export const GET: RequestHandler = async ({ params }) => {
 		JOIN threads t ON t.id = m.thread_id
 		WHERE t.included_in_publish = true
 			AND r.status <> 'excluded'
+			AND m.status = 'published'
 			AND ${countsTowardScore('m')}
 			AND r.slug = ${params.slug}
 		ORDER BY CASE WHEN m.role = 'primary' THEN 0 ELSE 1 END, m.score DESC

@@ -27,12 +27,6 @@
 			<p class="summary" aria-hidden="true">
 				<span class="skeleton-line body medium"></span>
 			</p>
-			<p class="attribution">
-				Built with SvelteKit, hosted on
-				<a href="https://railway.com?referralCode=QCz9lp" target="_blank" rel="noopener noreferrer"
-					>Railway</a
-				>
-			</p>
 		</section>
 	</section>
 
@@ -152,18 +146,6 @@
 		margin: 0 0 0.5rem;
 		display: flex;
 		justify-content: center;
-	}
-
-	.attribution {
-		font-size: 0.75rem;
-		color: #7a6e63;
-		margin-top: 0.25rem;
-	}
-
-	.attribution a {
-		font-size: 0.75rem;
-		color: #7a6e63;
-		text-decoration: underline;
 	}
 
 	.app-trap {
@@ -497,10 +479,6 @@
 			margin: 0 0 0.2rem;
 		}
 
-		.attribution {
-			margin-top: 0;
-		}
-
 		.app-trap {
 			position: relative;
 			top: auto;
@@ -540,12 +518,6 @@
 		}
 	}
 
-	@media (min-width: 1024px) and (max-height: 800px) {
-		.attribution {
-			display: none;
-		}
-	}
-
 	@media (max-width: 1023px) {
 		.map-pane {
 			display: none;
@@ -575,10 +547,6 @@
 			font-size: 0.78rem;
 			line-height: 1.4;
 			margin: 0 0 0.15rem;
-		}
-
-		.attribution {
-			display: none;
 		}
 
 		.search-field {

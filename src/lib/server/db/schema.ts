@@ -4,6 +4,7 @@ import {
 	boolean,
 	index,
 	integer,
+	jsonb,
 	pgTable,
 	real,
 	text,
@@ -93,6 +94,10 @@ export const mentions = pgTable(
 		commentDate: timestamp('comment_date', { withTimezone: true }), // when the Reddit comment was authored (NULL for legacy rows awaiting backfill)
 		// Whether the body names this restaurant (port of namesRestaurant()). NULL = not computed yet.
 		namesRestaurant: boolean('names_restaurant'),
+		// Takedown gate for the removal-by-request promise on /about. 'published' (default) or
+		// 'taken_down'. Only the admin UI writes it; the ingest upsert never touches it, so a
+		// re-ingest cannot resurrect a removed quote.
+		status: text('status').default('published').notNull(),
 		createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 	},
 	(table) => ({
@@ -188,6 +193,24 @@ export const mergeLog = pgTable('merge_log', {
 	deletedMentionIds: bigint('deleted_mention_ids', { mode: 'number' }).array().notNull(),
 	createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
+
+/**
+ * First-party interaction counter (#163). One row per beacon: the event name and a tiny,
+ * allowlisted props object. Deliberately holds no IP, user agent, cookie, session or client id,
+ * so a row cannot be tied back to a visitor. Written only when EVENTS_ENABLED=1.
+ */
+export const events = pgTable(
+	'events',
+	{
+		id: bigserial('id', { mode: 'number' }).primaryKey(),
+		event: text('event').notNull(),
+		props: jsonb('props').$type<Record<string, string | boolean>>().default({}).notNull(),
+		createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+	},
+	(table) => ({
+		eventCreatedIdx: index('events_event_created_idx').on(table.event, table.createdAt),
+	})
+);
 
 export type RestaurantAlias = typeof restaurantAliases.$inferSelect;
 export type MergeLogEntry = typeof mergeLog.$inferSelect;

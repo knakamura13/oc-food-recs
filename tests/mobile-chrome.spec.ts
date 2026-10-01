@@ -14,7 +14,6 @@ test('390px chrome leaves room for restaurant results', async ({ page }, testInf
 		const sortBar = document.querySelector('.sort-bar');
 		const shortcut = document.querySelector('.search-shortcut');
 		const search = document.querySelector<HTMLInputElement>('input[type="search"]');
-		const attribution = document.querySelector('.attribution');
 		const mapBtn = document.querySelector('.mobile-map-trigger');
 		if (!rowEl || !filters || !sortBar || !search || !mapBtn) {
 			throw new Error('Missing explorer chrome');
@@ -26,7 +25,6 @@ test('390px chrome leaves room for restaurant results', async ({ page }, testInf
 			sortHeight: Math.round(sortBar.getBoundingClientRect().height),
 			shortcutVisible: Boolean(shortcut && shortcut.getClientRects().length > 0),
 			searchFontSize: Number.parseFloat(getComputedStyle(search).fontSize),
-			attributionVisible: Boolean(attribution && attribution.getClientRects().length > 0),
 			mapRight: Math.round(mapBox.right),
 			vw: window.innerWidth
 		};
@@ -37,7 +35,6 @@ test('390px chrome leaves room for restaurant results', async ({ page }, testInf
 	expect(metrics.rowTop).toBeLessThanOrEqual(340);
 	expect(metrics.shortcutVisible).toBe(false);
 	expect(metrics.searchFontSize).toBeGreaterThanOrEqual(16);
-	expect(metrics.attributionVisible).toBe(false);
 	expect(metrics.mapRight).toBeLessThanOrEqual(metrics.vw + 1);
 });
 
