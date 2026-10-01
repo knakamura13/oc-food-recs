@@ -64,11 +64,11 @@ describe("Hero", () => {
     const { unmount } = render(Hero, {
       meta: { ...singleThreadMeta, newest_comment_date: "2026-06-08T23:18:08.220Z" },
     });
-    expect(screen.getByText(/the newest from jun 2026\./i)).toBeInTheDocument();
+    expect(screen.getByText(/comments through jun 2026\./i)).toBeInTheDocument();
     unmount();
 
     render(Hero, { meta: singleThreadMeta });
-    expect(screen.queryByText(/the newest from/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/comments through/i)).not.toBeInTheDocument();
   });
 
   it("lets the mobile summary wrap instead of clamping mid-sentence", () => {

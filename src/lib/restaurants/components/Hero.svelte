@@ -26,11 +26,12 @@
 	<p class="summary">
 		{#if threadCount === 1}
 			This interactive explorer is built from one Reddit thread and {totalCommentsLabel} community
-			comments{#if newestLabel}, the newest from {newestLabel}{/if}.
+			comments.
 		{:else}
 			This interactive explorer pulls together {threadCount} Reddit threads{#if subredditCount > 1}{' '}across
-				{subredditCount} subreddits{/if} and {totalCommentsLabel} community comments{#if newestLabel}, the newest from {newestLabel}{/if}.
+				{subredditCount} subreddits{/if} and {totalCommentsLabel} community comments.
 		{/if}
+		{#if newestLabel}Comments through {newestLabel}.{/if}
 	</p>
 </section>
 
