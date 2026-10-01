@@ -4,7 +4,8 @@ import {
 	loadExclusionQueue,
 	markRestaurantExcluded,
 	restoreRestaurantActive,
-	type ExclusionReason
+	type ExclusionReason,
+	type RestaurantExclusionReason
 } from '$lib/server/restaurants/admin';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -27,12 +28,20 @@ export const actions: Actions = {
 		if (!Number.isFinite(restaurantId) || restaurantId <= 0) {
 			return fail(400, { error: 'Invalid restaurant id.', action: 'excludeRestaurant' });
 		}
-		const reason = coerceReason(form.get('reason'));
+		const rawReason = String(form.get('reason') ?? '');
+		const reason: RestaurantExclusionReason = rawReason === 'closed' ? 'closed' : coerceReason(rawReason);
+		const addToRegistry = Boolean(form.get('addToRegistry'));
+		if (reason === 'closed' && addToRegistry) {
+			return fail(400, {
+				error: 'A closed restaurant is not a chain; leave "Add to registry" unchecked.',
+				action: 'excludeRestaurant'
+			});
+		}
 		try {
 			await markRestaurantExcluded(restaurantId, reason);
 			// Optionally also blacklist the brand so future ingests/sweeps catch it everywhere.
 			const brandName = String(form.get('brandName') ?? '').trim();
-			if (form.get('addToRegistry') && brandName) {
+			if (addToRegistry && brandName && reason !== 'closed') {
 				await addBrandToRegistry(brandName, reason, null);
 			}
 			return { success: true, action: 'excludeRestaurant', message: 'Restaurant excluded from the public site.' };

@@ -43,7 +43,8 @@ class ParseDetailTests(unittest.TestCase):
 
 
 class ClassifyTests(unittest.TestCase):
-    CAFE = ("Cafe Rae, 1421 N El Camino Real, San Clemente, CA 92672, USA", "San Clemente")
+    CAFE = ("Cafe Rae, 1421 N El Camino Real, San Clemente, CA 92672, USA", "San Clemente", 33.4380, -117.6280)
+    HERE = (33.4381, -117.6281)
 
     def test_single_match_sets_street(self):
         self.assertEqual(bs.classify("Cafe Rae", "San Clemente", [self.CAFE]), ("set", "1421 N El Camino Real", ""))
@@ -52,22 +53,41 @@ class ClassifyTests(unittest.TestCase):
         self.assertEqual(bs.classify("Cafe Rae", "San Clemente", [self.CAFE, self.CAFE])[0], "set")
 
     def test_different_streets_are_ambiguous(self):
-        other = ("Cafe Rae, 5 Main St, San Clemente, CA 92672, USA", "San Clemente")
+        other = ("Cafe Rae, 5 Main St, San Clemente, CA 92672, USA", "San Clemente", 33.4380, -117.6280)
         self.assertEqual(bs.classify("Cafe Rae", "San Clemente", [self.CAFE, other])[0], "ambiguous")
 
     def test_city_mismatch_is_ambiguous(self):
         self.assertEqual(bs.classify("Cafe Rae", "Irvine", [self.CAFE])[0], "ambiguous")
 
     def test_wrong_business_is_ambiguous(self):
-        lab = ("The LAB Anti-Mall, 2930 Bristol St, Costa Mesa, CA 92626, USA", "Costa Mesa")
+        lab = ("The LAB Anti-Mall, 2930 Bristol St, Costa Mesa, CA 92626, USA", "Costa Mesa", 33.6810, -117.8860)
         self.assertEqual(bs.classify("Bob's", "Costa Mesa", [lab])[0], "ambiguous")
 
     def test_other_city_row_is_ignored_when_local_one_exists(self):
-        far = ("Cafe Rae, 9 Far Rd, Irvine, CA 92604, USA", "Irvine")
+        far = ("Cafe Rae, 9 Far Rd, Irvine, CA 92604, USA", "Irvine", 33.6840, -117.8260)
         self.assertEqual(bs.classify("Cafe Rae", "San Clemente", [self.CAFE, far]), ("set", "1421 N El Camino Real", ""))
 
     def test_no_candidates(self):
         self.assertEqual(bs.classify("Cafe Rae", "San Clemente", [])[0], "none")
+
+    def test_cached_address_far_from_restaurant_is_ambiguous(self):
+        # Same name and city, but the cached geocode is another branch ~5 km away.
+        self.assertEqual(
+            bs.classify("Cafe Rae", "San Clemente", [self.CAFE], coords=(33.4800, -117.6280))[0],
+            "ambiguous",
+        )
+
+    def test_nearby_cached_address_sets_street(self):
+        self.assertEqual(
+            bs.classify("Cafe Rae", "San Clemente", [self.CAFE], coords=self.HERE),
+            ("set", "1421 N El Camino Real", ""),
+        )
+
+    def test_no_city_and_no_coords_is_ambiguous(self):
+        self.assertEqual(bs.classify("Cafe Rae", None, [self.CAFE])[0], "ambiguous")
+
+    def test_no_city_but_nearby_coords_sets_street(self):
+        self.assertEqual(bs.classify("Cafe Rae", None, [self.CAFE], coords=self.HERE)[0], "set")
 
 
 if __name__ == "__main__":
