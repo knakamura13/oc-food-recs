@@ -479,6 +479,7 @@ class WriteToDbTest(unittest.TestCase):
                 "Taqueria de Anda is the best",
                 50,
                 None,
+                True,  # names_restaurant: body names the restaurant
             ),
         )
 
@@ -498,6 +499,7 @@ class WriteToDbTest(unittest.TestCase):
                 10,
                 "endorsement",
                 None,
+                False,  # names_restaurant: "seconded" does not name it
             ),
         )
 
@@ -1427,6 +1429,27 @@ class WriteToDbDedupTest(WriteToDbTest):
         ]
         self.assertEqual(len(restaurant_upserts), 1)
         self.assertEqual(restaurant_upserts[0][3], "Main St")
+
+
+class NamesRestaurantTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.pipeline = load_pipeline_module()
+
+    def test_reply_naming_the_restaurant(self):
+        nr = self.pipeline.names_restaurant
+        self.assertTrue(nr("Lupe's is the best, get the carne asada", "Lupe's Tacos"))
+        self.assertTrue(nr("Nothing beats Tama Sushi imo", "Tama Sushi"))
+
+    def test_reply_naming_a_different_restaurant_or_none(self):
+        nr = self.pipeline.names_restaurant
+        self.assertFalse(nr("Go to Tama Sushi instead", "Lupe's Tacos"))
+        self.assertFalse(nr("Best tacos in town, get the carne asada", "Lupe's Tacos"))
+
+    def test_weak_name_words_alone_do_not_match(self):
+        nr = self.pipeline.names_restaurant
+        self.assertFalse(nr("the kitchen was great and the coffee too", "Vox Kitchen"))
+        self.assertTrue(nr("vox is great", "The Vox Kitchen"))
 
 
 if __name__ == "__main__":
