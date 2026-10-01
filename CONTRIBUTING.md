@@ -66,6 +66,13 @@ E2E_SEED=1 npm run db:seed-e2e   # truncates fixture DB only — see script guar
 npm run test:e2e
 ```
 
+## Reddit data stays out of git
+
+This repo is public. Never commit real Reddit page saves or comment exports; anything carrying real usernames or comment text stays on your machine. The same goes for build output and published-data snapshots (`/build`, `/dist`, exported API JSON).
+
+- Test fixtures must be synthetic: invented users, ids, restaurants, and text in the markup the parser reads (see `tests/fixtures/synthetic-thread-*.html`).
+- Raw thread data is already gitignored: `data/uningested-threads/`, archived saves and per-thread working dirs under `data/threads/`, `data/backups/`, and root-level `*reddit-thread*.html` saves. Keep raw data under those paths.
+
 ## Monitoring
 
 `GET /api/health` returns row counts and a timestamp — useful for TTFB/load monitoring on Railway. Revisit server-side filtering if `restaurant_count` approaches ~500 or TTFB exceeds ~1s (see README Performance section).
