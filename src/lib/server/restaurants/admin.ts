@@ -360,3 +360,138 @@ export async function reportRestaurantAsChain(
 
   return updated.length === 0 ? "already_queued" : "queued";
 }
+
+/**
+ * One Reddit comment as the takedown page sees it. A comment that names several restaurants is
+ * several `mentions` rows; removal is per comment, so they are grouped and moved together.
+ */
+export interface TakedownComment {
+  threadId: string;
+  commentId: string;
+  permalink: string | null;
+  author: string;
+  body: string;
+  score: number;
+  restaurants: string[];
+  publishedRows: number;
+  takenDownRows: number;
+}
+
+type TakedownRow = {
+  thread_id: string;
+  comment_id: string;
+  permalink: string | null;
+  author: string;
+  body: string;
+  score: number;
+  restaurants: string[];
+  published_rows: number;
+  taken_down_rows: number;
+};
+
+/** Pasted permalinks often carry `?context=3` or a `#fragment`; the stored value never does. */
+export function normalizeTakedownQuery(raw: string): string {
+  const q = raw.trim();
+  if (/^https?:\/\//i.test(q)) return q.replace(/[?#].*$/, "").replace(/\/+$/, "");
+  return q;
+}
+
+/** The stored `t1_` comment id inside any reddit.com comment URL (new, old or short-form paths). */
+export function redditCommentIdFromUrl(raw: string): string | null {
+  const m = normalizeTakedownQuery(raw).match(
+    /^https?:\/\/[^/]*reddit\.com\/r\/[^/]+\/comments?\/(?:[a-z0-9]+\/(?:[^/]+\/)?)?([a-z0-9]+)$/i,
+  );
+  return m ? `t1_${m[1]}` : null;
+}
+
+function groupedCommentsQuery(where: ReturnType<typeof sql>, limit: number) {
+  return db.execute(sql`
+    SELECT
+      m.thread_id,
+      m.comment_id,
+      MAX(m.permalink) AS permalink,
+      MAX(m.author) AS author,
+      MAX(m.body) AS body,
+      MAX(m.score)::int AS score,
+      ARRAY_AGG(DISTINCT r.name ORDER BY r.name) AS restaurants,
+      COUNT(*) FILTER (WHERE m.status = 'published')::int AS published_rows,
+      COUNT(*) FILTER (WHERE m.status <> 'published')::int AS taken_down_rows
+    FROM mentions m
+    JOIN restaurants r ON r.id = m.restaurant_id
+    WHERE ${where}
+    GROUP BY m.thread_id, m.comment_id
+    ORDER BY MAX(m.score) DESC, m.thread_id, m.comment_id
+    LIMIT ${limit}
+  `);
+}
+
+function toTakedownComment(row: TakedownRow): TakedownComment {
+  return {
+    threadId: row.thread_id,
+    commentId: row.comment_id,
+    permalink: row.permalink,
+    author: row.author,
+    body: row.body,
+    score: row.score,
+    restaurants: row.restaurants,
+    publishedRows: row.published_rows,
+    takenDownRows: row.taken_down_rows,
+  };
+}
+
+/** Find comments by pasted permalink or by any text in the quote or its author. */
+export async function searchMentionsForTakedown(
+  query: string,
+  limit = 50,
+): Promise<TakedownComment[]> {
+  const q = normalizeTakedownQuery(query);
+  if (!q) return [];
+  const like = `%${q.replace(/[\\%_]/g, "\\$&")}%`;
+  const commentId = redditCommentIdFromUrl(q);
+  const result = await groupedCommentsQuery(
+    sql`(m.permalink ILIKE ${like} OR m.body ILIKE ${like} OR m.author ILIKE ${like}
+      ${commentId ? sql`OR m.comment_id = ${commentId}` : sql``})`,
+    limit,
+  );
+  return (result.rows as unknown as TakedownRow[]).map(toTakedownComment);
+}
+
+/** Comments with at least one removed row, so a takedown can be undone without searching. */
+export async function loadTakenDownMentions(
+  limit = 200,
+): Promise<TakedownComment[]> {
+  const result = await groupedCommentsQuery(sql`m.status <> 'published'`, limit);
+  return (result.rows as unknown as TakedownRow[]).map(toTakedownComment);
+}
+
+async function setCommentStatus(
+  threadId: string,
+  commentId: string,
+  status: "published" | "taken_down",
+): Promise<number> {
+  const updated = await db
+    .update(mentions)
+    .set({ status })
+    .where(
+      and(eq(mentions.threadId, threadId), eq(mentions.commentId, commentId)),
+    )
+    .returning({ id: mentions.id });
+  if (updated.length === 0) throw new Error("Mention not found.");
+  return updated.length;
+}
+
+/** Remove a comment's quote from the public site (every restaurant it names). Returns rows changed. */
+export function takeDownMention(
+  threadId: string,
+  commentId: string,
+): Promise<number> {
+  return setCommentStatus(threadId, commentId, "taken_down");
+}
+
+/** Put a taken-down comment's quote back on the public site. Returns rows changed. */
+export function restoreMention(
+  threadId: string,
+  commentId: string,
+): Promise<number> {
+  return setCommentStatus(threadId, commentId, "published");
+}

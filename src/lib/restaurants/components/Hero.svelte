@@ -23,7 +23,6 @@
 				{subredditCount} subreddits{/if} and {totalCommentsLabel} community comments.
 		{/if}
 	</p>
-	<p class="attribution">Built with SvelteKit, hosted on <a href="https://railway.com?referralCode=QCz9lp" target="_blank" rel="noopener noreferrer">Railway</a></p>
 </section>
 
 <style>
@@ -52,47 +51,8 @@
 		margin: 0 0 0.5rem;
 	}
 
-	a {
-		color: #c43700;
-		text-decoration: underline;
-		text-decoration-thickness: 1px;
-		text-underline-offset: 2px;
-		font-weight: 500;
-		border-radius: 2px;
-		transition: text-decoration-thickness 0.15s ease, background 0.15s ease, color 0.15s ease;
-	}
-
-	a:hover {
-		text-decoration-thickness: 2px;
-	}
-
-	a:active {
-		background: #fff0eb;
-	}
-
-	.attribution {
-		font-size: 0.75rem;
-		color: #7a6e63;
-		margin-top: 0.25rem;
-	}
-
-	.attribution a {
-		font-size: 0.75rem;
-		color: #7a6e63;
-		text-decoration: underline;
-	}
-
-	.attribution a:hover {
-		color: #c43700;
-	}
-
-	.attribution a:active {
-		color: #c43700;
-		background: #fff0eb;
-	}
-
 	/* Desktop explorer is a locked viewport — keep the intro compact so map + list
-	   get the space. Short laptop windows hide the attribution line entirely. */
+	   get the space. */
 	@media (min-width: 1024px) {
 		.hero {
 			padding: 0.85rem 1.5rem 0.4rem;
@@ -107,16 +67,6 @@
 			font-size: 0.85rem;
 			line-height: 1.4;
 			margin: 0 0 0.2rem;
-		}
-
-		.attribution {
-			margin-top: 0;
-		}
-	}
-
-	@media (min-width: 1024px) and (max-height: 800px) {
-		.attribution {
-			display: none;
 		}
 	}
 
@@ -137,9 +87,5 @@
 		}
 
 		/* Do not line-clamp .summary: 320px needs 3 lines; a 2-line clamp cuts mid-number. */
-
-		.attribution {
-			display: none;
-		}
 	}
 </style>

@@ -38,9 +38,6 @@ describe("Hero", () => {
     expect(
       screen.getByText(/one reddit thread and 1,234 community comments/i),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole("link", { name: /railway/i }),
-    ).toHaveAttribute("href", expect.stringContaining("railway.com"));
   });
 
   it("mentions multiple threads and subreddits in the summary", () => {
@@ -59,21 +56,6 @@ describe("Hero", () => {
         /2 reddit threads across 2 subreddits and 5,000 community comments/i,
       ),
     ).toBeInTheDocument();
-  });
-
-  it("gives hero links pressed feedback without changing the Railway href", () => {
-    render(Hero, { meta: singleThreadMeta });
-    expect(screen.getByRole("link", { name: /railway/i })).toHaveAttribute(
-      "href",
-      expect.stringContaining("railway.com"),
-    );
-    expect(heroSource).toMatch(/a:active\s*\{/);
-    expect(heroSource).toMatch(/\.attribution a:active\s*\{/);
-    expect(heroSource).toContain("#fff0eb");
-    expect(heroSource).toContain("#c43700");
-    expect(heroSource).toMatch(
-      /@media \(max-width: 1023px\)[\s\S]*\.attribution \{[\s\S]*display: none/,
-    );
   });
 
   it("lets the mobile summary wrap instead of clamping mid-sentence", () => {

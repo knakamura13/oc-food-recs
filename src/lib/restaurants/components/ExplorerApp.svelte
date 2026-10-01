@@ -37,6 +37,7 @@
 	import RestaurantList from '$lib/restaurants/components/RestaurantList.svelte';
 	import BackToTop from '$lib/restaurants/components/BackToTop.svelte';
 	import type { ExplorerPageData } from '$lib/restaurants/explorer-page-data';
+	import { trackEvent } from '$lib/events';
 
 	let {
 		data,
@@ -258,6 +259,7 @@
 
 	function openMobileMap(opener: HTMLButtonElement) {
 		if (!isMobileViewport()) return;
+		trackEvent('map_opened');
 		mapOpener = opener;
 		snapMobileShellToTop();
 		mapExpanded = true;

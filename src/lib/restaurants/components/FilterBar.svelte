@@ -15,6 +15,7 @@
 	import { onMount } from 'svelte';
 	import type { Attachment } from 'svelte/attachments';
 	import { toast } from '$lib/toast';
+	import { trackEvent, type EventProps } from '$lib/events';
 	import RecencyHistogram from './RecencyHistogram.svelte';
 	import { MOM_AND_POP_HELP } from '$lib/restaurants/mom-and-pop';
 
@@ -76,10 +77,17 @@
 	);
 	const isCustomRecency = $derived(appState.freshnessCutoff !== null && !isNewSinceVisit);
 
+	function trackFilterApplied(kind: EventProps<'filter_applied'>['kind']) {
+		trackEvent('filter_applied', { kind });
+	}
+
 	function toggleNewSinceVisit() {
 		if (lastVisitMs === null) return;
 		if (isNewSinceVisit) setFreshnessFilter(null);
-		else setFreshnessFilter(lastVisitMs, 'visit');
+		else {
+			trackFilterApplied('new_since_visit');
+			setFreshnessFilter(lastVisitMs, 'visit');
+		}
 	}
 
 	function closeAllDropdowns() {
@@ -220,6 +228,7 @@
 		if (idx >= 0) {
 			appState.activeCuisines = appState.activeCuisines.filter((c) => c !== cuisine);
 		} else {
+			trackFilterApplied('cuisine');
 			appState.activeCuisines = [...appState.activeCuisines, cuisine];
 		}
 		if (isCompactFilterViewport()) dismissOpenFilter();
@@ -230,6 +239,7 @@
 		if (idx >= 0) {
 			appState.activeCities = appState.activeCities.filter((c) => c !== city);
 		} else {
+			trackFilterApplied('city');
 			appState.activeCities = [...appState.activeCities, city];
 		}
 		if (isCompactFilterViewport()) dismissOpenFilter();
@@ -240,6 +250,7 @@
 		if (idx >= 0) {
 			appState.activeSubreddits = appState.activeSubreddits.filter((s) => s !== subreddit);
 		} else {
+			trackFilterApplied('subreddit');
 			appState.activeSubreddits = [...appState.activeSubreddits, subreddit];
 		}
 		if (isCompactFilterViewport()) dismissOpenFilter();
@@ -254,6 +265,7 @@
 			toast.error('Could not copy share link');
 			return;
 		}
+		trackEvent('share_clicked', { surface: 'view' });
 		navigator.clipboard.writeText(window.location.href).then(
 			() => toast.success('Share link copied to clipboard!'),
 			() => toast.error('Could not copy share link')
@@ -561,7 +573,10 @@
 			aria-pressed={appState.showMomAndPop}
 			title={MOM_AND_POP_HELP}
 			aria-label="Mom & pop. {MOM_AND_POP_HELP}"
-			onclick={() => (appState.showMomAndPop = !appState.showMomAndPop)}
+			onclick={() => {
+				if (!appState.showMomAndPop) trackFilterApplied('mom_and_pop');
+				appState.showMomAndPop = !appState.showMomAndPop;
+			}}
 		>
 			{#if appState.showMomAndPop}
 				<span aria-hidden="true">✓</span>
@@ -617,7 +632,10 @@
 				class="dropdown-trigger mapped-only-toggle saved-toggle"
 				class:has-active={appState.showSavedOnly}
 				aria-pressed={appState.showSavedOnly}
-				onclick={() => (appState.showSavedOnly = !appState.showSavedOnly)}
+				onclick={() => {
+					if (!appState.showSavedOnly) trackFilterApplied('saved');
+					appState.showSavedOnly = !appState.showSavedOnly;
+				}}
 			>
 				<Bookmark size={13} aria-hidden="true" />
 				Saved
@@ -650,7 +668,10 @@
 				aria-label={appState.showUnmapped
 					? `Including ${unmappedCount} unmapped ${unmappedCount === 1 ? 'restaurant' : 'restaurants'} in the list`
 					: `Include ${unmappedCount} unmapped ${unmappedCount === 1 ? 'restaurant' : 'restaurants'} in the list`}
-				onclick={() => (appState.showUnmapped = !appState.showUnmapped)}
+				onclick={() => {
+					if (!appState.showUnmapped) trackFilterApplied('unmapped');
+					appState.showUnmapped = !appState.showUnmapped;
+				}}
 			>
 				{#if appState.showUnmapped}
 					<span aria-hidden="true">✓</span>

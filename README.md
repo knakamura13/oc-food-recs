@@ -63,7 +63,7 @@ The database is populated by the Python pipeline in [`scripts/`](scripts/) (driv
 3. **Geocode** each restaurant (Google Geocoding with a Nominatim fallback), caching results in `geocode_cache`
 4. **Upsert** threads, restaurants, and mentions into Postgres, deduplicating restaurants across threads
 
-Ingestion runs from the CLI ([`reddit_pipeline.py`](scripts/reddit_pipeline.py)). Admin routes handle geocode corrections ([`/admin/geocode`](src/routes/admin/geocode)) and chain/corporate exclusions ([`/admin/exclusions`](src/routes/admin/exclusions)). See [`CONTRIBUTING.md`](CONTRIBUTING.md) and [`docs/INGEST_TRACKING.md`](docs/INGEST_TRACKING.md) for ingest workflow.
+Ingestion runs from the CLI ([`reddit_pipeline.py`](scripts/reddit_pipeline.py)). Admin routes handle geocode corrections ([`/admin/geocode`](src/routes/admin/geocode)) and chain/corporate exclusions ([`/admin/exclusions`](src/routes/admin/exclusions)). Removal requests from [`/about`](src/routes/about) are honoured at [`/admin/mentions`](src/routes/admin/mentions) (sets `mentions.status = 'taken_down'`). Set `EVENTS_ENABLED=1` to count seven anonymous interactions into the `events` table (see [`src/lib/events.ts`](src/lib/events.ts) for the allowlist); it is off by default. See [`CONTRIBUTING.md`](CONTRIBUTING.md) and [`docs/INGEST_TRACKING.md`](docs/INGEST_TRACKING.md) for ingest workflow.
 
 ---
 

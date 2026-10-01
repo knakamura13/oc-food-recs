@@ -11,6 +11,7 @@
 	} from '$lib/restaurants/search-restaurants';
 	import { normalizeSearchText } from '$lib/restaurants/normalize-name';
 	import { SEARCH_DEBOUNCE_MS, scheduleDebounced } from '$lib/debounce';
+	import { trackEvent } from '$lib/events';
 
 	interface Props {
 		restaurants: Restaurant[];
@@ -177,9 +178,11 @@
 		const option = options[index];
 		if (!option) return;
 		if (option.kind === 'filter') {
+			trackEvent('filter_applied', { kind: 'search_suggestion' });
 			applyFilterMatch(option.match);
 			return;
 		}
+		trackEvent('search_submitted', { zero_results: false });
 		selectResult(option.restaurant);
 	}
 
@@ -187,6 +190,7 @@
 		// Enter must act on the query as typed, not the debounced copy.
 		debouncedQuery = appState.searchQuery;
 		if (!queryTrimmed) return;
+		if (options.length === 0) trackEvent('search_submitted', { zero_results: true });
 
 		// The visibly highlighted row wins; with nothing highlighted, the first row does.
 		const index = highlightIndex >= 0 ? highlightIndex : 0;

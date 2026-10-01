@@ -2,6 +2,7 @@
 	import { Bookmark, ChevronRight, Flag, MapPin } from 'lucide-svelte';
 	import { getTrimmedSnippet } from '$lib/restaurants/snippet';
 	import { googleMapsUrl } from '$lib/restaurants/maps-url';
+	import { trackEvent } from '$lib/events';
 	import { tick, untrack } from 'svelte';
 	import type { Attachment } from 'svelte/attachments';
 	import {
@@ -293,6 +294,7 @@
 		if (appState.selectedRestaurantSlug === slug) {
 			appState.selectedRestaurantSlug = null;
 		} else {
+			trackEvent('card_expanded');
 			appState.selectedRestaurantSlug = slug;
 			if (restaurant.lat != null && restaurant.lng != null) {
 				appState.mapTarget = { slug, lat: restaurant.lat, lng: restaurant.lng };
@@ -377,6 +379,7 @@
 	}
 
 	async function copyShareLink(restaurant: Restaurant) {
+		trackEvent('share_clicked', { surface: 'card' });
 		try {
 			await navigator.clipboard.writeText(shareUrl(restaurant.slug));
 			toast.success('Link copied!');
@@ -450,6 +453,7 @@
 		e.stopPropagation();
 		const saved = toggleSaved(restaurant.slug);
 		if (saved) {
+			trackEvent('restaurant_saved');
 			toast.success(`Saved ${restaurant.name}`);
 		} else {
 			toast.info(`Removed ${restaurant.name} from saved`);
@@ -898,6 +902,7 @@
 											<a
 												class="maps-link"
 												href={googleMapsUrl(restaurant)}
+												onclick={() => trackEvent('maps_clicked')}
 												target="_blank"
 												rel="noopener noreferrer"
 												aria-label="Open {restaurant.name} in Google Maps"
