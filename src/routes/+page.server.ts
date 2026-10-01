@@ -17,6 +17,7 @@ import {
   type SnippetCandidate,
 } from "$lib/restaurants/top-comment-snippet";
 import { sql } from "drizzle-orm";
+import { PUBLIC_CACHE_CONTROL } from "$lib/server/cache-control";
 import type { PageServerLoad } from "./$types";
 
 interface RestaurantRow {
@@ -320,7 +321,9 @@ async function loadPageMeta(
 	);
 }
 
-export const load: PageServerLoad = async ({ url }) => {
+export const load: PageServerLoad = async ({ url, setHeaders }) => {
+  // Edge-cacheable (Railway CDN): data edits reach visitors within the s-maxage window.
+  setHeaders({ "cache-control": PUBLIC_CACHE_CONTROL });
   // Read URL in the load body so SvelteKit tracks search-param dependencies.
   // Keep the full dataset streamed while the three summary aggregates resolve,
   // so the page can render crawlable head metadata before the explorer mounts.

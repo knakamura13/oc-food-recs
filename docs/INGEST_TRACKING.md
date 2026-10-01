@@ -26,6 +26,7 @@ For each new thread HTML export:
 ```sh
 # Drop HTML exports in data/uningested-threads/, then:
 npm run pipeline:ingest-batch
+railway cdn purge html                    # public pages are edge-cached for up to 5 min; purge so new data shows now
 
 python3 scripts/reingest_all_threads.py   # re-ingest all known threads
 npm run pipeline:geocode-health           # geocode cache health
@@ -38,7 +39,7 @@ Track progress in [GitHub issue #18](https://github.com/knakamura13/oc-food-recs
 
 1. Export/save the Reddit thread HTML.
 2. Place it in [`data/uningested-threads/`](../data/uningested-threads/) (see README there).
-3. Run `npm run pipeline:ingest-batch` (or the per-thread checklist below).
+3. Run `npm run pipeline:ingest-batch`, then `railway cdn purge html` (or the per-thread checklist below).
 4. Verify on the public site; update issue #18 with the new thread row and counts from `GET /api/health`.
 
 ## Maintenance
