@@ -4,6 +4,7 @@ import {
 	hasPageMetaFilters,
 	type PageMetaAggregates
 } from '$lib/restaurants/page-meta';
+import { countsTowardScore } from '$lib/server/restaurants/counts-toward-score';
 import { db } from "$lib/server/db";
 import type {
   Mention,
@@ -63,6 +64,7 @@ async function loadHomePage(
 			FROM mentions m
 			JOIN threads t ON t.id = m.thread_id
 			WHERE t.included_in_publish = true
+				AND ${countsTowardScore('m')}
 		),
 		ranked_mentions AS (
 			-- Rank each author's mentions of a restaurant by score so the same

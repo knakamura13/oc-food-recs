@@ -91,6 +91,8 @@ export const mentions = pgTable(
 		role: text('role').notNull(), // 'primary' | 'endorsement'
 		classification: text('classification'), // 'dish_rec' | 'personal_story' | 'endorsement' | 'filler' | 'question' | NULL (primaries)
 		commentDate: timestamp('comment_date', { withTimezone: true }), // when the Reddit comment was authored (NULL for legacy rows awaiting backfill)
+		// Whether the body names this restaurant (port of namesRestaurant()). NULL = not computed yet.
+		namesRestaurant: boolean('names_restaurant'),
 		createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 	},
 	(table) => ({
