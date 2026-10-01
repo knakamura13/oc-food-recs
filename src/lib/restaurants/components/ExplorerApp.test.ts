@@ -94,6 +94,7 @@ function makeHomeData(): ExplorerPageData {
       },
     ],
     total_comments_processed: 10,
+    newest_comment_date: null,
   };
   return {
     dataset: { restaurants, meta },

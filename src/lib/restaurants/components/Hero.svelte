@@ -10,6 +10,15 @@
 	let threadCount = $derived(meta.source_threads.length);
 	let subredditCount = $derived(new Set(meta.source_threads.map((t) => t.subreddit)).size);
 	let totalCommentsLabel = $derived(meta.total_comments_processed.toLocaleString());
+	let newestLabel = $derived(
+		meta.newest_comment_date
+			? new Date(meta.newest_comment_date).toLocaleDateString('en-US', {
+					month: 'short',
+					year: 'numeric',
+					timeZone: 'UTC'
+				})
+			: null
+	);
 </script>
 
 <section class="hero">
@@ -22,6 +31,7 @@
 			This interactive explorer pulls together {threadCount} Reddit threads{#if subredditCount > 1}{' '}across
 				{subredditCount} subreddits{/if} and {totalCommentsLabel} community comments.
 		{/if}
+		{#if newestLabel}Comments through {newestLabel}.{/if}
 	</p>
 </section>
 

@@ -6,6 +6,7 @@ interface CountRow {
   restaurant_count: number;
   thread_count: number;
   mention_count: number;
+  newest_comment_date: string | Date | null;
 }
 
 export const GET: RequestHandler = async () => {
@@ -16,7 +17,10 @@ export const GET: RequestHandler = async () => {
         (SELECT COUNT(*)::int FROM threads WHERE included_in_publish = true) AS thread_count,
         (SELECT COUNT(*)::int FROM mentions m
           JOIN threads t ON t.id = m.thread_id
-          WHERE t.included_in_publish = true) AS mention_count
+          WHERE t.included_in_publish = true) AS mention_count,
+        (SELECT MAX(m.comment_date) FROM mentions m
+          JOIN threads t ON t.id = m.thread_id
+          WHERE t.included_in_publish = true AND m.status = 'published') AS newest_comment_date
     `);
 
     const row = (result.rows[0] ?? {}) as Partial<CountRow>;
@@ -28,6 +32,9 @@ export const GET: RequestHandler = async () => {
         restaurant_count: row.restaurant_count ?? 0,
         thread_count: row.thread_count ?? 0,
         mention_count: row.mention_count ?? 0,
+        newest_comment_date: row.newest_comment_date
+          ? new Date(row.newest_comment_date).toISOString()
+          : null,
       }),
       {
         headers: {

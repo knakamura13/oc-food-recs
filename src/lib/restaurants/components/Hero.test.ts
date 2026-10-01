@@ -22,6 +22,7 @@ const thread = {
 
 const singleThreadMeta: RestaurantData["meta"] = {
   total_comments_processed: 1234,
+  newest_comment_date: null,
   source_threads: [thread],
 };
 
@@ -44,6 +45,7 @@ describe("Hero", () => {
     render(Hero, {
       meta: {
         total_comments_processed: 5000,
+        newest_comment_date: null,
         source_threads: [
           thread,
           { ...thread, id: "t2", subreddit: "food" },
@@ -56,6 +58,17 @@ describe("Hero", () => {
         /2 reddit threads across 2 subreddits and 5,000 community comments/i,
       ),
     ).toBeInTheDocument();
+  });
+
+  it("shows how recent the newest comment is, and omits it when unknown", () => {
+    const { unmount } = render(Hero, {
+      meta: { ...singleThreadMeta, newest_comment_date: "2026-06-08T23:18:08.220Z" },
+    });
+    expect(screen.getByText(/comments through jun 2026\./i)).toBeInTheDocument();
+    unmount();
+
+    render(Hero, { meta: singleThreadMeta });
+    expect(screen.queryByText(/comments through/i)).not.toBeInTheDocument();
   });
 
   it("lets the mobile summary wrap instead of clamping mid-sentence", () => {

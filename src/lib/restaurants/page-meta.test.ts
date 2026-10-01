@@ -11,6 +11,7 @@ import { makeRestaurant } from './test-utils';
 const meta = {
   source_threads: [{ id: "t1", subreddit: "orangecounty" } as never],
   total_comments_processed: 100,
+  newest_comment_date: null,
 };
 
 const restaurants = [
