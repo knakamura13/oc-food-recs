@@ -812,5 +812,215 @@ class SourceValidationTest(unittest.TestCase):
             self.assertFalse((Path(folder) / 'summary.json').exists())
 
 
+class ListedLocationsTest(unittest.TestCase):
+    def fixture(self, count=6):
+        entries = [
+            {
+                'source': 0,
+                'quote': f'Synthetic Grill {100 + i} Main Street, Tustin. Open daily.',
+                'address': f'{100 + i} Main Street',
+                'city': 'Tustin',
+                'operating': True,
+            }
+            for i in range(count)
+        ]
+        result = {
+            'decision': 'chain',
+            'count': count,
+            'identity_verified': True,
+            'complete': True,
+            'locations': entries,
+        }
+        return result, [' '.join(e['quote'] for e in entries)]
+
+    def test_six_quoted_distinct_addresses_support_chain_without_numeric_total(self):
+        from chain_sources import model_evidence
+
+        result, sources = self.fixture()
+        evidence = model_evidence('S6', result, sources)
+        self.assertEqual(cs.decide(evidence)['decision'], 'chain')
+        self.assertEqual(len(evidence[0]['locations']), 6)
+        self.assertFalse(evidence[0]['complete'])
+
+    def test_address_list_accepts_alphanumeric_numbers_and_via_streets(self):
+        from chain_sources import model_evidence
+
+        result, sources = self.fixture()
+        for entry, address in zip(
+            result['locations'],
+            [
+                '400B Camino de Estrella',
+                '821 Via Suerte',
+                '120 Avenida Pico',
+                '27124 Paseo Espada',
+                '34069 Doheny Park Rd.',
+                '2 Ritz Carlton Drive',
+            ],
+        ):
+            entry.update(address=address, quote=f'{address}, Tustin. Open daily.')
+        sources = [' '.join(e['quote'] for e in result['locations'])]
+        self.assertEqual(
+            cs.decide(model_evidence('S6', result, sources))['decision'], 'chain'
+        )
+
+    def test_future_opening_entry_cannot_establish_six_operating_sites(self):
+        from chain_sources import model_evidence
+
+        result, sources = self.fixture()
+        result['locations'][-1]['quote'] = '105 Main Street, Tustin. Opening Fall 2026.'
+        sources = [' '.join(e['quote'] for e in result['locations'])]
+        self.assertEqual(model_evidence('S6', result, sources), [])
+
+    def test_evaluation_preserves_each_location_source_url(self):
+        import chain_evaluate as ce
+        import json, tempfile
+
+        result, texts = self.fixture()
+
+        class RecordedResponse:
+            def gemma(self, prompt):
+                self.prompt = prompt
+                return {
+                    'seconds': 0,
+                    'response': {
+                        'done': True,
+                        'message': {'content': json.dumps(result)},
+                    },
+                }
+
+        model = RecordedResponse()
+        row = {
+            'id': 1,
+            'name': 'Synthetic Grill',
+            'location': 'Tustin',
+            'evidence': [],
+            'decision': 'unknown',
+        }
+        source = {
+            'kind': 'S5',
+            'url': 'https://example.com/locations',
+            'text': texts[0],
+            'official_source': True,
+            'truncated': False,
+        }
+        with tempfile.TemporaryDirectory() as folder:
+            ce.gemma_unresolved([row], {1: [source]}, model, Path(folder))
+        self.assertEqual(row['decision'], 'chain')
+        self.assertTrue(
+            all(e['url'] == source['url'] for e in row['evidence'][0]['locations'])
+        )
+        self.assertIn('"official_source": true', model.prompt)
+
+    def test_duplicate_addresses_across_sources_do_not_inflate_count(self):
+        from chain_sources import model_evidence
+
+        result, sources = self.fixture(5)
+        duplicate = dict(
+            result['locations'][0],
+            source=1,
+            address='100 Main St.',
+            quote='Synthetic Grill 100 Main St., Tustin. Open daily.',
+        )
+        result['locations'].append(duplicate)
+        result['count'] = 6
+        sources.append(duplicate['quote'])
+        self.assertEqual(model_evidence('S6', result, sources), [])
+
+    def test_mailing_suffix_and_city_state_variations_do_not_duplicate_branches(self):
+        from chain_sources import model_evidence
+
+        for address, city in [
+            ('100 Main St., Tustin CA 92780', 'Tustin'),
+            ('100 Main Street', 'Tustin CA'),
+            ('100 Main St., tustin ca 92780', 'tustin ca'),
+        ]:
+            with self.subTest(address=address, city=city):
+                result, sources = self.fixture(5)
+                duplicate = dict(
+                    result['locations'][0],
+                    source=1,
+                    address=address,
+                    city=city,
+                    quote=f'{address}, {city}. Open daily.',
+                )
+                result['locations'].append(duplicate)
+                result['count'] = 6
+                sources.append(duplicate['quote'])
+                self.assertEqual(model_evidence('S6', result, sources), [])
+
+    def test_closed_planned_and_ungrounded_entries_cannot_reach_six(self):
+        from chain_sources import model_evidence
+
+        for change in [
+            {'operating': False},
+            {'quote': 'Synthetic Grill 105 Main Street, Tustin. Coming soon.'},
+            {'quote': 'Synthetic Grill 105 Main Street, Tustin. Permanently closed.'},
+            {'address': '999 Invented Street'},
+            {'city': 'Irvine'},
+            {'source': True},
+        ]:
+            with self.subTest(change=change):
+                result, sources = self.fixture()
+                result['locations'][-1].update(change)
+                if 'quote' in change:
+                    sources = [' '.join(e['quote'] for e in result['locations'])]
+                self.assertEqual(model_evidence('S6', result, sources), [])
+
+    def test_list_is_not_a_complete_small_worldwide_total(self):
+        from chain_sources import model_evidence
+
+        result, sources = self.fixture(5)
+        result['decision'] = 'independent'
+        self.assertEqual(model_evidence('S6', result, sources), [])
+
+    def test_boolean_source_index_cannot_ground_literal_count(self):
+        from chain_sources import grounded_count
+
+        self.assertFalse(
+            grounded_count(
+                {
+                    'source': True,
+                    'count': 6,
+                    'quote': 'We operate six locations worldwide.',
+                },
+                ['other source', 'We operate six locations worldwide.'],
+            )
+        )
+
+
+class WebsiteTraversalTest(unittest.TestCase):
+    def test_location_links_in_navigation_are_collected_before_cleaning_text(self):
+        import chain_sources as src
+        import tempfile
+        from unittest.mock import patch
+
+        class Response:
+            is_redirect = False
+            headers = {'Content-Type': 'text/html'}
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                pass
+
+            def raise_for_status(self):
+                pass
+
+            def iter_content(self, size):
+                yield b'<nav><a href="/locations/">Locations</a><a href="/our-cafes/">Our Cafes</a><a href="/stores/">Stores</a></nav><main>Synthetic Grill</main><footer>Copyright Synthetic Grill</footer>'
+
+        with (
+            tempfile.TemporaryDirectory() as folder,
+            patch.object(src, 'public_url'),
+            patch.object(src.requests, 'get', return_value=Response()),
+        ):
+            result = src.website_text('https://example.com/', Path(folder))
+        self.assertIn('https://example.com/locations/', result['links'])
+        self.assertIn('https://example.com/our-cafes/', result['links'])
+        self.assertIn('https://example.com/stores/', result['links'])
+        self.assertIn('Copyright Synthetic Grill', result['text'])
+
+
 if __name__ == '__main__':
     unittest.main()

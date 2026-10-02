@@ -20,6 +20,7 @@ from chain_scorer import (
     website_domain,
 )
 from chain_sources import (
+    WEBSITE_EXTRACT_VERSION,
     atp_places,
     download_nsi,
     explicit_location_counts,
@@ -150,7 +151,9 @@ def deterministic_rows(restaurants, matches, global_rows, nsi, atp):
 def fetch_websites(rows, cache, output, workers):
     path = output / 'websites.json'
     if path.exists():
-        return json.loads(path.read_text())
+        cached = json.loads(path.read_text())
+        if all(w.get('extract_version') == WEBSITE_EXTRACT_VERSION for w in cached):
+            return cached
     urls = sorted(
         {
             w
@@ -408,10 +411,19 @@ def gemma_unresolved(rows, contexts, models, output):
                 for e in r['evidence']
                 if e.get('count') is not None or e['kind'] == 'S3'
             ][:12],
-            'sources': [{'index': i, 'text': t} for i, t in enumerate(budget)],
+            'sources': [
+                {
+                    'index': i,
+                    'text': t,
+                    'kind': chosen[i]['kind'],
+                    'url': chosen[i].get('url'),
+                    'official_source': chosen[i].get('official_source') is True,
+                }
+                for i, t in enumerate(budget)
+            ],
         }
         prompt = (
-            'Judge only the supplied evidence for this named business. Six or more operating locations anywhere means chain. Five or fewer means independent only when an official source explicitly gives a complete worldwide current total. Family ownership, an incomplete directory and missing evidence do not prove independent. Reports are not evidence. If insufficient or conflicting, abstain. Return JSON {"decision":"chain|independent|unknown","count":integer or null,"complete":boolean,"identity_verified":boolean,"source":source index or null,"quote":"exact source excerpt containing the location count"}.\n'
+            'Judge only the supplied evidence for this named business. Six or more operating locations anywhere means chain. Five or fewer means independent only when an official source explicitly gives a complete worldwide current total. Family ownership, an incomplete directory and missing evidence do not prove independent. Reports are not evidence. If insufficient or conflicting, abstain. Return JSON {"decision":"chain|independent|unknown","count":integer or null,"complete":boolean,"identity_verified":boolean,"source":source index or null,"quote":"exact source excerpt containing the location count"}. A chain can also be established by a list of at least six distinct currently operating street addresses of this same business. In that case include "locations":[{"source":index,"quote":"exact excerpt for this individual location","address":"exact street address from that excerpt","city":"exact city from that excerpt","operating":true}] and set count to the number of distinct entries. Do not duplicate branches across pages, units or spelling variations; exclude closed, planned and coming-soon entries. A list alone never proves independence or completeness.\n'
             + json.dumps(bundle, ensure_ascii=False)
         )
         result = models.gemma(prompt)
@@ -435,6 +447,8 @@ def gemma_unresolved(rows, contexts, models, output):
                     and not source.get('truncated')
                     and len(source['text']) <= 5000
                 )
+                for location in e.get('locations', []):
+                    location['url'] = chosen[location['source']].get('url')
                 e['url'] = chosen[e['source']].get('url')
                 e['official_source'] = source.get('official_source') is True
             r['evidence'] += evidence

@@ -11,7 +11,7 @@ import socket
 import time
 from collections import defaultdict
 from pathlib import Path
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import urldefrag, urljoin, urlsplit
 
 import duckdb
 import psycopg
@@ -28,6 +28,7 @@ from chain_scorer import (
 )
 
 RELEASE = '2026-09-23.1'
+WEBSITE_EXTRACT_VERSION = 3
 OVERTURE = f's3://overturemaps-us-west-2/release/{RELEASE}/theme=places/type=place/*'
 NSI_PATHS = [
     f'data/brands/amenity/{x}.json'
@@ -182,6 +183,7 @@ def grounded_count(result, sources):
         and not isinstance(count, bool)
         and count > 0
         and isinstance(index, int)
+        and not isinstance(index, bool)
         and 0 <= index < len(sources)
         and isinstance(quote, str)
         and len(quote.strip()) >= 12
@@ -190,10 +192,118 @@ def grounded_count(result, sources):
     )
 
 
+def grounded_locations(result, sources):
+    """Ground a positive lower bound in distinct quoted street-address entries.
+
+    A list does not establish completeness. Location identity and current operation
+    still require the model's semantic judgment; exact excerpts and conservative
+    address normalization prevent fabricated entries and repeated page sections.
+    """
+    count, entries = result.get('count'), result.get('locations')
+    if (
+        type(count) is not int
+        or count < 6
+        or not isinstance(entries, list)
+        or len(entries) != count
+    ):
+        return []
+    abbreviations = {
+        'street': 'st',
+        'avenue': 'ave',
+        'boulevard': 'blvd',
+        'road': 'rd',
+        'drive': 'dr',
+        'lane': 'ln',
+        'court': 'ct',
+        'parkway': 'pkwy',
+        'highway': 'hwy',
+        'place': 'pl',
+        'terrace': 'ter',
+        'north': 'n',
+        'south': 's',
+        'east': 'e',
+        'west': 'w',
+    }
+    seen = set()
+    for entry in entries:
+        if not isinstance(entry, dict):
+            return []
+        index, quote = entry.get('source'), entry.get('quote')
+        address, city = entry.get('address'), entry.get('city')
+        if (
+            type(index) is not int
+            or not 0 <= index < len(sources)
+            or not all(isinstance(v, str) and v.strip() for v in (quote, address, city))
+            or quote not in sources[index]
+            or address not in quote
+            or city not in quote
+            or entry.get('operating') is not True
+            or re.search(
+                r'\b(?:closed|coming soon|planned|opening(?!\s+(?:hours|times))|future location)\b',
+                quote,
+                re.I,
+            )
+        ):
+            return []
+        # Units in a shared building are not separate restaurant branches.
+        street = re.split(r'\b(?:suite|ste|unit)\b|#', address, maxsplit=1, flags=re.I)[
+            0
+        ]
+        city_name = re.sub(r'\s+\d{5}(?:-\d{4})?\s*$', '', city.strip())
+        city_name = re.sub(
+            r'[,\s]+(?:[A-Z]{2}|California)\s*$', '', city_name, flags=re.I
+        )
+        street = re.sub(
+            r'[,\s]+'
+            + re.escape(city_name)
+            + r'(?:[,\s]+(?:[A-Z]{2}|California))?(?:\s+\d{5}(?:-\d{4})?)?\s*$',
+            '',
+            street,
+            flags=re.I,
+        )
+        tokens = re.findall(r'[a-z0-9]+', street.lower())
+        tokens = [abbreviations.get(token, token) for token in tokens]
+        if (
+            not tokens
+            or not re.fullmatch(r'\d+[a-z]?', tokens[0])
+            or len(tokens) < 3
+            or not any(
+                token
+                in {
+                    'st',
+                    'ave',
+                    'blvd',
+                    'rd',
+                    'dr',
+                    'ln',
+                    'ct',
+                    'pkwy',
+                    'hwy',
+                    'pl',
+                    'ter',
+                    'way',
+                    'paseo',
+                    'camino',
+                    'calle',
+                    'avenida',
+                    'via',
+                }
+                for token in tokens[1:]
+            )
+        ):
+            return []
+        key = (tuple(tokens), tuple(re.findall(r'[a-z0-9]+', city_name.lower())))
+        if key in seen:
+            return []
+        seen.add(key)
+    return entries
+
+
 def model_evidence(kind, result, sources):
     if kind == 'S6' and result.get('decision') not in {'chain', 'independent'}:
         return []
-    if not grounded_count(result, sources):
+    locations = grounded_locations(result, sources) if kind == 'S6' else []
+    if not grounded_count(result, sources) and not locations:
         return []
     if kind == 'S6' and (result['decision'] == 'chain') != (result['count'] >= 6):
         return []
@@ -203,10 +313,11 @@ def model_evidence(kind, result, sources):
             'count': result['count'],
             'scope': 'worldwide',
             'identity_verified': result.get('identity_verified') is True,
-            'complete': result.get('complete') is True,
+            'complete': result.get('complete') is True and not locations,
             'supported': True,
-            'quote': result['quote'],
-            'source': result['source'],
+            'quote': locations[0]['quote'] if locations else result['quote'],
+            'source': locations[0]['source'] if locations else result['source'],
+            **({'locations': locations} if locations else {}),
         }
     ]
 
@@ -456,8 +567,10 @@ def website_text(url, cache):
     key = hashlib.sha256(url.encode()).hexdigest()
     path = cache / 'websites' / f'{key}.json'
     if path.exists():
-        return json.loads(path.read_text())
-    result = {'requested_url': url}
+        cached = json.loads(path.read_text())
+        if cached.get('extract_version') == WEBSITE_EXTRACT_VERSION:
+            return cached
+    result = {'requested_url': url, 'extract_version': WEBSITE_EXTRACT_VERSION}
     try:
         for _ in range(5):
             public_url(url)
@@ -485,24 +598,39 @@ def website_text(url, cache):
                     if size >= 1_000_000:
                         break
                 soup = BeautifulSoup(b''.join(chunks), 'html.parser')
-                for el in soup(['script', 'style', 'nav', 'footer', 'noscript']):
-                    el.decompose()
-                text = soup.get_text(' ', strip=True)
                 links = [
-                    urljoin(url, a['href'])
+                    urldefrag(urljoin(url, a['href']))[0]
                     for a in soup.find_all('a', href=True)
                     if re.search(
-                        r'location|about|our.story',
+                        r'location|about|our.story|our.caf[eé]s|stores',
                         a.get_text(' ', strip=True) + ' ' + a['href'],
                         re.I,
                     )
                     and website_domain(urljoin(url, a['href'])) == website_domain(url)
                 ]
+                # Navigation often contains the only route to the locations page.
+                # Collect its links first; retain footer identity/contact evidence.
+                for el in soup(['script', 'style', 'nav', 'noscript']):
+                    el.decompose()
+                text = soup.get_text(' ', strip=True)
+
+                def priority(link):
+                    path = urlsplit(link).path.rstrip('/').lower()
+                    is_index = path.split('/')[-1] in {
+                        'locations',
+                        'our-locations',
+                        'our-cafes',
+                        'stores',
+                    }
+                    return (0 if is_index else 1 if 'location' in path else 2, link)
+
                 result.update(
                     {
                         'url': url,
                         'text': text[:30000],
-                        'links': sorted(set(links))[:6],
+                        'links': sorted(set(links) - {urldefrag(url)[0]}, key=priority)[
+                            :6
+                        ],
                         'truncated': len(text) > 30000 or size >= 1_000_000,
                         'fetched_at': time.time(),
                     }

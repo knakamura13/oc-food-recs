@@ -55,7 +55,14 @@ versions are not assumed to exist in this older backup.
   candidate is checked in its quoted context, independently of whole-page chain
   evidence; postal codes, closed sites and unrelated counts do not qualify.
 - Gemma uses local Ollama `gemma4:31b`, `think: false`, JSON, temperature 0.
-  It sees supplied evidence; a quoted count must actually occur in a source.
+  It sees supplied evidence with URLs and publisher checks; a quoted numeric count
+  must actually occur in a source. Alternatively, six or more distinct operating
+  street-address entries can establish a positive lower bound. Each entry must
+  quote its exact address and city from a supplied source. Repeated addresses,
+  unit variations, closed sites and planned locations are rejected. Lists never
+  establish completeness or independence. This validator recognizes common
+  English street suffixes and Spanish street prefixes; other address formats
+  can still use an explicit numeric count.
   Empty evidence, unsupported claims and explicit abstentions cannot exclude a row.
 
 Observed location counts are lower bounds. Six or more identity-matched locations

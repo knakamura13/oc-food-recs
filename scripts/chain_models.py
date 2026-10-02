@@ -150,7 +150,7 @@ class Models:
             'options': {
                 'temperature': 0,
                 'num_ctx': 8192,
-                'num_predict': 160 if probe else 384,
+                'num_predict': 160 if probe else 2048,
             },
             'keep_alive': '30m',
         }
