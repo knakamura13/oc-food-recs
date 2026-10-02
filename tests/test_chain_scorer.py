@@ -988,6 +988,220 @@ class ListedLocationsTest(unittest.TestCase):
         )
 
 
+class ComparisonPolicyLabelsTest(unittest.TestCase):
+    def test_observed_small_count_is_not_a_negative_worldwide_policy_label(self):
+        import chain_evaluate as ce
+
+        items = [
+            {
+                'id': 1,
+                'name': 'Synthetic Grill',
+                'city': 'Tustin',
+                'worldwide_observed_count': 5,
+                'proxy_label': False,
+            },
+            {
+                'id': 2,
+                'name': 'Synthetic Chain',
+                'city': 'Tustin',
+                'worldwide_observed_count': 6,
+                'proxy_label': True,
+            },
+        ]
+        ce.reconcile_probe_labels(items, [])
+        self.assertIsNone(items[0]['policy_label'])
+        self.assertTrue(items[1]['policy_label'])
+        self.assertEqual(
+            items[1]['policy_label_basis'], 'observed_worldwide_lower_bound'
+        )
+
+    def test_official_lower_bound_overrides_proxy_undercount_and_keeps_provenance(self):
+        import chain_evaluate as ce
+
+        items = [
+            {
+                'id': 1,
+                'name': 'Synthetic Grill',
+                'city': 'Tustin',
+                'worldwide_observed_count': 5,
+                'proxy_label': False,
+            }
+        ]
+        audits = [
+            {
+                'id': 1,
+                'name': 'Synthetic Grill',
+                'city': 'Tustin',
+                'count': 6,
+                'scope': 'worldwide',
+                'label': True,
+                'basis': 'official_operating_location_list',
+                'url': 'https://example.com/locations',
+                'note': 'Six distinct operating addresses.',
+            }
+        ]
+        ce.reconcile_probe_labels(items, audits)
+        self.assertTrue(items[0]['policy_label'])
+        self.assertFalse(items[0]['proxy_label'])
+        self.assertEqual(items[0]['policy_label_evidence']['url'], audits[0]['url'])
+
+    def test_invalid_identity_audit_removes_directory_positive_from_reference(self):
+        import chain_evaluate as ce
+
+        items = [
+            {
+                'id': 1,
+                'name': 'Synthetic Grill',
+                'city': 'Tustin',
+                'worldwide_observed_count': 60,
+                'proxy_label': True,
+            }
+        ]
+        ce.reconcile_probe_labels(
+            items,
+            [
+                {
+                    'id': 1,
+                    'name': 'Synthetic Grill',
+                    'city': 'Tustin',
+                    'count': None,
+                    'scope': 'worldwide',
+                    'label': None,
+                    'basis': 'rejected_domain_identity',
+                    'url': 'https://example.com/',
+                    'note': 'Assigned domain belongs to another business.',
+                }
+            ],
+        )
+        self.assertIsNone(items[0]['policy_label'])
+        self.assertTrue(items[0]['proxy_label'])
+
+    def test_regional_small_total_cannot_supply_a_negative_worldwide_label(self):
+        import chain_evaluate as ce
+
+        item = {
+            'id': 1,
+            'name': 'Synthetic Grill',
+            'city': 'Tustin',
+            'worldwide_observed_count': 5,
+            'proxy_label': False,
+        }
+        with self.assertRaises(ValueError):
+            ce.reconcile_probe_labels(
+                [item],
+                [
+                    {
+                        'id': 1,
+                        'name': 'Synthetic Grill',
+                        'city': 'Tustin',
+                        'count': 5,
+                        'scope': 'regional',
+                        'label': False,
+                        'complete': True,
+                        'basis': 'official_complete_total',
+                        'url': 'https://example.com/',
+                        'note': 'Five regional stores.',
+                    }
+                ],
+            )
+
+    def test_audit_must_match_probe_identity(self):
+        import chain_evaluate as ce
+
+        item = {
+            'id': 1,
+            'name': 'Synthetic Grill',
+            'city': 'Tustin',
+            'worldwide_observed_count': 5,
+            'proxy_label': False,
+        }
+        with self.assertRaises(ValueError):
+            ce.reconcile_probe_labels(
+                [item],
+                [
+                    {
+                        'id': 1,
+                        'name': 'Other Business',
+                        'city': 'Tustin',
+                        'count': 6,
+                        'scope': 'worldwide',
+                        'label': True,
+                        'basis': 'official_operating_location_list',
+                        'url': 'https://example.com/',
+                        'note': 'Six locations.',
+                    }
+                ],
+            )
+
+    def test_decisive_audit_requires_well_formed_public_provenance(self):
+        import chain_evaluate as ce
+
+        item = {
+            'id': 1,
+            'name': 'Synthetic Grill',
+            'city': 'Tustin',
+            'worldwide_observed_count': 5,
+            'proxy_label': False,
+        }
+        audit = {
+            'id': 1,
+            'name': 'Synthetic Grill',
+            'city': 'Tustin',
+            'count': 5,
+            'scope': 'worldwide',
+            'label': False,
+            'complete': True,
+            'basis': 'official_complete_total',
+            'url': 'https://example.com/',
+            'note': 'Five operating locations is the complete worldwide total.',
+        }
+        bad = [
+            {'url': 'file:///private/tmp/nonpublic.txt'},
+            {'url': 'http://localhost/'},
+            {'url': 'http://127.0.0.1/'},
+            {'url': 'http://10.0.0.1/'},
+            {'url': 'http://[::1]/'},
+            {'basis': ['anything']},
+            {'note': {'yes': True}},
+            {'checked_date_utc': 'tomorrow'},
+            {'snapshot_text_sha256': 'bad'},
+            {'basis': 'rejected_domain_identity'},
+            {'basis': 'official_operating_location_list'},
+        ]
+        for changes in bad:
+            with self.subTest(changes=changes), self.assertRaises(ValueError):
+                ce.reconcile_probe_labels([dict(item)], [dict(audit, **changes)])
+        valid = [dict(item)]
+        ce.reconcile_probe_labels(valid, [audit])
+        self.assertFalse(valid[0]['policy_label'])
+
+    def test_policy_metrics_exclude_unverified_small_counts(self):
+        import chain_evaluate as ce
+
+        items = [
+            {
+                'id': 1,
+                'policy_label': True,
+                'proxy_label': False,
+                'jev_probability': 0.1,
+                'gemma_answer': False,
+                'gemma_confidence': 1,
+            },
+            {
+                'id': 2,
+                'policy_label': None,
+                'proxy_label': False,
+                'jev_probability': 0.1,
+                'gemma_answer': False,
+                'gemma_confidence': 1,
+            },
+        ]
+        metrics = ce.comparison_metrics(items, label_key='policy_label')
+        self.assertEqual(metrics['gemma']['labeled'], 1)
+        self.assertEqual(metrics['gemma']['recall'], 0)
+        self.assertEqual(metrics['gemma']['negative_labels'], 0)
+
+
 class WebsiteTraversalTest(unittest.TestCase):
     def test_location_links_in_navigation_are_collected_before_cleaning_text(self):
         import chain_sources as src

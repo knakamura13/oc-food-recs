@@ -5,6 +5,10 @@ from __future__ import annotations
 import argparse
 import concurrent.futures
 import hashlib
+import ipaddress
+import re
+from datetime import date
+from urllib.parse import urlsplit
 import json
 import time
 from collections import defaultdict
@@ -546,6 +550,8 @@ def run(args):
     )
     report['comparison_metrics'] = comparison['metrics']
     report['comparison_unlabeled'] = comparison['unlabeled_ids']
+    report['comparison_policy_metrics'] = comparison['policy_metrics']
+    report['comparison_policy_unlabeled'] = comparison['policy_unlabeled_ids']
     write_json(output / 'summary.json', report)
     print(json.dumps(report, indent=2), flush=True)
 
@@ -570,6 +576,99 @@ def main():
     if not 1 <= args.workers <= 16:
         p.error('--workers must be between 1 and 16')
     run(args)
+
+
+def validate_probe_audit(audit):
+    if not all(
+        isinstance(audit.get(k), str) and audit[k].strip()
+        for k in ('url', 'basis', 'note')
+    ):
+        raise ValueError('Probe audit requires string public-source provenance')
+    parsed = urlsplit(audit['url'])
+    host = (parsed.hostname or '').lower().rstrip('.')
+    if parsed.scheme not in {'http', 'https'} or parsed.username or parsed.password:
+        raise ValueError('Probe audit requires a public HTTP(S) URL')
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        if not re.fullmatch(
+            r'(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]*', host
+        ) or host.endswith(('.local', '.localhost')):
+            raise ValueError('Probe audit URL must have a public host shape')
+    else:
+        if not address.is_global:
+            raise ValueError('Probe audit URL cannot use a nonpublic address')
+    if 'checked_date_utc' in audit:
+        value = audit['checked_date_utc']
+        if not isinstance(value, str) or not re.fullmatch(r'\d{4}-\d{2}-\d{2}', value):
+            raise ValueError('Invalid probe audit date')
+        date.fromisoformat(value)
+    if 'snapshot_text_sha256' in audit:
+        value = audit['snapshot_text_sha256']
+        if not isinstance(value, str) or not re.fullmatch(r'[a-f0-9]{64}', value):
+            raise ValueError('Invalid probe audit snapshot hash')
+    label, count, basis = audit.get('label'), audit.get('count'), audit['basis']
+    allowed = {
+        'official_operating_location_list',
+        'official_complete_total',
+        'rejected_domain_identity',
+        'regional_total_not_worldwide',
+    }
+    if basis not in allowed:
+        raise ValueError('Unknown probe audit basis')
+    if label is not None:
+        if type(label) is not bool or type(count) is not int or count < 1:
+            raise ValueError('Invalid policy label or location count')
+        if audit.get('scope') != 'worldwide':
+            raise ValueError('Policy labels require worldwide scope')
+        if label != (count >= 6):
+            raise ValueError('Policy label and count disagree')
+        if label and basis not in {
+            'official_operating_location_list',
+            'official_complete_total',
+        }:
+            raise ValueError('Positive audit requires official operating evidence')
+        if not label and (
+            audit.get('complete') is not True or basis != 'official_complete_total'
+        ):
+            raise ValueError(
+                'Negative audit requires explicit official complete worldwide total'
+            )
+
+
+def reconcile_probe_labels(items, audits):
+    """Keep directory proxies separate from supported worldwide policy references.
+
+    Below-threshold observations never establish a negative policy label. Audits
+    are fixed public-source evidence, not predictions from either compared model.
+    """
+    by_id = {item['id']: item for item in items}
+    if len(by_id) != len(items):
+        raise ValueError('Duplicate probe identities')
+    for item in items:
+        count = item['worldwide_observed_count']
+        item['policy_label'] = True if count is not None and count >= 6 else None
+        item['policy_label_basis'] = (
+            'observed_worldwide_lower_bound'
+            if item['policy_label'] is True
+            else 'unverified_worldwide_total'
+        )
+    seen = set()
+    for audit in audits:
+        item = by_id.get(audit['id'])
+        if audit['id'] in seen or item is None:
+            raise ValueError('Duplicate or unknown probe audit')
+        seen.add(audit['id'])
+        if any(
+            name_tokens(audit[key]) != name_tokens(item[key])
+            for key in ('name', 'city')
+        ):
+            raise ValueError('Probe audit identity does not match')
+        validate_probe_audit(audit)
+        label = audit.get('label')
+        item['policy_label'] = label
+        item['policy_label_basis'] = audit['basis']
+        item['policy_label_evidence'] = audit
 
 
 def comparison_report(rows, models, output, probe_path):
@@ -632,13 +731,35 @@ def comparison_report(rows, models, output, probe_path):
             'gemma_error': gr.get('error'),
         }
         results.append(record)
+    audit_path = Path(probe_path).with_name('chain_probe_audits.json')
+    audits = json.loads(audit_path.read_text()) if audit_path.exists() else []
+    reconcile_probe_labels(results, audits)
     metrics = comparison_metrics(results)
+    policy_metrics = comparison_metrics(results, label_key='policy_label')
     report = {
         'threshold': 6,
         'scope': 'worldwide',
         'label_type': 'Observed Overture counts; incomplete coverage is not verified independence',
         'items': results,
         'metrics': metrics,
+        'policy_label_type': 'Worldwide lower-bound references plus public-source audits; below-six observations remain unverified',
+        'policy_metrics': policy_metrics,
+        'policy_unlabeled_ids': [r['id'] for r in results if r['policy_label'] is None],
+        'policy_reference_has_negative_labels': any(
+            r['policy_label'] is False for r in results
+        ),
+        'policy_proxy_conflicts': [
+            r['id']
+            for r in results
+            if r['policy_label'] is not None
+            and r['proxy_label'] is not None
+            and r['policy_label'] != r['proxy_label']
+        ],
+        'audited_unresolved_ids': [
+            r['id']
+            for r in results
+            if r.get('policy_label_evidence') and r['policy_label'] is None
+        ],
         'unlabeled_ids': [r['id'] for r in results if r['proxy_label'] is None],
         'request_errors': [
             r['id'] for r in results if r['jev_error'] or r['gemma_error']
@@ -648,9 +769,9 @@ def comparison_report(rows, models, output, probe_path):
     return report
 
 
-def comparison_metrics(results):
+def comparison_metrics(results, label_key='proxy_label'):
     metrics = {}
-    labeled = [r for r in results if r['proxy_label'] is not None]
+    labeled = [r for r in results if r[label_key] is not None]
     for model in ['jev', 'gemma']:
 
         def answer(r):
@@ -663,11 +784,11 @@ def comparison_metrics(results):
             return r['gemma_answer'] if isinstance(r['gemma_answer'], bool) else None
 
         answered = [r for r in labeled if answer(r) is not None]
-        positives = [r for r in labeled if r['proxy_label']]
-        negatives = [r for r in labeled if not r['proxy_label']]
+        positives = [r for r in labeled if r[label_key]]
+        negatives = [r for r in labeled if not r[label_key]]
         answered_positives = [r for r in positives if answer(r) is not None]
         tp = sum(answer(r) is True for r in positives)
-        correct = sum(answer(r) == r['proxy_label'] for r in answered)
+        correct = sum(answer(r) == r[label_key] for r in answered)
         metrics[model] = {
             'labeled': len(labeled),
             'answered': len(answered),
@@ -683,9 +804,7 @@ def comparison_metrics(results):
                 tp / len(answered_positives) if answered_positives else None
             ),
             'abstentions': [r['id'] for r in labeled if answer(r) is None],
-            'disagreements': [
-                r['id'] for r in labeled if answer(r) != r['proxy_label']
-            ],
+            'disagreements': [r['id'] for r in labeled if answer(r) != r[label_key]],
         }
         if model == 'gemma':
             metrics[model]['zero_confidence_false_ids'] = [

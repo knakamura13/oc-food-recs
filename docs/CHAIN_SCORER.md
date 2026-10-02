@@ -109,3 +109,18 @@ Overall recall uses every positive reference label; abstentions count as misses.
 Conditional recall/accuracy and response coverage are reported separately, along
 with raw zero-confidence answers. A Boolean false with zero confidence is not
 evidence that a restaurant is independent.
+
+## Comparison reference labels
+
+The 62-probe report retains raw directory proxy agreement and separately reports
+worldwide policy references. Six-plus observed counts supply positive lower bounds;
+below-six observations remain unverified. `scripts/chain_probe_audits.json` records
+public-source corrections and rejected identities with exact probe name/city,
+source URL, scope, date and notes. A negative reference requires an explicit
+complete worldwide total of five or fewer. Regional totals cannot qualify.
+
+Official source audits affect comparison references only, not scorer decisions.
+The report includes every probe's reference basis, unresolved references, and
+proxy conflicts. If no verified negative references exist, the comparison cannot
+establish false-positive performance or general policy accuracy. These reference
+limitations remain separate from model response coverage and abstentions.
