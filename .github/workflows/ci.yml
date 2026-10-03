@@ -19,7 +19,7 @@ jobs:
         with:
           python-version: "3.11"
       - run: npm ci
-      - run: pip install -e .
+      - run: pip install -e '.[chain-scorer]'
       - run: npm run check
       - run: npm test
       - run: npm run test:pipeline

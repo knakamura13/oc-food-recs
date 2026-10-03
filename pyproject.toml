@@ -11,6 +11,14 @@ dependencies = [
   "rapidfuzz>=3.9",
 ]
 
+[project.optional-dependencies]
+chain-scorer = [
+  "duckdb>=1.4,<2",
+  "ijson>=3.3,<4",
+  "requests>=2.32,<3",
+  "tldextract>=5.1,<6",
+]
+
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
