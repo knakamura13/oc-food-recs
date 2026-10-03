@@ -37,9 +37,11 @@
 		<p class="subtitle">
 			Keep chains and corporate restaurant groups off the public Mom & pop set. The curated
 			registry auto-excludes known brands from the map. Fuzzy signals (LLM, location count,
-			multi-city density) land here as <code>likely_chain</code> and stay out of Mom & pop
-			until you confirm or restore. Public “Report a chain” flags also land here, but they
-			do not hide the spot until you confirm. Confirming or restoring a restaurant locks
+			multi-city density) land here with unknown chain confidence and remain visible
+			on the public map until you confirm an exclusion. Public “Report a chain” flags
+			also queue review without hiding the spot. Rows already marked as likely chains
+			remain hidden until their confidence is refreshed or you keep them active.
+			Confirming or restoring a restaurant locks
 			that decision so re-ingests and the registry sweep won't undo it.
 		</p>
 	</header>
@@ -93,8 +95,9 @@
 		<h2 id="pending-heading">Pending review</h2>
 		<p class="section-hint">
 			{pendingReview.length} restaurant{pendingReview.length === 1 ? '' : 's'} flagged by a fuzzy
-			signal or a public chain report. These fail the Mom & pop chip until you confirm an
-			exclusion or keep them active.
+			signal or a public chain report. A pending review does not itself hide a restaurant:
+			unknown confidence remains visible, while likely-chain confidence stays hidden.
+			Confirm an exclusion or keep the restaurant active after reviewing it.
 		</p>
 
 		{#if pendingReview.length > 0}

@@ -77,24 +77,22 @@ OC_BOUNDS = {
 ENDORSEMENT_TYPES = {"dish_rec", "endorsement", "personal_story"}
 THREAD_FOLDER_PATTERN = "{subreddit}-{post_id}"
 
-# --- Chain / corporate-group exclusion (Mom & pop policy v1) ---------------
-# Exclude from Mom & pop if ANY of: franchise/national brand, denylist hit, or
-# 4+ Southern California locations under the same brand. Independents with
-# <=3 locations stay public. See docs/INGEST_TRACKING.md.
+# --- Chain / corporate-group exclusion -----------------------------------
+# The worldwide policy boundary is six operating locations. Ingest counts and
+# city density are unverified review hints, not proof of chain or independence.
 #
 # How many distinct SoCal cities one normalized name must appear in (within the
-# batch / corpus) before the density heuristic flags it as a likely chain.
-# Aligned with the 4+ location rule (4 cities implies 4+ locations).
-DENSITY_CITY_THRESHOLD = int(os.environ.get("OC_FOOD_RECS_DENSITY_CITIES", "4"))
+# batch / corpus) before the density heuristic queues it for review.
+DENSITY_CITY_THRESHOLD = int(os.environ.get("OC_FOOD_RECS_DENSITY_CITIES", "6"))
 # OFF by default: an unbounded Google Places probe that counts how many results a bare
 # name returns. Unreliable + paid, so it only ever routes to 'pending_review', never
 # auto-excludes. Enable with OC_FOOD_RECS_CHAIN_PROBE=1.
 CHAIN_PROBE_ENABLED = os.environ.get(
     "OC_FOOD_RECS_CHAIN_PROBE", ""
 ).strip().lower() in ("1", "true", "yes")
-# Flag when location count is >= this value (policy: 4+ SoCal locations fails).
+# Queue when an unverified location count reaches the policy boundary.
 CHAIN_LOCATION_THRESHOLD = int(
-    os.environ.get("OC_FOOD_RECS_CHAIN_LOCATION_THRESHOLD", "4")
+    os.environ.get("OC_FOOD_RECS_CHAIN_LOCATION_THRESHOLD", "6")
 )
 CHAIN_CONFIDENCE_INDEPENDENT = "independent"
 CHAIN_CONFIDENCE_LIKELY_CHAIN = "likely_chain"
@@ -2627,14 +2625,14 @@ def google_location_count(name: str) -> int | None:
 
 
 def chain_confidence_for(status: str, _reason: str | None = None) -> str:
-    """Map publish status to Mom & pop policy confidence.
+    """Keep unverified ingest classifications unknown, including review hints.
 
-    Denylist hits (`excluded`) and fuzzy flags (`pending_review`) are `likely_chain`.
-    Unflagged rows are `independent`. `unknown` is the DB default until backfill/ingest.
+    The existing authoritative denylist retains likely_chain confidence.
+    Independence requires verified complete worldwide evidence outside this path.
     """
-    if status in ("excluded", "pending_review"):
+    if status == "excluded":
         return CHAIN_CONFIDENCE_LIKELY_CHAIN
-    return CHAIN_CONFIDENCE_INDEPENDENT
+    return CHAIN_CONFIDENCE_UNKNOWN
 
 
 def merge_unreviewed_classification(
@@ -2649,18 +2647,15 @@ def merge_unreviewed_classification(
 
     Denylist ``excluded`` always wins. ``pending_review`` (user reports, LLM,
     density, location-count) stays queued — never cleared back to ``active``.
-    User reports retain their status/reason while taking fresh chain confidence.
+    Review hints retain their status/reason while taking fresh chain confidence.
     Existing unreviewed ``excluded`` can be recomputed so a registry removal
     unhides the row.
     """
     status = current_status or "active"
-    confidence = current_confidence or CHAIN_CONFIDENCE_UNKNOWN
     if new_status == "excluded":
         return new_status, new_reason, new_confidence
     if status == "pending_review":
-        if current_reason == "user_reported_chain":
-            return status, current_reason, new_confidence
-        return status, current_reason, confidence
+        return status, current_reason, new_confidence
     return new_status, new_reason, new_confidence
 
 
@@ -2676,9 +2671,8 @@ def classify_restaurant_status(
     ever routes to 'pending_review'. Fuzzy reason priority: LLM > location-count > density.
     Returns ('active', None) when nothing fires.
 
-    Policy v1: denylist hits never land on the public map. 4+ SoCal locations (or
-    4+ distinct cities in-corpus) and LLM chain_suspect go to the admin queue as
-    likely_chain and fail the Mom & pop chip until a human confirms.
+    Denylist hits stay excluded. Six or more unverified locations or distinct
+    cities, and LLM chain_suspect, queue review with unknown chain confidence.
     """
     hit = match_excluded_brand(restaurant["name"], registry)
     if hit is not None:
@@ -2846,6 +2840,7 @@ def write_to_db(
                         chain_confidence = CASE
                             WHEN restaurants.reviewed_at IS NOT NULL THEN restaurants.chain_confidence
                             WHEN EXCLUDED.status = 'excluded' THEN EXCLUDED.chain_confidence
+                            WHEN restaurants.status = 'pending_review' THEN EXCLUDED.chain_confidence
                             WHEN restaurants.status IN ('excluded', 'pending_review') THEN restaurants.chain_confidence
                             ELSE EXCLUDED.chain_confidence
                         END,

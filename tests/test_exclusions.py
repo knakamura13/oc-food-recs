@@ -228,16 +228,27 @@ class TestClassifyStatus(unittest.TestCase):
         )
         self.assertEqual(
             rp.chain_confidence_for("pending_review", "llm_suspected_chain"),
-            rp.CHAIN_CONFIDENCE_LIKELY_CHAIN,
+            rp.CHAIN_CONFIDENCE_UNKNOWN,
         )
         self.assertEqual(
             rp.chain_confidence_for("active", None),
-            rp.CHAIN_CONFIDENCE_INDEPENDENT,
+            rp.CHAIN_CONFIDENCE_UNKNOWN,
         )
 
     def test_policy_threshold_defaults(self):
-        self.assertEqual(rp.CHAIN_LOCATION_THRESHOLD, 4)
-        self.assertEqual(rp.DENSITY_CITY_THRESHOLD, 4)
+        self.assertEqual(rp.CHAIN_LOCATION_THRESHOLD, 6)
+        self.assertEqual(rp.DENSITY_CITY_THRESHOLD, 6)
+
+    def test_unverified_counts_are_hints_not_chain_confidence(self):
+        for reason in ('many_locations', 'multi_city_density', 'user_reported_chain'):
+            self.assertEqual(rp.chain_confidence_for('pending_review', reason),
+                rp.CHAIN_CONFIDENCE_UNKNOWN)
+
+    def test_five_locations_do_not_queue_but_six_do(self):
+        for count, expected in [(5, ('active', None)),
+                (6, ('pending_review', 'many_locations'))]:
+            self.assertEqual(rp.classify_restaurant_status(
+                {'name': 'Example Cafe', 'chain_location_count': count}, registry=[]), expected)
 
     def test_merge_refreshes_user_report_confidence_without_clearing_report(self):
         for new_confidence in (
@@ -262,11 +273,11 @@ class TestClassifyStatus(unittest.TestCase):
             rp.CHAIN_CONFIDENCE_LIKELY_CHAIN,
             "active",
             None,
-            rp.CHAIN_CONFIDENCE_INDEPENDENT,
+            rp.CHAIN_CONFIDENCE_UNKNOWN,
         )
         self.assertEqual(status, "pending_review")
         self.assertEqual(reason, "llm_suspected_chain")
-        self.assertEqual(confidence, rp.CHAIN_CONFIDENCE_LIKELY_CHAIN)
+        self.assertEqual(confidence, rp.CHAIN_CONFIDENCE_UNKNOWN)
 
     def test_merge_denylist_upgrades_queued_row(self):
         status, reason, confidence = rp.merge_unreviewed_classification(
