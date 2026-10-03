@@ -243,7 +243,6 @@ def grounded_locations(result, sources):
         'pl',
         'ter',
         'cir',
-        'broadway',
         'way',
         'paseo',
         'camino',
@@ -296,14 +295,24 @@ def grounded_locations(result, sources):
         # codes, so a state such as CT cannot supply a missing street type.
         if (not any(token in street_types for token in tokens[1:])
             and re.search(r'\b(?:rd|dr|st|ln|pl)\.?\s*$', untrimmed_street, re.I)):
+            # A city word inside the street name is not a separate locality.
+            locality_text = evidence_whitespace(quote).replace(
+                evidence_whitespace(address), ' ')
+            if not re.search(r'(?<!\w)' + re.escape(evidence_whitespace(city))
+                + r'(?!\w)', locality_text):
+                return []
             street = untrimmed_street
             tokens = [abbreviations.get(token, token)
                 for token in re.findall(r'[a-z0-9]+', street.lower())]
+        broadway_address = (tokens[1:] == ['broadway']
+            or (len(tokens) == 3 and tokens[1] in {'n', 's', 'e', 'w'}
+                and tokens[2] == 'broadway'))
         if (
             not tokens
             or not re.fullmatch(r'\d+[a-z]?', tokens[0])
-            or len(tokens) < 3
-            or not any(token in street_types for token in tokens[1:])
+            or (len(tokens) < 3 and not broadway_address)
+            or (not broadway_address
+                and not any(token in street_types for token in tokens[1:]))
         ):
             return []
         key = (tuple(tokens), tuple(re.findall(r'[a-z0-9]+', city_name.lower())))

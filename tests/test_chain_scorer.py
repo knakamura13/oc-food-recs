@@ -13,6 +13,39 @@ except ModuleNotFoundError:
 
 
 class SourceRetrievalTest(unittest.TestCase):
+    def test_broadway_requires_number_and_optional_direction_only(self):
+        import chain_sources as src
+        for street in ('Broadway', 'N Broadway', 'South Broadway'):
+            entries = [dict(source=0, quote=f'{145+i} {street}, New York',
+                address=f'{145+i} {street}', city='New York', operating=True)
+                for i in range(6)]
+            with self.subTest(street=street):
+                self.assertEqual(len(src.grounded_locations(dict(count=6, locations=entries),
+                    [' '.join(e['quote'] for e in entries)])), 6)
+        entries = [dict(source=0, quote=f'{145+i} shows on Broadway, New York',
+            address=f'{145+i} shows on Broadway', city='New York', operating=True)
+            for i in range(6)]
+        self.assertEqual(src.grounded_locations(dict(count=6, locations=entries),
+            [' '.join(e['quote'] for e in entries)]), [])
+
+    def test_city_named_road_requires_locality_outside_address(self):
+        import chain_sources as src
+        for suffix in ('', ' Open daily. 15101 Addison Rd', ', Addisonville'):
+            entries = [dict(source=0, quote=f'{15101+i} Addison Rd{suffix}',
+                address=f'{15101+i} Addison Rd', city='Addison', operating=True)
+                for i in range(6)]
+            # Keep repeated street mentions identical to each entry's address.
+            for entry in entries:
+                entry['quote'] = entry['quote'].replace('15101 Addison Rd', entry['address'])
+            with self.subTest(suffix=suffix):
+                self.assertEqual(src.grounded_locations(dict(count=6, locations=entries),
+                    [' '.join(e['quote'] for e in entries)]), [])
+        entries = [dict(source=0, quote=f'{15101+i} Addison Rd, Addison, TX',
+            address=f'{15101+i} Addison Rd', city='Addison', operating=True)
+            for i in range(6)]
+        self.assertEqual(len(src.grounded_locations(dict(count=6, locations=entries),
+            [' '.join(e['quote'] for e in entries)])), 6)
+
     def test_grounded_addresses_accept_broadway_and_circle_but_reject_nonaddresses(self):
         import chain_sources as src
         addresses = ['145 N Broadway', '760 Briarwood Cir', '100 Main St',
