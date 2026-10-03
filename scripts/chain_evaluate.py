@@ -449,7 +449,7 @@ REPAIR_INSTRUCTIONS = (
 
 
 def compact_repair_payload(bundle, parsed, feedback):
-    """Choose up to six candidate windows. Selection never establishes evidence."""
+    """Choose up to six candidate entries, merging same-source spans contiguously."""
     entries = parsed.get('locations')
     entries = entries[:24] if isinstance(entries, list) else []
     invalid = set(feedback.get('invalid_entries', []))
@@ -475,13 +475,16 @@ def compact_repair_payload(bundle, parsed, feedback):
         text = bundle['sources'][index]['text']
         pattern = r'\s+'.join(re.escape(part) for part in quote.split())
         match = re.search(pattern, text)
-        if match is None or index in windows:
+        if match is None:
             continue
         start, end = max(0, match.start() - 32), min(len(text), match.end() + 220)
+        if index in windows:
+            start = min(start, windows[index][0])
+            end = max(end, windows[index][1])
         windows[index] = [start, end]
         selected_entries.append({'entry': i, **{key:entry.get(key)
             for key in ('source', 'address', 'city', 'operating')}})
-        if len(windows) == 6:
+        if len(selected_entries) == 6:
             break
     # Unknown outputs may lack structured quotes. Use original prefixes only.
     if not windows and not entries:

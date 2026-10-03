@@ -105,6 +105,45 @@ class RetrievalTest(unittest.TestCase):
         self.assertEqual(f.call_count,3)
 
 class PromptBudgetTest(unittest.TestCase):
+    def test_same_source_locator_repair_preserves_six_fixable_addresses(self):
+        import chain_evaluate as ce
+        streets=['Main Way','Ocean Paseo','State Hwy','Oak Way','Park Paseo','Coast Hwy','Last Way']
+        quotes=[f'Venue {i}: {100+i} {street}, Tustin Open daily.'
+            for i,street in enumerate(streets)]
+        text='Example Bakery Navigation '+ ('x'*400)+' '+ (' '.join(
+            quote+' Intervening original page text. '+ 'y'*220 for quote in quotes))
+        good=[dict(source=0,quote=quote,address=f'{100+i} {streets[i]}',
+            city='Tustin',operating=True) for i,quote in enumerate(quotes[:6])]
+        all_entries=[dict(source=0,quote=quote,address=f'{100+i} {streets[i]}',
+            city='Tustin',operating=True) for i,quote in enumerate(quotes)]
+        bad=[{**entry,'address':entry['quote'].split(',')[0]} for entry in all_entries]
+        self.assertEqual(cr.address_excerpts(text),[])
+        class Model:
+            def __init__(self):self.prompts=[]
+            def gemma(self,prompt):
+                self.prompts.append(prompt)
+                entries=bad if len(self.prompts)==1 else good
+                return {'seconds':0,'response':{'done':True,'message':{'content':json.dumps(
+                    dict(decision='chain',count=len(entries),complete=False,identity_verified=True,
+                        source=None,quote=None,locations=entries))}}}
+        model=Model()
+        source=dict(kind='S5',id='locator',url='https://example.com/locations',
+            text=text,truncated=False)
+        row=dict(id=1,name='Example Bakery',location='Tustin',decision='unknown',evidence=[])
+        with tempfile.TemporaryDirectory() as d:
+            ce.gemma_unresolved([row],{1:[source]},model,Path(d))
+            record=json.loads((Path(d)/'gemma-results.json').read_text())[0]
+        self.assertEqual(len(model.prompts),2)
+        repair_bundle=json.loads(model.prompts[1].split('\n')[1])
+        self.assertEqual(len(repair_bundle['sources']),1)
+        sent=repair_bundle['sources'][0]['text']
+        for quote in quotes[:6]:self.assertIn(quote,sent)
+        self.assertEqual(row['decision'],'chain')
+        start,end=record['attempts'][1]['source_text_ranges']['0']
+        self.assertEqual(sent,text[start:end])
+        self.assertNotIn(quotes[6],sent)
+        self.assertLessEqual(len(model.prompts[1].encode()),8192-2048-256)
+
     def test_compact_repair_keeps_verified_quote_windows_and_original_indices(self):
         import chain_evaluate as ce
         entries=[dict(source=i,quote=f'{100+i} Main St, Tustin Open daily',
