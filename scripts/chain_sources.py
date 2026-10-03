@@ -28,7 +28,7 @@ from chain_scorer import (
 )
 
 RELEASE = '2026-09-23.1'
-WEBSITE_EXTRACT_VERSION = 3
+WEBSITE_EXTRACT_VERSION = 4
 OVERTURE = f's3://overturemaps-us-west-2/release/{RELEASE}/theme=places/type=place/*'
 NSI_PATHS = [
     f'data/brands/amenity/{x}.json'
@@ -625,7 +625,7 @@ def website_text(url, cache):
                     urldefrag(urljoin(url, a['href']))[0]
                     for a in soup.find_all('a', href=True)
                     if re.search(
-                        r'location|about|our.story|our.caf[eé]s|stores',
+                        r'location|about|our.story|our.caf[eé]s|stores|fundrais|reservations',
                         a.get_text(' ', strip=True) + ' ' + a['href'],
                         re.I,
                     )
@@ -652,7 +652,7 @@ def website_text(url, cache):
                         'url': url,
                         'text': text[:30000],
                         'links': sorted(set(links) - {urldefrag(url)[0]}, key=priority)[
-                            :6
+                            :16
                         ],
                         'truncated': len(text) > 30000 or size >= 1_000_000,
                         'fetched_at': time.time(),

@@ -14,6 +14,7 @@ import time
 from collections import defaultdict
 from pathlib import Path
 
+from chain_retrieval import address_excerpts, crawl_websites, lookup_websites, location_link
 from chain_models import EVIDENCE_QUESTIONS, Models, noul, parse_gemma, probability
 from chain_scorer import (
     brand_matches,
@@ -49,13 +50,14 @@ def same_family(a, b):
     return x == y or min(len(x), len(y)) >= 2 and (x[: len(y)] == y or y[: len(x)] == x)
 
 
-def candidate_websites(urls, local_domains=()):
+def candidate_websites(urls, local_domains=(), discovered_domains=()):
     """Prefer local domains, then locator indexes, within a three-domain cap."""
     local_domains = set(local_domains)
+    discovered_domains = set(discovered_domains)
     def priority(url):
         path = urlsplit(url).path.rstrip('/').lower()
         index = path.split('/')[-1] in {'locations', 'our-locations', 'stores', 'our-cafes'}
-        return (website_domain(url) not in local_domains, not index, bool(path), len(path), url)
+        return (website_domain(url) not in local_domains, website_domain(url) not in discovered_domains, not index, bool(path), len(path), url)
     chosen = {}
     for url in sorted(urls, key=priority):
         domain = website_domain(url)
@@ -194,6 +196,29 @@ def row_websites(row):
         {website_domain(w) for w in local_urls})
 
 
+def discover_websites(rows, cache, output, workers):
+    """Opt-in lookup and bounded crawl; discovered sites remain unverified."""
+    lookups=[]
+    for row in rows:
+        result=lookup_websites(row,cache)
+        lookups.append({'restaurant_id':row['id'],**result})
+        local_urls={w for p in row.get('overture_matches',[])
+            for w in p.get('websites') or [] if website_domain(w)}
+        row['candidate_websites']=candidate_websites(
+            set(row.get('candidate_websites',[])) | local_urls | set(result['urls']),
+            {website_domain(w) for w in local_urls},
+            {website_domain(w) for w in result['urls']})
+        row['source_lookup']={'query':result['query'],'lookup_url':result['lookup_url'],
+            'urls':result['urls'],'identity_verified':False}
+    write_json(output/'source-lookups.json',lookups)
+    write_json(output/'retrieval-rows.json',rows)
+    acquired=crawl_websites([w for row in rows for w in row_websites(row)],cache,workers)
+    write_json(output/'retrieval-summary.json',
+        {k:v for k,v in acquired.items() if k!='pages'})
+    write_json(output/'websites.json',acquired['pages'])
+    return acquired['pages']
+
+
 def fetch_websites(rows, cache, output, workers):
     path = output / 'websites.json'
     urls = sorted({w for r in rows for w in row_websites(r)})
@@ -255,6 +280,7 @@ def jev_sources(rows, mentions, websites, models, output, workers):
                 'text': w['text'],
                 'url': w['url'],
                 'truncated': w['truncated'],
+                'address_excerpts': address_excerpts(w['text']),
             }
             for w in pages.values()
         ]
@@ -408,14 +434,31 @@ def gemma_unresolved(rows, contexts, models, output):
     unresolved = [r for r in rows if r['decision'] == 'unknown']
     for index, r in enumerate(unresolved):
         sources = contexts.get(r['id'], [])
+        expanded=[]
+        for source in sources:
+            excerpts=source.get('address_excerpts',[])
+            if len(excerpts)>=6:
+                expanded.extend({**source,'text':e['text'],'truncated':True,
+                    'excerpt_range':[e['start'],e['end']],
+                    'parent_text_sha256':hashlib.sha256(source['text'].encode()).hexdigest()}
+                    for e in excerpts)
+            else:
+                expanded.append(source)
         # Keep all sources in the artifact. A bounded prompt is an explicit subset;
         # truncation may reduce recall but must never imply an exhaustive total.
         chosen = sorted(
-            sources,
-            key=lambda s: bool(explicit_location_counts(s['text'])),
+            expanded,
+            key=lambda s: (bool(s.get('excerpt_range')),
+                bool(s.get('official_source')),
+                location_link(s.get('url') or ''),
+                (location_link(s.get('url') or '')
+                    and urlsplit(s.get('url') or '').path.rstrip('/').split('/')[-1]
+                    not in {'locations','location','stores','store','our-locations','our-cafes'}),
+                bool(explicit_location_counts(s['text'])), s['kind']=='S5'),
             reverse=True,
         )[:8]
-        texts = [s['text'][:5000] for s in chosen]
+        limit=min(5000,20000//max(1,len(chosen)))
+        texts = [s['text'][:limit] for s in chosen]
         budget = []
         chars = 0
         for text in texts:
@@ -464,7 +507,7 @@ def gemma_unresolved(rows, contexts, models, output):
                     and source['kind'] == 'S5'
                     and source.get('official_source') is True
                     and not source.get('truncated')
-                    and len(source['text']) <= 5000
+                    and len(source['text']) <= len(budget[e['source']])
                 )
                 for location in e.get('locations', []):
                     location['url'] = chosen[location['source']].get('url')
@@ -508,7 +551,8 @@ def run(args):
     write_json(output / 'deterministic-rows.json', rows)
     print('deterministic', summarize(rows), flush=True)
     models = Models(output / 'models')
-    websites = fetch_websites(rows, cache, output, args.workers)
+    acquire=discover_websites if getattr(args,'discover_sources',False) else fetch_websites
+    websites = acquire(rows, cache, output, args.workers)
     contexts = jev_sources(
         rows, before['mentions'], websites, models, output, args.workers
     )
@@ -582,6 +626,8 @@ def main():
     p.add_argument('--output', required=True)
     p.add_argument('--atp-zip')
     p.add_argument('--workers', type=int, default=8)
+    p.add_argument('--discover-sources',action='store_true',
+        help='Opt in to cached public search and bounded same-publisher branch crawling')
     p.add_argument(
         '--prepare-only',
         action='store_true',
