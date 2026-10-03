@@ -50,13 +50,14 @@ export const restaurants = pgTable('restaurants', {
 	//   'excluded'       — hidden from the public site (chain / corporate group). Only the
 	//                      authoritative registry sweep/ingest sets this automatically.
 	//   'pending_review' — a fuzzy signal (LLM/density/location-count/user report)
-	//                      flagged it. Still in the public payload. Ingest/LLM/density
-	//                      flags are likely_chain (Mom & pop hides them). Public user
-	//                      reports stay independent until an admin confirms.
+	//                      flagged it. Still in the public payload. Unverified ingest
+	//                      hints produce unknown confidence; public reports do not hide
+	//                      the row. Visibility follows chainConfidence, not queue status.
 	status: text('status').default('active').notNull(),
 	exclusionReason: text('exclusion_reason'), // 'chain' | 'corporate_group' | 'llm_suspected_chain' | 'many_locations' | 'multi_city_density' | 'user_reported_chain'
-	// Policy v1 confidence: 'independent' | 'likely_chain' | 'unknown'.
-	// Mom & pop chip shows independent + unknown; likely_chain stays public only with the chip off.
+	// Chain confidence: 'independent' | 'likely_chain' | 'unknown'.
+	// Public filtering allows independent + unknown and always hides likely_chain.
+	// Unverified active/queued rows remain unknown until evidence or review resolves them.
 	chainConfidence: text('chain_confidence').default('unknown').notNull(),
 	// Non-null once a human has confirmed/restored this row in the admin UI. Auto-logic
 	// (re-ingest ON CONFLICT, apply_exclusions sweep) NEVER touches a row where this is set.
