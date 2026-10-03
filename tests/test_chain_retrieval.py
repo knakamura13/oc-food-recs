@@ -105,6 +105,67 @@ class RetrievalTest(unittest.TestCase):
         self.assertEqual(f.call_count,3)
 
 class PromptBudgetTest(unittest.TestCase):
+    def test_compact_repair_keeps_verified_quote_windows_and_original_indices(self):
+        import chain_evaluate as ce
+        entries=[dict(source=i,quote=f'{100+i} Main St, Tustin Open daily',
+            address=f'{100+i} Main St',city='Tustin',operating=True) for i in range(8)]
+        sources=[dict(index=i,kind='S5',url=f'https://example.com/locations/{i}',
+            text='Example Bakery Navigation '+ 'x'*1000+' '+entry['quote']+' Hours daily.',
+            official_source=True) for i,entry in enumerate(entries)]
+        original=dict(restaurant=dict(name='Example Bakery',city='Tustin'),sources=sources,
+            observed_evidence=[dict(kind='S3',count=100)])
+        parsed=dict(decision='chain',count=8,locations=entries)
+        feedback=dict(invalid_entries=[0],invalid_details={0:'Exact quote required'},
+            duplicate_pairs=[],count_matches_entries=True)
+        compact,suffix,ranges=ce.compact_repair_payload(original,parsed,feedback)
+        self.assertEqual([s['index'] for s in compact['sources']],[1,2,3,4,5,6])
+        self.assertNotIn('observed_evidence',compact)
+        for src in compact['sources']:
+            start,end=ranges[src['index']]
+            self.assertEqual(src['text'],sources[src['index']]['text'][start:end])
+            self.assertIn(entries[src['index']]['quote'],src['text'])
+            self.assertEqual(src['publisher_context'],sources[src['index']]['text'][:100])
+        prompt,texts=ce.budget_repair_prompt(ce.REPAIR_INSTRUCTIONS,compact,suffix,8)
+        self.assertIsNotNone(prompt)
+        self.assertLessEqual(len(prompt.encode()),8192-2048-256)
+        self.assertEqual(len(texts),8)
+        self.assertEqual(texts[0],'')
+        self.assertEqual(texts[7],'')
+
+    def test_compact_repair_does_not_promote_prior_nonoperating_entries(self):
+        import chain_evaluate as ce
+        entries=[dict(source=i,quote=f'{100+i} Main St, Tustin',address=f'{100+i} Main St',
+            city='Tustin',operating=i!=0) for i in range(7)]
+        original=dict(restaurant=dict(name='Example',city='Tustin'),sources=[
+            dict(index=i,kind='S5',url=f'https://example.com/{i}',text=entry['quote'])
+            for i,entry in enumerate(entries)])
+        feedback=dict(invalid_entries=[0],invalid_details={0:'operating must be true'},
+            duplicate_pairs=[],count_matches_entries=True)
+        compact,suffix,ranges=ce.compact_repair_payload(original,
+            dict(decision='chain',count=7,locations=entries),feedback)
+        self.assertEqual([s['index'] for s in compact['sources']],[1,2,3,4,5,6])
+        prior=json.loads(suffix.split('Previous output: ',1)[1].split('\n',1)[0])
+        self.assertTrue(all(e['operating'] is True for e in prior['entries']))
+        for entry in entries:entry['operating']=False
+        compact,suffix,ranges=ce.compact_repair_payload(original,
+            dict(decision='chain',count=7,locations=entries),feedback)
+        self.assertEqual(compact['sources'],[])
+
+
+    def test_compact_repair_never_treats_an_uncontained_quote_as_source_text(self):
+        import chain_evaluate as ce
+        text='Example Open daily 100 Main St, Tustin'
+        original=dict(restaurant=dict(name='Example',city='Tustin'),sources=[
+            dict(index=0,kind='S5',url='https://example.com/',text=text)])
+        parsed=dict(decision='chain',count=6,locations=[dict(source=0,
+            quote='Invented phrase 999 Fake Street, Somewhere',address='999 Fake Street',
+            city='Somewhere',operating=True)])
+        feedback=dict(invalid_entries=[0],invalid_details={0:'Exact quote required'},
+            duplicate_pairs=[],count_matches_entries=False)
+        compact,suffix,ranges=ce.compact_repair_payload(original,parsed,feedback)
+        self.assertEqual(compact['sources'],[])
+        self.assertEqual(ranges,{})
+
     def test_complete_repair_prompt_has_a_conservative_context_budget(self):
         import chain_evaluate as ce
         entries=[dict(source=i,quote=f'{100+i} Main St, Tustin Open daily',
@@ -164,6 +225,30 @@ class PromptBudgetTest(unittest.TestCase):
         model=Model()
         source=dict(kind='S5',id='0',url='https://example.com/',official_source=True,
             text='Only one location worldwide. '+ 'x'*4500+' '+entry['quote'],truncated=False)
+        row=dict(id=1,name='Example',location='Tustin',decision='unknown',evidence=[])
+        with tempfile.TemporaryDirectory() as d:
+            ce.gemma_unresolved([row],{1:[source]},model,Path(d))
+        self.assertEqual(model.calls,2)
+        self.assertEqual(row['decision'],'unknown')
+        self.assertEqual(row['evidence'],[])
+
+    def test_complete_claim_from_a_selected_repair_bundle_still_abstains(self):
+        import chain_evaluate as ce
+        entry=dict(source=0,quote='100 Main St, Tustin Open daily',
+            address='100 Main St',city='Tustin',operating=True)
+        class Model:
+            def __init__(self):self.calls=0
+            def gemma(self,prompt):
+                self.calls+=1
+                result=(dict(decision='chain',count=6,locations=[entry]*6,
+                    identity_verified=True,complete=False,source=None,quote=None)
+                    if self.calls==1 else dict(decision='independent',count=1,
+                        identity_verified=True,complete=True,source=0,
+                        quote='Only one location worldwide.'))
+                return {'seconds':0,'response':{'done':True,'message':{'content':json.dumps(result)}}}
+        model=Model()
+        source=dict(kind='S5',id='0',url='https://example.com/',official_source=True,
+            text='Only one location worldwide. '+entry['quote'],truncated=False)
         row=dict(id=1,name='Example',location='Tustin',decision='unknown',evidence=[])
         with tempfile.TemporaryDirectory() as d:
             ce.gemma_unresolved([row],{1:[source]},model,Path(d))
