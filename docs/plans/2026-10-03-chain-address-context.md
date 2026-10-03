@@ -35,3 +35,16 @@ SHA-256 values:
 Verification: 260 Python tests passed. The CI pipeline command passed 256 tests before the diagnostic wording refinement, which was then covered by the full suite. New checks cover parent provenance, shared context budgets, opening-hour boundaries, one successful repair, persistent-invalid repair abstention, duplicate feedback and diagnostic subthreshold evidence rejection. Independent review found no actionable defects or acceptance-rule changes.
 
 Next: review the change, then perform the broader read-only evaluation with automatic acquisition and preserved row-level caches. Report recall against all 66 excluded controls, inspect boundary cases at five to seven locations, and independently check precision of newly supported classifications. Production exclusions remain gated on those checks. A repair may add one hosted request per eligible unresolved row, so measure its frequency and latency in the broader run.
+
+## PR #213 review follow-up: complete repair budget
+
+The original five-control result above predates the repair-context fix. Repair requests now budget the complete serialized payload, including instructions, source metadata, publisher context, prior output and validator feedback. A conservative UTF-8 byte upper bound reserves the configured 2,048 generation tokens and 256 framing/system tokens inside the 8,192-token context. Source indices are preserved, but source text prefixes are shortened to fit. Repaired evidence and completeness checks use only those transmitted prefixes. If fixed content cannot fit, repair is skipped and the restaurant remains unknown.
+
+The same-page cached trial under this stricter budget supports **2/5** controls: Porto's and Sugarfish. Round Table Pizza and Texas de Brazil skip oversized fixed repair payloads. Postino receives trimmed source text and remains unknown. The historical 5/5 result is preserved, but it is not the current budget-safe recovery result. Compact repair metadata and evidence windows must be evaluated before a full-corpus rerun.
+
+Private follow-up artifacts: `output/chain-scorer/issue-200/address-repair-budget-20261003`.
+
+- `gemma-results.json` SHA-256: `985eed76aeaab675d59c2d3420e130301574f77a8cc8de494b41273bea6f0609`
+- `results.json` SHA-256: `b0b8ecd132a7c87576a8c24eba2cb0b9ff7c2947ddf116d39d61727abea365bc`
+
+Regression checks cover complete multibyte prompt limits, rejection of quotes trimmed from repair evidence, oversized fixed-payload skips, and prevention of complete negative claims from repair-truncated text.

@@ -15,7 +15,10 @@ from collections import defaultdict
 from pathlib import Path
 
 from chain_retrieval import address_excerpts, crawl_websites, lookup_websites, location_link
-from chain_models import EVIDENCE_QUESTIONS, Models, noul, parse_gemma, probability
+from chain_models import (
+    EVIDENCE_QUESTIONS, GEMMA_CONTEXT_TOKENS, GEMMA_OUTPUT_TOKENS,
+    Models, noul, parse_gemma, probability,
+)
 from chain_scorer import (
     brand_matches,
     decide,
@@ -430,6 +433,36 @@ def jev_generic_names(rows, global_rows, models):
     """
 
 
+def budget_repair_prompt(instructions, bundle, suffix):
+    """Bound the entire retry, conservatively counting one token per UTF-8 byte.
+
+    Reserve generation tokens and 256 tokens for the system message/chat framing.
+    Fixed metadata, prior output and feedback must fit before admitting source text.
+    """
+    maximum = GEMMA_CONTEXT_TOKENS - GEMMA_OUTPUT_TOKENS - 256
+
+    def render(limit):
+        sources = [{**source, 'text': source['text'][:limit]}
+            for source in bundle['sources']]
+        prompt = instructions + '\n' + json.dumps(
+            {**bundle, 'sources': sources}, ensure_ascii=False, separators=(',', ':')) + suffix
+        return prompt, [s['text'] for s in sources]
+
+    fixed, _ = render(0)
+    if len(fixed.encode('utf-8')) >= maximum:
+        return None, []
+    low, high = 0, max((len(s['text']) for s in bundle['sources']), default=0)
+    while low < high:
+        middle = (low + high + 1) // 2
+        candidate, _ = render(middle)
+        if len(candidate.encode('utf-8')) <= maximum:
+            low = middle
+        else:
+            high = middle - 1
+    prompt, texts = render(low)
+    return (prompt, texts) if any(texts) else (None, [])
+
+
 def gemma_unresolved(rows, contexts, models, output):
     results = []
     unresolved = [r for r in rows if r['decision'] == 'unknown']
@@ -510,13 +543,14 @@ def gemma_unresolved(rows, contexts, models, output):
             parsed = parse_gemma(result['response'])
             rec['parsed'] = parsed
             evidence = model_evidence('S6', parsed, budget)
+            evidence_budget = budget
             rec['attempts'] = [{'result': result, 'parsed': parsed}]
             address_sources = sum(bool(s.get('excerpt_range')) or
                 location_link(s.get('url') or '') for s in chosen)
             if (not evidence and (parsed.get('decision') == 'chain'
                 or (parsed.get('decision') == 'unknown' and address_sources >= 6))):
                 feedback = location_feedback(parsed, budget)
-                repair = models.gemma(prompt + '\nThe previous output did not establish '
+                suffix = ('\nThe previous output did not establish '
                     'a supported decision. Correct it once using only the original '
                     'source texts. Invalid entries must be corrected from exact text '
                     'or omitted. Keep at most one entry from each duplicate pair. '
@@ -526,13 +560,22 @@ def gemma_unresolved(rows, contexts, models, output):
                     'establish contradictory affiliation.\nPrevious output: '
                     + json.dumps(parsed, ensure_ascii=False)
                     + '\nValidator feedback: ' + json.dumps(feedback))
-                attempt = {'result': repair}
-                if not repair.get('error'):
-                    parsed = parse_gemma(repair['response'])
-                    attempt['parsed'] = parsed
-                    rec['parsed'] = parsed
-                    evidence = model_evidence('S6', parsed, budget)
-                rec['attempts'].append(attempt)
+                repair_prompt, repair_budget = budget_repair_prompt(
+                    prompt.split('\n', 1)[0], bundle, suffix)
+                if repair_prompt is None:
+                    rec['repair_skipped'] = 'Fixed repair payload exceeds context budget'
+                else:
+                    repair = models.gemma(repair_prompt)
+                    attempt = {'result': repair,
+                        'prompt_bytes': len(repair_prompt.encode('utf-8')),
+                        'source_text_lengths': [len(text) for text in repair_budget]}
+                    if not repair.get('error'):
+                        parsed = parse_gemma(repair['response'])
+                        attempt['parsed'] = parsed
+                        rec['parsed'] = parsed
+                        evidence_budget = repair_budget
+                        evidence = model_evidence('S6', parsed, evidence_budget)
+                    rec['attempts'].append(attempt)
             # Completeness additionally requires an official website, never a Reddit claim.
             for e in evidence:
                 source = chosen[e['source']]
@@ -541,7 +584,7 @@ def gemma_unresolved(rows, contexts, models, output):
                     and source['kind'] == 'S5'
                     and source.get('official_source') is True
                     and not source.get('truncated')
-                    and len(source['text']) <= len(budget[e['source']])
+                    and len(source['text']) <= len(evidence_budget[e['source']])
                 )
                 for location in e.get('locations', []):
                     location['url'] = chosen[location['source']].get('url')

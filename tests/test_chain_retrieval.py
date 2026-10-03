@@ -105,6 +105,89 @@ class RetrievalTest(unittest.TestCase):
         self.assertEqual(f.call_count,3)
 
 class PromptBudgetTest(unittest.TestCase):
+    def test_complete_repair_prompt_has_a_conservative_context_budget(self):
+        import chain_evaluate as ce
+        entries=[dict(source=i,quote=f'{100+i} Main St, Tustin Open daily',
+            address=f'{100+i} Main St',city='Tustin',operating=True) for i in range(6)]
+        class Model:
+            def __init__(self):self.prompts=[]
+            def gemma(self,prompt):
+                self.prompts.append(prompt)
+                result=dict(decision='chain',count=6,locations=[entries[0]]*6,
+                    identity_verified=True,complete=False,source=None,quote=None)
+                return {'seconds':0,'response':{'done':True,'message':{'content':json.dumps(result)}}}
+        model=Model()
+        sources=[dict(kind='S5',id=str(i),url='https://example.com/locations/'+str(i),
+            text='語'*1200+' '+e['quote'],truncated=False) for i,e in enumerate(entries)]
+        row=dict(id=1,name='Example',location='Tustin',decision='unknown',evidence=[])
+        with tempfile.TemporaryDirectory() as d:
+            ce.gemma_unresolved([row],{1:sources},model,Path(d))
+        self.assertEqual(len(model.prompts),2)
+        self.assertLessEqual(len(model.prompts[1].encode('utf-8')),8192-2048-256)
+        self.assertEqual(row['decision'],'unknown')
+
+    def test_repair_cannot_ground_quotes_removed_by_its_budget(self):
+        import chain_evaluate as ce
+        entries=[dict(source=i,quote=f'{100+i} Main St, Tustin Open daily',
+            address=f'{100+i} Main St',city='Tustin',operating=True) for i in range(6)]
+        class Model:
+            def __init__(self):self.calls=0
+            def gemma(self,prompt):
+                self.calls+=1
+                result=dict(decision='chain',count=6,
+                    locations=[entries[0]]*6 if self.calls==1 else entries,
+                    identity_verified=True,complete=False,source=None,quote=None)
+                return {'seconds':0,'response':{'done':True,'message':{'content':json.dumps(result)}}}
+        model=Model()
+        sources=[dict(kind='S5',id=str(i),url='https://example.com/locations/'+str(i),
+            text='x'*1400+' '+e['quote'],truncated=False) for i,e in enumerate(entries)]
+        row=dict(id=1,name='Example',location='Tustin',decision='unknown',evidence=[])
+        with tempfile.TemporaryDirectory() as d:
+            ce.gemma_unresolved([row],{1:sources},model,Path(d))
+        self.assertEqual(model.calls,2)
+        self.assertEqual(row['decision'],'unknown')
+
+    def test_repair_truncation_cannot_establish_complete_negative_evidence(self):
+        import chain_evaluate as ce
+        entry=dict(source=0,quote='100 Main St, Tustin Open daily',
+            address='100 Main St',city='Tustin',operating=True)
+        class Model:
+            def __init__(self):self.calls=0
+            def gemma(self,prompt):
+                self.calls+=1
+                result=(dict(decision='chain',count=6,locations=[entry]*6,
+                    identity_verified=True,complete=False,source=None,quote=None)
+                    if self.calls==1 else dict(decision='independent',count=1,
+                        identity_verified=True,complete=True,source=0,
+                        quote='Only one location worldwide.'))
+                return {'seconds':0,'response':{'done':True,'message':{'content':json.dumps(result)}}}
+        model=Model()
+        source=dict(kind='S5',id='0',url='https://example.com/',official_source=True,
+            text='Only one location worldwide. '+ 'x'*4500+' '+entry['quote'],truncated=False)
+        row=dict(id=1,name='Example',location='Tustin',decision='unknown',evidence=[])
+        with tempfile.TemporaryDirectory() as d:
+            ce.gemma_unresolved([row],{1:[source]},model,Path(d))
+        self.assertEqual(model.calls,2)
+        self.assertEqual(row['decision'],'unknown')
+        self.assertFalse(row['evidence'][0]['complete'])
+
+    def test_oversized_fixed_repair_payload_skips_the_retry(self):
+        import chain_evaluate as ce
+        class Model:
+            def __init__(self):self.calls=0
+            def gemma(self,prompt):
+                self.calls+=1
+                result=dict(decision='chain',count=6,locations=[],identity_verified=True,
+                    complete=False,source=None,quote='語'*6000)
+                return {'seconds':0,'response':{'done':True,'message':{'content':json.dumps(result)}}}
+        model=Model()
+        source=dict(kind='S5',id='1',url='https://example.com/',text='Open daily',truncated=False)
+        row=dict(id=1,name='Example',location='Tustin',decision='unknown',evidence=[])
+        with tempfile.TemporaryDirectory() as d:
+            ce.gemma_unresolved([row],{1:[source]},model,Path(d))
+        self.assertEqual(model.calls,1)
+        self.assertEqual(row['decision'],'unknown')
+
     def test_invalid_location_output_gets_one_repair_with_validator_feedback(self):
         import chain_evaluate as ce
         entries=[dict(source=0,quote=f'{100+i} Main St, Tustin Open daily',
