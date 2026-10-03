@@ -1,6 +1,6 @@
 # Issue #200 resume decision
 
-Prepared October 2, 2026. No inference was started for this plan.
+Prepared October 2, 2026. The authorized 20-row calibration is complete; the full evaluation has not started.
 
 ## Verified saved workload
 
@@ -30,7 +30,36 @@ mean 8.68 seconds, median 5.41 seconds, maximum 51.88 seconds. At that mean,
 size, revised requests, model loading, retries and machine contention vary.
 This is a forecast from saved measurements, not a completed full-run duration.
 
-## Proposed calibration
+## Calibration completed October 2
+
+The authorized sample used 20 fresh requests across source-bundle sizes, including
+excluded-chain controls and a 17,041-character source bundle. Exact request-hash
+checks found zero usable cache hits among the 1,160 current unknown rows before
+calibration; the 106 older cache entries do not match these revised requests.
+
+- 20/20 requests completed without request errors in 5.81 minutes.
+- Mean 17.41 seconds, median 9.72, range
+  7.31–78.07 seconds per request.
+- Model loading accounted for 32.14 seconds across the sample. Excluding
+  model-loading time, the mean was 15.80 seconds.
+- 1,140 uncached rows remain. Extrapolating the sample gives
+  5.51 hours including its loading overhead, or
+  5.00 hours at the measured warm mean.
+  **Plan 5–7 hours for inference**, with additional time for evidence reconciliation
+  and the final acceptance report. This small, deliberately stratified sample is
+  not a statistical confidence interval or a completed end-to-end measurement.
+- Validated decisions: zero chain, zero independent, 20 unknown. Successful
+  requests do not prove sufficient evidence or exclusion precision.
+
+Raw calibration rows, exact requests, timings, manifest and summary remain in the
+main checkout's ignored `output/chain-scorer/issue-200/calibration-20261002/`.
+The runner is saved there as `calibrate.py`. It reads saved rows/contexts directly,
+uses the existing exact-request model cache, and accesses no database. Prepared
+rows and contexts remain untouched; calibration checkpoints are separate.
+
+The full evaluation still needs the preconditions and acceptance checks below.
+
+## Calibration procedure
 
 After authorization to run inference, select 20 unknown rows spread across
 current source-bundle sizes, including empty evidence, long bundles and excluded
