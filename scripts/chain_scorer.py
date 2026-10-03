@@ -185,7 +185,7 @@ def decide(evidence: list[dict[str, Any]]) -> dict[str, Any]:
             continue
         if not item.get('identity_verified') or item.get('scope') != 'worldwide':
             continue
-        if item.get('kind') in {'S4', 'S5', 'S6'} and not item.get('supported', True):
+        if not item.get('supported', True):
             continue
         if count >= THRESHOLD:
             positive.append(item)

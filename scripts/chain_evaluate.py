@@ -613,6 +613,7 @@ def validate_probe_audit(audit):
         'official_complete_total',
         'rejected_domain_identity',
         'regional_total_not_worldwide',
+        'unverified_operating_total',
     }
     if basis not in allowed:
         raise ValueError('Unknown probe audit basis')

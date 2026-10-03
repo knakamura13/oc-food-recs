@@ -8,9 +8,9 @@ What it does:
   1. Upserts ``scripts/exclusions_seed.json`` into ``excluded_brands`` (unless
      ``--skip-seed``).
   2. Reclassifies every restaurant with ``reviewed_at IS NULL`` using the same
-     matcher as ingest: denylist -> ``excluded`` / ``likely_chain``; 4+ distinct
-     SoCal cities -> ``pending_review`` / ``likely_chain``; otherwise
-     ``active`` / ``independent``.
+     matcher as ingest: denylist -> ``excluded`` / ``likely_chain``; 6+ distinct
+     cities -> ``pending_review`` / ``unknown``; otherwise
+     ``active`` / ``unknown``. Counts remain unverified review hints.
 
 Human-reviewed rows are never touched. LLM ``chain_suspect`` is ingest-time only
 and is not replayed here. Unreviewed ``pending_review`` rows (including
