@@ -136,6 +136,7 @@ class PromptBudgetTest(unittest.TestCase):
         self.assertEqual(len(model.prompts),2)
         repair_bundle=json.loads(model.prompts[1].split('\n')[1])
         self.assertEqual(len(repair_bundle['sources']),1)
+        self.assertTrue(repair_bundle['sources'][0]['publisher_identity_verified'])
         sent=repair_bundle['sources'][0]['text']
         for quote in quotes[:6]:self.assertIn(quote,sent)
         self.assertEqual(row['decision'],'chain')
