@@ -13,6 +13,88 @@ except ModuleNotFoundError:
 
 
 class SourceRetrievalTest(unittest.TestCase):
+    def test_local_listing_does_not_license_other_businesses_on_same_page(self):
+        import chain_evaluate as ev
+        row = dict(name='Example Kitchen', street='100 Main St', location='Tustin')
+        source = dict(kind='S5', url='https://directory.example/food',
+            text='Example Kitchen 100 Main St Tustin. Other Kitchen has six locations.',
+            official_source=False)
+        self.assertTrue(ev.source_identity(row, source, [source]))
+        self.assertFalse(ev.count_identity(row, source, [source], listed=True))
+        self.assertFalse(ev.count_identity(row, source, [source],
+            quote='Other Kitchen has six locations.'))
+        quote='Example Kitchen at 100 Main St Tustin has six locations worldwide.'
+        source['text'] = quote
+        self.assertTrue(ev.count_identity(row, source, [source], quote))
+
+    def test_model_identity_assertion_cannot_override_local_mismatch(self):
+        import chain_evaluate as ev
+        import json
+        import tempfile
+
+        entries = [dict(source=0, quote=f'{100+i} Main St, Burien Open daily',
+            address=f'{100+i} Main St', city='Burien', operating=True) for i in range(6)]
+        class Model:
+            def gemma(self, prompt):
+                return {'seconds':0, 'response':{'done':True, 'message':{'content':json.dumps(
+                    dict(decision='chain', count=6, complete=False, identity_verified=True,
+                        locations=entries))}}}
+        row = dict(id=1, name='Example Kitchen', street='12911 Main St',
+            location='Garden Grove', decision='unknown', evidence=[])
+        source = dict(kind='S5', url='https://example.com/locations',
+            text='Example Kitchen '+ ' '.join(e['quote'] for e in entries), official_source=True)
+        with tempfile.TemporaryDirectory() as folder:
+            ev.gemma_unresolved([row], {1:[source]}, Model(), Path(folder))
+        self.assertEqual(row['decision'], 'unknown')
+        self.assertFalse(row['evidence'][0]['identity_verified'])
+        self.assertEqual(len(row['evidence'][0]['locations']), 6)
+
+    def test_local_identity_rejects_other_businesses_and_missing_address(self):
+        import chain_evaluate as ev
+        cases = [
+            ("Cassidy's", '2603 Newport Blvd', 'Newport Beach', "Cassidy's Corner Cafe 3846 Atlantic Ave Long Beach"),
+            ('Azteca', '12911 Main St', 'Garden Grove', 'Azteca 153 SW 157th St Burien'),
+            ('Navarros', '1535 S Standard Ave', 'Santa Ana', 'Navarro Discount Pharmacy 11800 SW 8th St Miami'),
+            ("Huckleberry's", '15891 Gothard St', 'Huntington Beach', "Huckleberry's 800 Southampton Rd Benicia"),
+        ]
+        for name, street, city, text in cases:
+            row = dict(name=name, street=street, location=city)
+            source = dict(kind='S5', url='https://example.com/locations', text=text,
+                official_source=True)
+            with self.subTest(name=name):
+                self.assertFalse(ev.source_identity(row, source, [source]))
+        source = dict(kind='S5', url='https://example.com/locations',
+            text='Example Kitchen 100 Main St Tustin', official_source=True)
+        self.assertFalse(ev.source_identity(dict(name='Example Kitchen', street=None,
+            location='Tustin'), source, [source]))
+
+    def test_local_identity_accepts_same_page_and_official_publisher_only(self):
+        import chain_evaluate as ev
+        row = dict(name='Example Kitchen', street='100 Main St', location='Tustin')
+        anchor = dict(kind='S5', url='https://example.com/tustin',
+            text='Example Kitchen 100 Main Street, Tustin Open daily', official_source=True)
+        locator = dict(kind='S5', url='https://example.com/locations', text='Six branches')
+        other = {**locator, 'url':'https://other.example/locations'}
+        self.assertTrue(ev.source_identity(row, anchor, [anchor]))
+        self.assertTrue(ev.source_identity(row, locator, [anchor]))
+        self.assertTrue(ev.count_identity(row, locator, [anchor], listed=True))
+        self.assertFalse(ev.source_identity(row, other, [anchor]))
+        anchor['official_source'] = False
+        self.assertTrue(ev.source_identity(row, anchor, [anchor]))
+        self.assertFalse(ev.source_identity(row, locator, [anchor]))
+        self.assertFalse(ev.count_identity(row, locator, [anchor], listed=True))
+
+    def test_local_identity_requires_city_outside_street_and_nearby_name(self):
+        import chain_evaluate as ev
+        row = dict(name='Example Kitchen', street='15101 Addison Rd', location='Addison')
+        source = dict(kind='S5', url='https://example.com', official_source=True,
+            text='Example Kitchen 15101 Addison Rd Open daily')
+        self.assertFalse(ev.source_identity(row, source, [source]))
+        source['text'] += ', Addison'
+        self.assertTrue(ev.source_identity(row, source, [source]))
+        source['text'] = 'Example Kitchen ' + 'unrelated ' * 100 + '15101 Addison Rd, Addison'
+        self.assertFalse(ev.source_identity(row, source, [source]))
+
     def test_location_feedback_does_not_establish_subthreshold_evidence(self):
         import chain_sources as src
         entries=[dict(source=0,quote='100 Main St, Tustin Open daily',
@@ -765,13 +847,14 @@ class ReviewRegressionTest(unittest.TestCase):
                 'id': 1,
                 'name': 'Synthetic Grill',
                 'location': 'Tustin',
+                'street': '100 Main St',
                 'evidence': [],
                 'decision': 'unknown',
             }
             source = {
                 'kind': 'S5',
                 'url': 'https://example.com/',
-                'text': 'We have 5 locations worldwide.',
+                'text': 'Synthetic Grill 100 Main Street, Tustin. We have 5 locations worldwide.',
                 'official_source': official,
                 'truncated': False,
             }
@@ -873,6 +956,7 @@ class SourceValidationTest(unittest.TestCase):
             'id': 1,
             'name': 'Synthetic Grill',
             'location': 'Tustin',
+                'street': '100 Main St',
             'evidence': [],
             'decision': 'unknown',
             'overture_matches': [
@@ -886,7 +970,7 @@ class SourceValidationTest(unittest.TestCase):
         page = {
             'requested_url': 'https://example.com/',
             'url': 'https://example.com/',
-            'text': 'Synthetic Grill has exactly five locations worldwide.',
+            'text': 'Synthetic Grill 100 Main St, Tustin. Synthetic Grill has exactly five locations worldwide.',
             'truncated': False,
         }
         with tempfile.TemporaryDirectory() as folder:
@@ -1106,13 +1190,14 @@ class ListedLocationsTest(unittest.TestCase):
             'id': 1,
             'name': 'Synthetic Grill',
             'location': 'Tustin',
+                'street': '100 Main St',
             'evidence': [],
             'decision': 'unknown',
         }
         source = {
             'kind': 'S5',
             'url': 'https://example.com/locations',
-            'text': texts[0],
+            'text': 'Synthetic Grill 100 Main St, Tustin. ' + texts[0],
             'official_source': True,
             'truncated': False,
         }
