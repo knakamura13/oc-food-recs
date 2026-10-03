@@ -197,21 +197,26 @@ def grounded_count(result, sources):
     )
 
 
-def grounded_locations(result, sources):
+def _grounded_locations(result, sources, minimum, errors=None):
     """Ground a positive lower bound in distinct quoted street-address entries.
 
     A list does not establish completeness. Location identity and current operation
     still require the model's semantic judgment; exact excerpts and conservative
     address normalization prevent fabricated entries and repeated page sections.
     """
+    def fail(reason):
+        if errors is not None:
+            errors.append(reason)
+        return []
+
     count, entries = result.get('count'), result.get('locations')
     if (
         type(count) is not int
-        or count < 6
+        or count < minimum
         or not isinstance(entries, list)
         or len(entries) != count
     ):
-        return []
+        return fail('Count must match the structured entry count and minimum')
     abbreviations = {
         'street': 'st',
         'avenue': 'ave',
@@ -253,7 +258,7 @@ def grounded_locations(result, sources):
     seen = set()
     for entry in entries:
         if not isinstance(entry, dict):
-            return []
+            return fail('Entry must be an object')
         index, quote = entry.get('source'), entry.get('quote')
         address, city = entry.get('address'), entry.get('city')
         if (
@@ -270,7 +275,7 @@ def grounded_locations(result, sources):
                 re.I,
             )
         ):
-            return []
+            return fail('Require exact contiguous source quote, contained address and city, operating true, and no closed/planned wording')
         # Units in a shared building are not separate restaurant branches.
         street = re.split(r'\b(?:suite|ste|unit)\b|#', address, maxsplit=1, flags=re.I)[
             0
@@ -300,7 +305,7 @@ def grounded_locations(result, sources):
                 evidence_whitespace(address), ' ')
             if not re.search(r'(?<!\w)' + re.escape(evidence_whitespace(city))
                 + r'(?!\w)', locality_text):
-                return []
+                return fail('Require a distinct city occurrence outside the street address')
             street = untrimmed_street
             tokens = [abbreviations.get(token, token)
                 for token in re.findall(r'[a-z0-9]+', street.lower())]
@@ -314,12 +319,42 @@ def grounded_locations(result, sources):
             or (not broadway_address
                 and not any(token in street_types for token in tokens[1:]))
         ):
-            return []
+            return fail('Numbered street address must contain a recognized street type: '
+                + ', '.join(sorted(street_types))
+                + ', or number and optional direction followed by Broadway. Do not invent a street type.')
         key = (tuple(tokens), tuple(re.findall(r'[a-z0-9]+', city_name.lower())))
         if key in seen:
-            return []
+            return fail('Duplicate normalized building address and city')
         seen.add(key)
     return entries
+
+
+def grounded_locations(result, sources):
+    """Require a complete valid list of at least six distinct operating addresses."""
+    return _grounded_locations(result, sources, 6)
+
+
+def location_feedback(result, sources):
+    """Diagnostic only. Classification still requires the full six-entry guard."""
+    entries = result.get('locations')
+    if not isinstance(entries, list) or len(entries) > 24:
+        return {'error': 'Expected at most 24 structured location entries'}
+    valid = []
+    invalid_details = {}
+    for i, entry in enumerate(entries):
+        errors = []
+        if _grounded_locations({'count': 1, 'locations': [entry]}, sources, 1, errors):
+            valid.append(i)
+        else:
+            invalid_details[i] = errors[0]
+    duplicates = [[a, b] for j, a in enumerate(valid) for b in valid[j + 1:]
+        if not _grounded_locations(
+            {'count': 2, 'locations': [entries[a], entries[b]]}, sources, 2)]
+    return {'invalid_entries': [i for i in range(len(entries)) if i not in valid],
+        'invalid_details': invalid_details,
+        'duplicate_pairs': duplicates,
+        'count_matches_entries': type(result.get('count')) is int
+            and result['count'] == len(entries)}
 
 
 def model_evidence(kind, result, sources):

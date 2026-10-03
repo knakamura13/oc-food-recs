@@ -13,6 +13,31 @@ except ModuleNotFoundError:
 
 
 class SourceRetrievalTest(unittest.TestCase):
+    def test_location_feedback_does_not_establish_subthreshold_evidence(self):
+        import chain_sources as src
+        entries=[dict(source=0,quote='100 Main St, Tustin Open daily',
+            address='100 Main St',city='Tustin',operating=True)]
+        result=dict(decision='chain',count=1,locations=entries,identity_verified=True)
+        texts=[entries[0]['quote']]
+        self.assertEqual(src.location_feedback(result,texts)['invalid_entries'],[])
+        self.assertEqual(src.grounded_locations(result,texts),[])
+        self.assertEqual(src.model_evidence('S6',result,texts),[])
+
+    def test_location_feedback_reports_invalid_and_duplicate_entries(self):
+        import chain_sources as src
+        entries=[dict(source=0,quote='100 Main St Suite 1, Tustin Open daily',
+            address='100 Main St Suite 1',city='Tustin',operating=True),
+            dict(source=0,quote='100 Main Street Suite 2, Tustin Open daily',
+            address='100 Main Street Suite 2',city='Tustin',operating=True),
+            dict(source=0,quote='1 Shopping Center, Tustin',
+            address='1 Shopping Center',city='Tustin',operating=True)]
+        texts=[' '.join(e['quote'] for e in entries)]
+        feedback=src.location_feedback(dict(count=3,locations=entries),texts)
+        self.assertEqual(feedback['invalid_entries'],[2])
+        self.assertIn('recognized street type',feedback['invalid_details'][2])
+        self.assertEqual(feedback['duplicate_pairs'],[[0,1]])
+        self.assertTrue(feedback['count_matches_entries'])
+
     def test_broadway_requires_number_and_optional_direction_only(self):
         import chain_sources as src
         for street in ('Broadway', 'N Broadway', 'South Broadway'):
