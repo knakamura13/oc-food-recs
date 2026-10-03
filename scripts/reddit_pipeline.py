@@ -2649,6 +2649,7 @@ def merge_unreviewed_classification(
 
     Denylist ``excluded`` always wins. ``pending_review`` (user reports, LLM,
     density, location-count) stays queued — never cleared back to ``active``.
+    User reports retain their status/reason while taking fresh chain confidence.
     Existing unreviewed ``excluded`` can be recomputed so a registry removal
     unhides the row.
     """
@@ -2657,6 +2658,8 @@ def merge_unreviewed_classification(
     if new_status == "excluded":
         return new_status, new_reason, new_confidence
     if status == "pending_review":
+        if current_reason == "user_reported_chain":
+            return status, current_reason, new_confidence
         return status, current_reason, confidence
     return new_status, new_reason, new_confidence
 

@@ -9,7 +9,6 @@ export function resetAppState(): void {
   appState.freshnessCutoff = null;
   appState.freshnessSource = null;
   appState.showUnmapped = false;
-  appState.showMomAndPop = true;
   appState.showSavedOnly = false;
   appState.reportedChainSlugs = [];
   appState.sortKey = "score";

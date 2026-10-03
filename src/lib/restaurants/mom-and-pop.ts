@@ -1,9 +1,6 @@
 export type ChainConfidence = "independent" | "likely_chain" | "unknown";
 
-export const MOM_AND_POP_HELP =
-  "No franchises or big chains — independent spots with up to three locations still count.";
-
-/** Policy v1: independents and unknowns pass; likely_chain fails. */
+/** Public visibility: independent and unknown rows pass; likely_chain rows never do. */
 export function passesMomAndPopFilter(
   restaurant: Pick<RestaurantConfidence, "chain_confidence" | "slug">,
 ): boolean {

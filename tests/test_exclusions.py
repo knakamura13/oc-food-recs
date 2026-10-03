@@ -239,23 +239,21 @@ class TestClassifyStatus(unittest.TestCase):
         self.assertEqual(rp.CHAIN_LOCATION_THRESHOLD, 4)
         self.assertEqual(rp.DENSITY_CITY_THRESHOLD, 4)
 
-    def test_merge_preserves_user_reported_queue(self):
-        status, reason, confidence = rp.merge_unreviewed_classification(
-            "pending_review",
-            "user_reported_chain",
+    def test_merge_refreshes_user_report_confidence_without_clearing_report(self):
+        for new_confidence in (
+            rp.CHAIN_CONFIDENCE_UNKNOWN,
             rp.CHAIN_CONFIDENCE_INDEPENDENT,
-            "active",
-            None,
-            rp.CHAIN_CONFIDENCE_INDEPENDENT,
-        )
-        self.assertEqual(
-            (status, reason, confidence),
-            (
-                "pending_review",
-                "user_reported_chain",
-                rp.CHAIN_CONFIDENCE_INDEPENDENT,
-            ),
-        )
+            rp.CHAIN_CONFIDENCE_LIKELY_CHAIN,
+        ):
+            with self.subTest(new_confidence=new_confidence):
+                self.assertEqual(
+                    rp.merge_unreviewed_classification(
+                        "pending_review", "user_reported_chain",
+                        rp.CHAIN_CONFIDENCE_INDEPENDENT,
+                        "active", None, new_confidence,
+                    ),
+                    ("pending_review", "user_reported_chain", new_confidence),
+                )
 
     def test_merge_preserves_llm_queue(self):
         status, reason, confidence = rp.merge_unreviewed_classification(

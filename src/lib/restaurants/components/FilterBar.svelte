@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Bookmark, ChevronDown, Map as MapIcon, Share2, Store } from 'lucide-svelte';
+	import { Bookmark, ChevronDown, Map as MapIcon, Share2 } from 'lucide-svelte';
 	import type { Restaurant } from '$lib/restaurants/types';
 	import {
 		appState,
@@ -17,7 +17,6 @@
 	import { toast } from '$lib/toast';
 	import { trackEvent, type EventProps } from '$lib/events';
 	import RecencyHistogram from './RecencyHistogram.svelte';
-	import { MOM_AND_POP_HELP } from '$lib/restaurants/mom-and-pop';
 
 	interface Props {
 		/** Full roster: defines which options exist (and their stable "More cuisines" tiering). */
@@ -562,26 +561,6 @@
 				</div>
 			{/if}
 		</div>
-
-		<!-- After Recency so Cuisine/City stay fully visible at 320px. -->
-		<button
-			type="button"
-			class="dropdown-trigger mapped-only-toggle"
-			class:has-active={appState.showMomAndPop}
-			aria-pressed={appState.showMomAndPop}
-			title={MOM_AND_POP_HELP}
-			aria-label="Mom & pop. {MOM_AND_POP_HELP}"
-			onclick={() => {
-				if (!appState.showMomAndPop) trackFilterApplied('mom_and_pop');
-				appState.showMomAndPop = !appState.showMomAndPop;
-			}}
-		>
-			{#if appState.showMomAndPop}
-				<span aria-hidden="true">✓</span>
-			{/if}
-			<Store size={13} aria-hidden="true" />
-			Mom & pop
-		</button>
 
 		<!-- Subreddit dropdown (only when data spans more than one subreddit) -->
 		{#if showSubredditFilter}

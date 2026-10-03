@@ -61,7 +61,7 @@ describe("filter-page-restaurants", () => {
     expect(result[0].lat).not.toBeNull();
   });
 
-  it("hides likely_chain rows when Mom & pop is on", () => {
+  it("always hides likely_chain rows, including legacy toggle overrides", () => {
     const restaurants = [
       makeRestaurant({ slug: "pops", chain_confidence: "independent" }),
       makeRestaurant({ slug: "in-n-out", chain_confidence: "likely_chain" }),
@@ -74,7 +74,6 @@ describe("filter-page-restaurants", () => {
         activeCuisines: [],
         activeCities: [],
         showUnmapped: true,
-        showMomAndPop: true,
       },
       { threadSubreddit, subredditSliceCache: createSliceCache() },
     );
@@ -87,11 +86,12 @@ describe("filter-page-restaurants", () => {
         activeCuisines: [],
         activeCities: [],
         showUnmapped: true,
-        showMomAndPop: false,
+        // Stale client state must not bypass the unconditional policy.
+        ...({ showMomAndPop: false }),
       },
       { threadSubreddit, subredditSliceCache: createSliceCache() },
     );
-    expect(shown.map((r) => r.slug)).toEqual(["pops", "in-n-out", "mystery"]);
+    expect(shown.map((r) => r.slug)).toEqual(["pops", "mystery"]);
   });
 
   it("filters mentions by recency cutoff", () => {
