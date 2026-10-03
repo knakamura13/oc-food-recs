@@ -15,7 +15,10 @@ from collections import defaultdict
 from pathlib import Path
 
 from chain_retrieval import address_excerpts, crawl_websites, lookup_websites, location_link
-from chain_models import EVIDENCE_QUESTIONS, Models, noul, parse_gemma, probability
+from chain_models import (
+    EVIDENCE_QUESTIONS, GEMMA_CONTEXT_TOKENS, GEMMA_OUTPUT_TOKENS,
+    Models, noul, parse_gemma, probability,
+)
 from chain_scorer import (
     brand_matches,
     decide,
@@ -34,6 +37,7 @@ from chain_sources import (
     location_count_candidates,
     match_places,
     model_evidence,
+    location_feedback,
     place_matches,
     snapshot,
     website_text,
@@ -429,6 +433,36 @@ def jev_generic_names(rows, global_rows, models):
     """
 
 
+def budget_repair_prompt(instructions, bundle, suffix):
+    """Bound the entire retry, conservatively counting one token per UTF-8 byte.
+
+    Reserve generation tokens and 256 tokens for the system message/chat framing.
+    Fixed metadata, prior output and feedback must fit before admitting source text.
+    """
+    maximum = GEMMA_CONTEXT_TOKENS - GEMMA_OUTPUT_TOKENS - 256
+
+    def render(limit):
+        sources = [{**source, 'text': source['text'][:limit]}
+            for source in bundle['sources']]
+        prompt = instructions + '\n' + json.dumps(
+            {**bundle, 'sources': sources}, ensure_ascii=False, separators=(',', ':')) + suffix
+        return prompt, [s['text'] for s in sources]
+
+    fixed, _ = render(0)
+    if len(fixed.encode('utf-8')) >= maximum:
+        return None, []
+    low, high = 0, max((len(s['text']) for s in bundle['sources']), default=0)
+    while low < high:
+        middle = (low + high + 1) // 2
+        candidate, _ = render(middle)
+        if len(candidate.encode('utf-8')) <= maximum:
+            low = middle
+        else:
+            high = middle - 1
+    prompt, texts = render(low)
+    return (prompt, texts) if any(texts) else (None, [])
+
+
 def gemma_unresolved(rows, contexts, models, output):
     results = []
     unresolved = [r for r in rows if r['decision'] == 'unknown']
@@ -440,6 +474,7 @@ def gemma_unresolved(rows, contexts, models, output):
             if len(excerpts)>=6:
                 expanded.extend({**source,'text':e['text'],'truncated':True,
                     'excerpt_range':[e['start'],e['end']],
+                    'publisher_context':source['text'][:200],
                     'parent_text_sha256':hashlib.sha256(source['text'].encode()).hexdigest()}
                     for e in excerpts)
             else:
@@ -456,8 +491,9 @@ def gemma_unresolved(rows, contexts, models, output):
                     not in {'locations','location','stores','store','our-locations','our-cafes'}),
                 bool(explicit_location_counts(s['text'])), s['kind']=='S5'),
             reverse=True,
-        )[:8]
-        limit=min(5000,20000//max(1,len(chosen)))
+        )[:12]
+        context_chars=sum(len(s.get('publisher_context','')) for s in chosen)
+        limit=min(5000,(20000-context_chars)//max(1,len(chosen)))
         texts = [s['text'][:limit] for s in chosen]
         budget = []
         chars = 0
@@ -480,12 +516,14 @@ def gemma_unresolved(rows, contexts, models, output):
                     'kind': chosen[i]['kind'],
                     'url': chosen[i].get('url'),
                     'official_source': chosen[i].get('official_source') is True,
+                    **({'publisher_context':chosen[i]['publisher_context']}
+                        if chosen[i].get('publisher_context') else {}),
                 }
                 for i, t in enumerate(budget)
             ],
         }
         prompt = (
-            'Judge only the supplied evidence for this named business. Six or more operating locations anywhere means chain. Five or fewer means independent only when an official source explicitly gives a complete worldwide current total. Family ownership, an incomplete directory and missing evidence do not prove independent. Reports are not evidence. If insufficient or conflicting, abstain. Return JSON {"decision":"chain|independent|unknown","count":integer or null,"complete":boolean,"identity_verified":boolean,"source":source index or null,"quote":"exact source excerpt containing the location count"}. A chain can also be established by a list of at least six distinct currently operating street addresses of this same business. In that case include "locations":[{"source":index,"quote":"exact excerpt for this individual location","address":"exact street address from that excerpt","city":"exact city from that excerpt","operating":true}] and set count to the number of distinct entries. Every locations entry must include the operating boolean; set it to true only when the supplied source supports current operation, otherwise false. For each location quote, copy one contiguous excerpt containing its street address and city. Do not prepend a branch heading or join separated fragments. Do not duplicate branches across pages, units or spelling variations; exclude closed, planned and coming-soon entries. A list alone never proves independence or completeness.\n'
+            'Judge only the supplied evidence for this named business. Six or more operating locations anywhere means chain. Five or fewer means independent only when an official source explicitly gives a complete worldwide current total. Family ownership, an incomplete directory and missing evidence do not prove independent. Reports are not evidence. If insufficient or conflicting, abstain. Return JSON {"decision":"chain|independent|unknown","count":integer or null,"complete":boolean,"identity_verified":boolean,"source":source index or null,"quote":"exact source excerpt containing the location count"}. A chain can also be established by a list of at least six distinct currently operating street addresses of this same business. In that case include "locations":[{"source":index,"quote":"exact excerpt for this individual location","address":"exact street address from that excerpt","city":"exact city from that excerpt","operating":true}] and set count to the number of distinct entries. Every locations entry must include the operating boolean; set it to true only when the supplied source supports current operation, otherwise false. For each location quote, copy one contiguous excerpt containing its street address and city. Do not prepend a branch heading or join separated fragments. Do not duplicate branches across pages, units or spelling variations; exclude closed, planned and coming-soon entries. A list alone never proves independence or completeness. Publisher context is a separate exact excerpt from the same page that may establish affiliation; location quotes must come only from that source text, never concatenate publisher context with an address. For address fields, copy only the numbered street address and optional unit, omitting preceding venue or mall names. Include only recognized street addresses, not a shopping-center or mall name alone. Omit entries lacking an address or separate city. Count each normalized building street address only once even when suites or branch names differ. Count must equal the number of valid distinct entries you return. If fewer than six remain, abstain rather than include invalid or duplicate entries.\n'
             + json.dumps(bundle, ensure_ascii=False)
         )
         result = models.gemma(prompt)
@@ -493,12 +531,51 @@ def gemma_unresolved(rows, contexts, models, output):
             'restaurant_id': r['id'],
             'source_count': len(sources),
             'prompt_source_count': len(budget),
+            'prompt_sources': [
+                {'index':i,'url':s.get('url'),
+                    **{k:s[k] for k in ('excerpt_range','parent_text_sha256',
+                        'publisher_context') if k in s}}
+                for i,s in enumerate(chosen[:len(budget)])
+            ],
             'result': result,
         }
         if not result.get('error'):
             parsed = parse_gemma(result['response'])
             rec['parsed'] = parsed
             evidence = model_evidence('S6', parsed, budget)
+            evidence_budget = budget
+            rec['attempts'] = [{'result': result, 'parsed': parsed}]
+            address_sources = sum(bool(s.get('excerpt_range')) or
+                location_link(s.get('url') or '') for s in chosen)
+            if (not evidence and (parsed.get('decision') == 'chain'
+                or (parsed.get('decision') == 'unknown' and address_sources >= 6))):
+                feedback = location_feedback(parsed, budget)
+                suffix = ('\nThe previous output did not establish '
+                    'a supported decision. Correct it once using only the original '
+                    'source texts. Invalid entries must be corrected from exact text '
+                    'or omitted. Keep at most one entry from each duplicate pair. '
+                    'Return unknown if fewer than six valid distinct operating '
+                    'addresses remain. Do not invent a street type. Unverified '
+                    'candidate pages may describe other businesses and do not '
+                    'establish contradictory affiliation.\nPrevious output: '
+                    + json.dumps(parsed, ensure_ascii=False)
+                    + '\nValidator feedback: ' + json.dumps(feedback))
+                repair_prompt, repair_budget = budget_repair_prompt(
+                    prompt.split('\n', 1)[0], bundle, suffix)
+                if repair_prompt is None:
+                    rec['repair_skipped'] = 'Fixed repair payload exceeds context budget'
+                else:
+                    repair = models.gemma(repair_prompt)
+                    attempt = {'result': repair,
+                        'prompt_bytes': len(repair_prompt.encode('utf-8')),
+                        'source_text_lengths': [len(text) for text in repair_budget]}
+                    if not repair.get('error'):
+                        parsed = parse_gemma(repair['response'])
+                        attempt['parsed'] = parsed
+                        rec['parsed'] = parsed
+                        evidence_budget = repair_budget
+                        evidence = model_evidence('S6', parsed, evidence_budget)
+                    rec['attempts'].append(attempt)
             # Completeness additionally requires an official website, never a Reddit claim.
             for e in evidence:
                 source = chosen[e['source']]
@@ -507,7 +584,7 @@ def gemma_unresolved(rows, contexts, models, output):
                     and source['kind'] == 'S5'
                     and source.get('official_source') is True
                     and not source.get('truncated')
-                    and len(source['text']) <= len(budget[e['source']])
+                    and len(source['text']) <= len(evidence_budget[e['source']])
                 )
                 for location in e.get('locations', []):
                     location['url'] = chosen[location['source']].get('url')

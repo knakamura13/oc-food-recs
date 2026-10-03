@@ -38,6 +38,11 @@ def parse_gemma(body):
     return value
 
 
+# Shared with evaluator prompt budgets.
+GEMMA_CONTEXT_TOKENS = 8192
+GEMMA_OUTPUT_TOKENS = 2048
+
+
 class Models:
     def __init__(self, cache: Path, ollama_url='http://127.0.0.1:11434/api/chat'):
         self.cache = cache
@@ -149,8 +154,8 @@ class Models:
             ],
             'options': {
                 'temperature': 0,
-                'num_ctx': 8192,
-                'num_predict': 160 if probe else 2048,
+                'num_ctx': GEMMA_CONTEXT_TOKENS,
+                'num_predict': 160 if probe else GEMMA_OUTPUT_TOKENS,
             },
             'keep_alive': '30m',
         }

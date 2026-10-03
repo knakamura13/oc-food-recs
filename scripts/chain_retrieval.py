@@ -199,7 +199,8 @@ def crawl_websites(urls, cache, workers):
 def address_excerpts(text):
     # Text remains contiguous. A match locates a useful window, not an assertion
     # that the address belongs to this business or is currently operating.
-    pattern=r'\b\d+[A-Za-z]?\s+[^|,]{3,90}?\b(?:St(?:reet)?|Rd|Road|Dr(?:ive)?|Blvd|Boulevard|Ave(?:nue)?|Cir(?:cle)?|Broadway)\.?[^|,]{0,30}[|,]\s*[A-Za-z][A-Za-z .-]{1,40},\s*[A-Z]{2}\s+\d{5}\b'
+    word=r"(?:[A-Za-z][A-Za-z.'-]*|[0-9]{1,3}(?:st|nd|rd|th))"
+    pattern=r'\b\d+[A-Za-z]?\s+(?:'+word+r'\s+){0,8}(?:St(?:reet)?|Rd|Road|Dr(?:ive)?|Blvd|Boulevard|Ave(?:nue)?|Cir(?:cle)?|Broadway)\.?[^|,]{0,30}[|,]\s*[A-Za-z][A-Za-z .-]{1,40},\s*[A-Z]{2}\s+\d{5}\b'
     starts=sorted({m.start() for m in re.finditer(pattern,text)})
     if len(starts)<6:return []
     return [{'start':start,'end':min(start+350,starts[i+1] if i+1<len(starts) else len(text)),

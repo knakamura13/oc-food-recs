@@ -75,6 +75,16 @@ class RetrievalTest(unittest.TestCase):
         self.assertLessEqual(len(result['pages']),12)
         self.assertEqual(result['max_pages_per_publisher'],12)
 
+    def test_locator_windows_do_not_begin_inside_hours_or_previous_branch(self):
+        text='Locations | Example Bakery '+ ' '.join(
+            f'10a-2p {100+i} Main St, Tustin, CA 92780 Dine-in Hours Daily 6:30a - 8:30p '
+            for i in range(6))
+        excerpts=cr.address_excerpts(text)
+        self.assertEqual(len(excerpts),6)
+        for i,e in enumerate(excerpts):
+            self.assertTrue(e['text'].startswith(f'{100+i} Main St'))
+            self.assertIn('Dine-in Hours',e['text'])
+
     def test_locator_excerpts_are_original_contiguous_windows(self):
         text='Publisher '+ ' '.join(f'{100+i} Main St, Tustin, CA 92780 Open daily. ' for i in range(6))
         excerpts=cr.address_excerpts(text)
@@ -95,6 +105,160 @@ class RetrievalTest(unittest.TestCase):
         self.assertEqual(f.call_count,3)
 
 class PromptBudgetTest(unittest.TestCase):
+    def test_complete_repair_prompt_has_a_conservative_context_budget(self):
+        import chain_evaluate as ce
+        entries=[dict(source=i,quote=f'{100+i} Main St, Tustin Open daily',
+            address=f'{100+i} Main St',city='Tustin',operating=True) for i in range(6)]
+        class Model:
+            def __init__(self):self.prompts=[]
+            def gemma(self,prompt):
+                self.prompts.append(prompt)
+                result=dict(decision='chain',count=6,locations=[entries[0]]*6,
+                    identity_verified=True,complete=False,source=None,quote=None)
+                return {'seconds':0,'response':{'done':True,'message':{'content':json.dumps(result)}}}
+        model=Model()
+        sources=[dict(kind='S5',id=str(i),url='https://example.com/locations/'+str(i),
+            text='語'*1200+' '+e['quote'],truncated=False) for i,e in enumerate(entries)]
+        row=dict(id=1,name='Example',location='Tustin',decision='unknown',evidence=[])
+        with tempfile.TemporaryDirectory() as d:
+            ce.gemma_unresolved([row],{1:sources},model,Path(d))
+        self.assertEqual(len(model.prompts),2)
+        self.assertLessEqual(len(model.prompts[1].encode('utf-8')),8192-2048-256)
+        self.assertEqual(row['decision'],'unknown')
+
+    def test_repair_cannot_ground_quotes_removed_by_its_budget(self):
+        import chain_evaluate as ce
+        entries=[dict(source=i,quote=f'{100+i} Main St, Tustin Open daily',
+            address=f'{100+i} Main St',city='Tustin',operating=True) for i in range(6)]
+        class Model:
+            def __init__(self):self.calls=0
+            def gemma(self,prompt):
+                self.calls+=1
+                result=dict(decision='chain',count=6,
+                    locations=[entries[0]]*6 if self.calls==1 else entries,
+                    identity_verified=True,complete=False,source=None,quote=None)
+                return {'seconds':0,'response':{'done':True,'message':{'content':json.dumps(result)}}}
+        model=Model()
+        sources=[dict(kind='S5',id=str(i),url='https://example.com/locations/'+str(i),
+            text='x'*1400+' '+e['quote'],truncated=False) for i,e in enumerate(entries)]
+        row=dict(id=1,name='Example',location='Tustin',decision='unknown',evidence=[])
+        with tempfile.TemporaryDirectory() as d:
+            ce.gemma_unresolved([row],{1:sources},model,Path(d))
+        self.assertEqual(model.calls,2)
+        self.assertEqual(row['decision'],'unknown')
+
+    def test_repair_truncation_cannot_establish_complete_negative_evidence(self):
+        import chain_evaluate as ce
+        entry=dict(source=0,quote='100 Main St, Tustin Open daily',
+            address='100 Main St',city='Tustin',operating=True)
+        class Model:
+            def __init__(self):self.calls=0
+            def gemma(self,prompt):
+                self.calls+=1
+                result=(dict(decision='chain',count=6,locations=[entry]*6,
+                    identity_verified=True,complete=False,source=None,quote=None)
+                    if self.calls==1 else dict(decision='independent',count=1,
+                        identity_verified=True,complete=True,source=0,
+                        quote='Only one location worldwide.'))
+                return {'seconds':0,'response':{'done':True,'message':{'content':json.dumps(result)}}}
+        model=Model()
+        source=dict(kind='S5',id='0',url='https://example.com/',official_source=True,
+            text='Only one location worldwide. '+ 'x'*4500+' '+entry['quote'],truncated=False)
+        row=dict(id=1,name='Example',location='Tustin',decision='unknown',evidence=[])
+        with tempfile.TemporaryDirectory() as d:
+            ce.gemma_unresolved([row],{1:[source]},model,Path(d))
+        self.assertEqual(model.calls,2)
+        self.assertEqual(row['decision'],'unknown')
+        self.assertFalse(row['evidence'][0]['complete'])
+
+    def test_oversized_fixed_repair_payload_skips_the_retry(self):
+        import chain_evaluate as ce
+        class Model:
+            def __init__(self):self.calls=0
+            def gemma(self,prompt):
+                self.calls+=1
+                result=dict(decision='chain',count=6,locations=[],identity_verified=True,
+                    complete=False,source=None,quote='語'*6000)
+                return {'seconds':0,'response':{'done':True,'message':{'content':json.dumps(result)}}}
+        model=Model()
+        source=dict(kind='S5',id='1',url='https://example.com/',text='Open daily',truncated=False)
+        row=dict(id=1,name='Example',location='Tustin',decision='unknown',evidence=[])
+        with tempfile.TemporaryDirectory() as d:
+            ce.gemma_unresolved([row],{1:[source]},model,Path(d))
+        self.assertEqual(model.calls,1)
+        self.assertEqual(row['decision'],'unknown')
+
+    def test_invalid_location_output_gets_one_repair_with_validator_feedback(self):
+        import chain_evaluate as ce
+        entries=[dict(source=0,quote=f'{100+i} Main St, Tustin Open daily',
+            address=f'{100+i} Main St',city='Tustin',operating=True) for i in range(6)]
+        text=' '.join(e['quote'] for e in entries)
+        bad=[entries[0]]*6
+        class Model:
+            def __init__(self,persist=False):self.prompts=[];self.persist=persist
+            def gemma(self,prompt):
+                self.prompts.append(prompt)
+                locations=bad if self.persist or len(self.prompts)==1 else entries
+                return {'seconds':0,'response':{'done':True,'message':{'content':json.dumps(
+                    dict(decision='chain',count=6,complete=False,identity_verified=True,
+                        source=None,quote=None,locations=locations))}}}
+        model=Model()
+        source=dict(kind='S5',id='locator',url='https://example.com/locations',
+            text=text,truncated=False)
+        row=dict(id=1,name='Example',location='Tustin',decision='unknown',evidence=[])
+        with tempfile.TemporaryDirectory() as d:
+            ce.gemma_unresolved([row],{1:[source]},model,Path(d))
+            record=json.loads((Path(d)/'gemma-results.json').read_text())[0]
+        self.assertEqual(len(model.prompts),2)
+        self.assertIn('duplicate_pairs',model.prompts[1])
+        self.assertEqual(row['decision'],'chain')
+        self.assertEqual(len(record['attempts']),2)
+        model=Model(persist=True)
+        row=dict(id=2,name='Example',location='Tustin',decision='unknown',evidence=[])
+        with tempfile.TemporaryDirectory() as d:
+            ce.gemma_unresolved([row],{2:[source]},model,Path(d))
+        self.assertEqual(len(model.prompts),2)
+        self.assertEqual(row['decision'],'unknown')
+
+    def test_locator_context_preserves_publisher_and_separate_quote_windows(self):
+        import chain_evaluate as ce
+        class Model:
+            def gemma(self,prompt):
+                self.bundle=json.loads(prompt.rsplit('\n',1)[1])
+                return {'error':'capture only','seconds':0}
+        model=Model()
+        text='Locations | Example Bakery Open daily. '+ ' '.join(
+            f'{100+i} Main St, Tustin, CA 92780 Open daily. ' for i in range(6))
+        source=dict(kind='S5',id='locator',url='https://example.com/locations',
+            text=text,address_excerpts=cr.address_excerpts(text),truncated=False)
+        row=dict(id=1,name='Example Bakery',location='Tustin',decision='unknown',evidence=[])
+        with tempfile.TemporaryDirectory() as d:
+            ce.gemma_unresolved([row],{1:[source]},model,Path(d))
+            record=json.loads((Path(d)/'gemma-results.json').read_text())[0]
+        self.assertEqual(len(model.bundle['sources']),6)
+        for src in model.bundle['sources']:
+            self.assertEqual(src['publisher_context'],text[:200])
+        for src in record['prompt_sources']:
+            start,end=src['excerpt_range']
+            self.assertEqual(text[start:end],model.bundle['sources'][src['index']]['text'])
+            self.assertEqual(src['parent_text_sha256'],__import__('hashlib').sha256(text.encode()).hexdigest())
+
+    def test_twelve_branches_fit_when_some_cannot_supply_valid_streets(self):
+        import chain_evaluate as ce
+        class Model:
+            def gemma(self,prompt):
+                self.bundle=json.loads(prompt.rsplit('\n',1)[1])
+                return {'error':'capture only','seconds':0}
+        model=Model()
+        sources=[dict(kind='S5',id=str(i),url='https://example.com/locations/'+str(i),
+            text='Open daily '+ 'x'*2000,truncated=False) for i in range(12)]
+        row=dict(id=1,name='Example',location='Tustin',decision='unknown',evidence=[])
+        with tempfile.TemporaryDirectory() as d:
+            ce.gemma_unresolved([row],{1:sources},model,Path(d))
+        self.assertEqual(len(model.bundle['sources']),12)
+        self.assertLessEqual(sum(len(s['text'])+len(s.get('publisher_context',''))
+            for s in model.bundle['sources']),20000)
+
     def test_branch_pages_are_not_displaced_by_menu_or_home_pages(self):
         import chain_evaluate as ce
         class Model:
