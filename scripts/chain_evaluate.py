@@ -49,12 +49,13 @@ def same_family(a, b):
     return x == y or min(len(x), len(y)) >= 2 and (x[: len(y)] == y or y[: len(x)] == x)
 
 
-def candidate_websites(urls):
-    """Bound retrieval to three domains, preferring locator indexes to branches."""
+def candidate_websites(urls, local_domains=()):
+    """Prefer local domains, then locator indexes, within a three-domain cap."""
+    local_domains = set(local_domains)
     def priority(url):
         path = urlsplit(url).path.rstrip('/').lower()
         index = path.split('/')[-1] in {'locations', 'our-locations', 'stores', 'our-cafes'}
-        return (not index, bool(path), len(path), url)
+        return (website_domain(url) not in local_domains, not index, bool(path), len(path), url)
     chosen = {}
     for url in sorted(urls, key=priority):
         domain = website_domain(url)
@@ -173,7 +174,7 @@ def deterministic_rows(restaurants, matches, global_rows, nsi, atp):
             **r,
             'evidence': ev,
             'overture_matches': matched,
-            'candidate_websites': candidate_websites(candidate_urls),
+            'candidate_websites': candidate_websites(candidate_urls, local_domains),
             'same_name_count': distinct_locations(
                 [(p['lat'], p['lon']) for p in exact]
             ),
@@ -185,10 +186,12 @@ def deterministic_rows(restaurants, matches, global_rows, nsi, atp):
 
 
 def row_websites(row):
-    return candidate_websites({w for w in row.get('candidate_websites', []) if website_domain(w)} | {
+    local_urls = {
         w for p in row.get('overture_matches', []) for w in p.get('websites') or []
         if website_domain(w)
-    })
+    }
+    return candidate_websites(set(row.get('candidate_websites', [])) | local_urls,
+        {website_domain(w) for w in local_urls})
 
 
 def fetch_websites(rows, cache, output, workers):
@@ -393,36 +396,11 @@ def jev_sources(rows, mentions, websites, models, output, workers):
 
 
 def jev_generic_names(rows, global_rows, models):
-    for r in rows:
-        if r['decision'] != 'unknown' or r['same_name_count'] < 6:
-            continue
-        question = {
-            'non_generic': noul(
-                'Does `restaurant.name` identify a distinctive specific restaurant brand, rather than a generic or commonly reused business name? Consider only naming specificity; do not infer location counts or ownership.'
-            )
-        }
-        result = models.jev({'restaurant': {'name': r['name']}}, question)
-        p = (
-            None
-            if result.get('error')
-            else probability(result['response'], 'non_generic')
-        )
-        r['generic_name_probability'] = p
-        if p is not None and p >= 0.95:
-            pp = [
-                p
-                for p in global_rows
-                if name_tokens(p['name']) == name_tokens(r['name'])
-            ]
-            r['evidence'].append(
-                count_evidence(
-                    'S2',
-                    pp,
-                    corroboration='Jev distinctive name',
-                    non_generic_probability=p,
-                )
-            )
-            r.update(decide(r['evidence']))
+    """Retired name-only path, retained for compatibility with evaluation callers.
+
+    Naming specificity cannot verify branch affiliation. Do not spend inference
+    on a judgment that cannot supply supported identity evidence.
+    """
 
 
 def gemma_unresolved(rows, contexts, models, output):

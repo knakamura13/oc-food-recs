@@ -13,6 +13,31 @@ except ModuleNotFoundError:
 
 
 class SourceRetrievalTest(unittest.TestCase):
+    def test_local_domain_survives_speculative_locator_domains(self):
+        import chain_evaluate as ce
+        restaurant = dict(id=1, name='Example Cafe', location='Tustin',
+            status='active', exclusion_reason=None, lat=None, lng=None)
+        local = dict(id='local', name='Example Cafe', lat=33.7, lon=-117.8,
+            websites=['https://local-example.com/'], phones=[])
+        global_places = [dict(local, id=str(i), websites=[
+            'https://' + domain + '-example.com/locations']) for i, domain in enumerate('abcd')]
+        row = ce.deterministic_rows([restaurant], {1: [local]}, global_places,
+            {'brands': []}, {'brands': [], 'places': []})[0]
+        self.assertIn('https://local-example.com/', row['candidate_websites'])
+        self.assertIn('https://local-example.com/', ce.row_websites(row))
+        self.assertEqual(len(ce.row_websites(row)), 3)
+
+    def test_distinctive_name_does_not_spend_inference_on_unverified_identity(self):
+        import chain_evaluate as ce
+        from unittest.mock import Mock
+        row = dict(id=1, name='Distinctive Cafe', same_name_count=6,
+            decision='unknown', evidence=[])
+        model = Mock()
+        ce.jev_generic_names([row], [], model)
+        model.jev.assert_not_called()
+        self.assertEqual(row['decision'], 'unknown')
+        self.assertEqual(row['evidence'], [])
+
     def test_directory_domain_or_phone_does_not_verify_business_affiliation(self):
         import chain_evaluate as ce
         places = [dict(id=str(i), lat=33.7 + i * .01, lon=-117.8) for i in range(6)]
