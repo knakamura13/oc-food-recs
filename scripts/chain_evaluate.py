@@ -49,12 +49,31 @@ def same_family(a, b):
     return x == y or min(len(x), len(y)) >= 2 and (x[: len(y)] == y or y[: len(x)] == x)
 
 
+def candidate_websites(urls, local_domains=()):
+    """Prefer local domains, then locator indexes, within a three-domain cap."""
+    local_domains = set(local_domains)
+    def priority(url):
+        path = urlsplit(url).path.rstrip('/').lower()
+        index = path.split('/')[-1] in {'locations', 'our-locations', 'stores', 'our-cafes'}
+        return (website_domain(url) not in local_domains, not index, bool(path), len(path), url)
+    chosen = {}
+    for url in sorted(urls, key=priority):
+        domain = website_domain(url)
+        if domain and domain not in chosen:
+            chosen[domain] = url
+            if len(chosen) == 3:
+                break
+    return list(chosen.values())
+
+
 def count_evidence(kind, places, **extra):
     return {
         'kind': kind,
         'count': distinct_locations([(p['lat'], p['lon']) for p in places]),
         'scope': 'worldwide',
-        'identity_verified': True,
+        # A directory domain/phone is a retrieval hint, not proof that all
+        # same-name entries are operating branches of this particular business.
+        'identity_verified': kind == 'S3+S1',
         'complete': False,
         'place_ids': [p['id'] for p in places],
         **extra,
@@ -138,10 +157,24 @@ def deterministic_rows(restaurants, matches, global_rows, nsi, atp):
                     )
                 )
         exact = names[tokens]
+        candidate_urls = {
+            w for p in matched + exact for w in p.get('websites') or []
+            if website_domain(w)
+        }
+        # ATP locator URLs remain candidates even without a nearby directory
+        # match. Affiliation is judged later against the named local business.
+        for brand, places in atp_brands.items():
+            if not same_family(r['name'], brand):
+                continue
+            for place in places:
+                candidate_urls.update(w for w in place.get('websites') or [] if website_domain(w))
+                if place.get('source') and website_domain(place['source']):
+                    candidate_urls.add(place['source'])
         row = {
             **r,
             'evidence': ev,
             'overture_matches': matched,
+            'candidate_websites': candidate_websites(candidate_urls, local_domains),
             'same_name_count': distinct_locations(
                 [(p['lat'], p['lon']) for p in exact]
             ),
@@ -152,21 +185,23 @@ def deterministic_rows(restaurants, matches, global_rows, nsi, atp):
     return rows
 
 
+def row_websites(row):
+    local_urls = {
+        w for p in row.get('overture_matches', []) for w in p.get('websites') or []
+        if website_domain(w)
+    }
+    return candidate_websites(set(row.get('candidate_websites', [])) | local_urls,
+        {website_domain(w) for w in local_urls})
+
+
 def fetch_websites(rows, cache, output, workers):
     path = output / 'websites.json'
+    urls = sorted({w for r in rows for w in row_websites(r)})
     if path.exists():
         cached = json.loads(path.read_text())
-        if all(w.get('extract_version') == WEBSITE_EXTRACT_VERSION for w in cached):
+        if (all(w.get('extract_version') == WEBSITE_EXTRACT_VERSION for w in cached)
+            and set(urls) <= {w.get('requested_url') for w in cached}):
             return cached
-    urls = sorted(
-        {
-            w
-            for r in rows
-            for p in r['overture_matches']
-            for w in p.get('websites') or []
-            if website_domain(w)
-        }
-    )
     with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
         home = list(pool.map(lambda u: website_text(u, cache), urls))
     links = sorted({l for v in home for l in v.get('links', [])[:3]} - set(urls))
@@ -187,7 +222,8 @@ def jev_sources(rows, mentions, websites, models, output, workers):
         by_restaurant[m['restaurant_id']].append(m)
     for w in websites:
         if w.get('text'):
-            by_domain[website_domain(w['url'])].append(w)
+            for domain in {website_domain(w['url']), website_domain(w['requested_url'])} - {None}:
+                by_domain[domain].append(w)
     tasks = []
     contexts = {}
     for r in rows:
@@ -202,11 +238,16 @@ def jev_sources(rows, mentions, websites, models, output, workers):
             }
             for m in by_restaurant[r['id']]
         ]
-        ds = {
-            website_domain(w)
-            for p in r['overture_matches']
-            for w in p.get('websites') or []
-        } - {None}
+        ds = {website_domain(w) for w in row_websites(r)} - {None}
+        # A fetched redirect connects the candidate domain to its actual
+        # publisher, allowing that publisher's fetched locator pages through.
+        for _ in range(5):
+            redirected = {website_domain(w['url']) for w in websites
+                if w.get('url') and website_domain(w['requested_url']) in ds} - {None}
+            if redirected <= ds:
+                break
+            ds.update(redirected)
+        pages = {w['requested_url']: w for d in sorted(ds) for w in by_domain[d]}
         sources += [
             {
                 'kind': 'S5',
@@ -215,8 +256,7 @@ def jev_sources(rows, mentions, websites, models, output, workers):
                 'url': w['url'],
                 'truncated': w['truncated'],
             }
-            for d in sorted(ds)
-            for w in by_domain[d]
+            for w in pages.values()
         ]
         contexts[r['id']] = sources
         for s in sources:
@@ -356,36 +396,11 @@ def jev_sources(rows, mentions, websites, models, output, workers):
 
 
 def jev_generic_names(rows, global_rows, models):
-    for r in rows:
-        if r['decision'] != 'unknown' or r['same_name_count'] < 6:
-            continue
-        question = {
-            'non_generic': noul(
-                'Does `restaurant.name` identify a distinctive specific restaurant brand, rather than a generic or commonly reused business name? Consider only naming specificity; do not infer location counts or ownership.'
-            )
-        }
-        result = models.jev({'restaurant': {'name': r['name']}}, question)
-        p = (
-            None
-            if result.get('error')
-            else probability(result['response'], 'non_generic')
-        )
-        r['generic_name_probability'] = p
-        if p is not None and p >= 0.95:
-            pp = [
-                p
-                for p in global_rows
-                if name_tokens(p['name']) == name_tokens(r['name'])
-            ]
-            r['evidence'].append(
-                count_evidence(
-                    'S2',
-                    pp,
-                    corroboration='Jev distinctive name',
-                    non_generic_probability=p,
-                )
-            )
-            r.update(decide(r['evidence']))
+    """Retired name-only path, retained for compatibility with evaluation callers.
+
+    Naming specificity cannot verify branch affiliation. Do not spend inference
+    on a judgment that cannot supply supported identity evidence.
+    """
 
 
 def gemma_unresolved(rows, contexts, models, output):

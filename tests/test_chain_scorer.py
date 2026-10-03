@@ -12,6 +12,105 @@ except ModuleNotFoundError:
     cs = None
 
 
+class SourceRetrievalTest(unittest.TestCase):
+    def test_local_domain_survives_speculative_locator_domains(self):
+        import chain_evaluate as ce
+        restaurant = dict(id=1, name='Example Cafe', location='Tustin',
+            status='active', exclusion_reason=None, lat=None, lng=None)
+        local = dict(id='local', name='Example Cafe', lat=33.7, lon=-117.8,
+            websites=['https://local-example.com/'], phones=[])
+        global_places = [dict(local, id=str(i), websites=[
+            'https://' + domain + '-example.com/locations']) for i, domain in enumerate('abcd')]
+        row = ce.deterministic_rows([restaurant], {1: [local]}, global_places,
+            {'brands': []}, {'brands': [], 'places': []})[0]
+        self.assertIn('https://local-example.com/', row['candidate_websites'])
+        self.assertIn('https://local-example.com/', ce.row_websites(row))
+        self.assertEqual(len(ce.row_websites(row)), 3)
+
+    def test_distinctive_name_does_not_spend_inference_on_unverified_identity(self):
+        import chain_evaluate as ce
+        from unittest.mock import Mock
+        row = dict(id=1, name='Distinctive Cafe', same_name_count=6,
+            decision='unknown', evidence=[])
+        model = Mock()
+        ce.jev_generic_names([row], [], model)
+        model.jev.assert_not_called()
+        self.assertEqual(row['decision'], 'unknown')
+        self.assertEqual(row['evidence'], [])
+
+    def test_directory_domain_or_phone_does_not_verify_business_affiliation(self):
+        import chain_evaluate as ce
+        places = [dict(id=str(i), lat=33.7 + i * .01, lon=-117.8) for i in range(6)]
+        for kind in ('S1', 'S2'):
+            evidence = ce.count_evidence(kind, places)
+            self.assertFalse(evidence['identity_verified'])
+            self.assertEqual(cs.decide([evidence])['decision'], 'unknown')
+
+    def test_atp_and_global_sources_survive_missing_local_match(self):
+        import chain_evaluate as ce
+        restaurant = dict(id=1, name='Round Table', location='Fullerton',
+            status='active', exclusion_reason=None, lat=None, lng=None)
+        places = [dict(id='a', name='Round Table', lat=33.7, lon=-117.8,
+            websites=['https://roundtable-example.com/locations'], phones=[])]
+        atp = {'brands': ['Round Table Pizza'], 'places': [dict(
+            id='b', brand='Round Table Pizza', name='Round Table Pizza',
+            lat=33.8, lon=-117.9, websites=['https://roundtable-example.com/fullerton'],
+            source='https://roundtable-example.com/locations')]}
+        row = ce.deterministic_rows([restaurant], {}, places, {'brands': []}, atp)[0]
+        self.assertEqual(row['decision'], 'unknown')
+        self.assertIn('https://roundtable-example.com/locations', row['candidate_websites'])
+        self.assertEqual(len(row['candidate_websites']), 1)
+
+    def test_retrieval_prefers_locator_and_bounds_domains(self):
+        import chain_evaluate as ce
+        urls = ['https://a-example.com/branch/' + str(i) for i in range(100)]
+        urls += ['https://a-example.com/locations']
+        urls += ['https://' + c + '-example.com/' for c in 'bcdef']
+        chosen = ce.candidate_websites(urls)
+        self.assertEqual(len(chosen), 3)
+        self.assertIn('https://a-example.com/locations', chosen)
+        row = dict(candidate_websites=[], overture_matches=[dict(websites=urls)])
+        self.assertEqual(ce.row_websites(row), chosen)
+
+    def test_website_cache_must_cover_current_source_selection(self):
+        import chain_evaluate as ce
+        import tempfile
+        import json
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory)
+            old = dict(requested_url='https://old-example.com/',
+                url='https://old-example.com/', text='Old', links=[],
+                extract_version=ce.WEBSITE_EXTRACT_VERSION)
+            (output / 'websites.json').write_text(json.dumps([old]))
+            rows = [dict(overture_matches=[], candidate_websites=['https://new-example.com/'])]
+            page = {**old, 'requested_url': 'https://new-example.com/', 'url': 'https://new-example.com/'}
+            with patch.object(ce, 'website_text', return_value=page) as fetch:
+                result = ce.fetch_websites(rows, output, output, 1)
+            fetch.assert_called_once_with('https://new-example.com/', output)
+            self.assertEqual(result[0]['url'], 'https://new-example.com/')
+
+    def test_redirected_candidate_is_retained_without_asserting_official_identity(self):
+        import chain_evaluate as ce
+        import tempfile
+        class Model:
+            def jev(self, state, questions):
+                return {'error': 'No judgment available'}
+        row = dict(id=1, name='Synthetic Cafe', location='Tustin', evidence=[],
+            overture_matches=[], candidate_websites=['https://old-example.com/'], decision='unknown')
+        page = dict(requested_url='https://old-example.com/', url='https://new-example.com/',
+            text='Synthetic Cafe website', truncated=False)
+        detail = dict(requested_url='https://new-example.com/locations',
+            url='https://new-example.com/locations', text='Synthetic Cafe locations', truncated=False)
+        with tempfile.TemporaryDirectory() as directory:
+            failed = dict(requested_url='https://old-example.com/failed', error='Timeout')
+            contexts = ce.jev_sources([row], [], [page, detail, failed], Model(), Path(directory), 1)
+        self.assertEqual(len(contexts[1]), 2)
+        self.assertEqual(contexts[1][0]['url'], 'https://new-example.com/')
+        self.assertFalse(contexts[1][0]['official_source'])
+        self.assertEqual(row['decision'], 'unknown')
+
+
 class ScorerTest(unittest.TestCase):
     def test_scorer_is_available(self):
         self.assertIsNotNone(cs, 'Read-only chain scorer is not implemented')
