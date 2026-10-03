@@ -110,7 +110,7 @@ class PromptBudgetTest(unittest.TestCase):
         streets=['Main Way','Ocean Paseo','State Hwy','Oak Way','Park Paseo','Coast Hwy','Last Way']
         quotes=[f'Venue {i}: {100+i} {street}, Tustin Open daily.'
             for i,street in enumerate(streets)]
-        text='Example Bakery Navigation '+ ('x'*400)+' '+ (' '.join(
+        text='Example Bakery 100 Main Way, Tustin. Navigation '+ ('x'*400)+' '+ (' '.join(
             quote+' Intervening original page text. '+ 'y'*220 for quote in quotes))
         good=[dict(source=0,quote=quote,address=f'{100+i} {streets[i]}',
             city='Tustin',operating=True) for i,quote in enumerate(quotes[:6])]
@@ -128,14 +128,15 @@ class PromptBudgetTest(unittest.TestCase):
                         source=None,quote=None,locations=entries))}}}
         model=Model()
         source=dict(kind='S5',id='locator',url='https://example.com/locations',
-            text=text,truncated=False)
-        row=dict(id=1,name='Example Bakery',location='Tustin',decision='unknown',evidence=[])
+            text=text,truncated=False,official_source=True)
+        row=dict(id=1,name='Example Bakery',location='Tustin',street='100 Main Way',decision='unknown',evidence=[])
         with tempfile.TemporaryDirectory() as d:
             ce.gemma_unresolved([row],{1:[source]},model,Path(d))
             record=json.loads((Path(d)/'gemma-results.json').read_text())[0]
         self.assertEqual(len(model.prompts),2)
         repair_bundle=json.loads(model.prompts[1].split('\n')[1])
         self.assertEqual(len(repair_bundle['sources']),1)
+        self.assertTrue(repair_bundle['sources'][0]['publisher_identity_verified'])
         sent=repair_bundle['sources'][0]['text']
         for quote in quotes[:6]:self.assertIn(quote,sent)
         self.assertEqual(row['decision'],'chain')
@@ -316,7 +317,7 @@ class PromptBudgetTest(unittest.TestCase):
         import chain_evaluate as ce
         entries=[dict(source=0,quote=f'{100+i} Main St, Tustin Open daily',
             address=f'{100+i} Main St',city='Tustin',operating=True) for i in range(6)]
-        text=' '.join(e['quote'] for e in entries)
+        text='Example 100 Main St, Tustin. '+ ' '.join(e['quote'] for e in entries)
         bad=[entries[0]]*6
         class Model:
             def __init__(self,persist=False):self.prompts=[];self.persist=persist
@@ -328,8 +329,8 @@ class PromptBudgetTest(unittest.TestCase):
                         source=None,quote=None,locations=locations))}}}
         model=Model()
         source=dict(kind='S5',id='locator',url='https://example.com/locations',
-            text=text,truncated=False)
-        row=dict(id=1,name='Example',location='Tustin',decision='unknown',evidence=[])
+            text=text,truncated=False,official_source=True)
+        row=dict(id=1,name='Example',location='Tustin',street='100 Main St',decision='unknown',evidence=[])
         with tempfile.TemporaryDirectory() as d:
             ce.gemma_unresolved([row],{1:[source]},model,Path(d))
             record=json.loads((Path(d)/'gemma-results.json').read_text())[0]
@@ -338,7 +339,7 @@ class PromptBudgetTest(unittest.TestCase):
         self.assertEqual(row['decision'],'chain')
         self.assertEqual(len(record['attempts']),2)
         model=Model(persist=True)
-        row=dict(id=2,name='Example',location='Tustin',decision='unknown',evidence=[])
+        row=dict(id=2,name='Example',location='Tustin',street='100 Main St',decision='unknown',evidence=[])
         with tempfile.TemporaryDirectory() as d:
             ce.gemma_unresolved([row],{2:[source]},model,Path(d))
         self.assertEqual(len(model.prompts),2)
