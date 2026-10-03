@@ -224,10 +224,31 @@ def grounded_locations(result, sources):
         'highway': 'hwy',
         'place': 'pl',
         'terrace': 'ter',
+        'circle': 'cir',
         'north': 'n',
         'south': 's',
         'east': 'e',
         'west': 'w',
+    }
+    street_types = {
+        'st',
+        'ave',
+        'blvd',
+        'rd',
+        'dr',
+        'ln',
+        'ct',
+        'pkwy',
+        'hwy',
+        'pl',
+        'ter',
+        'cir',
+        'way',
+        'paseo',
+        'camino',
+        'calle',
+        'avenida',
+        'via',
     }
     seen = set()
     for entry in entries:
@@ -258,6 +279,7 @@ def grounded_locations(result, sources):
         city_name = re.sub(
             r'[,\s]+(?:[A-Z]{2}|California)\s*$', '', city_name, flags=re.I
         )
+        untrimmed_street = street
         street = re.sub(
             r'[,\s]+'
             + re.escape(city_name)
@@ -268,33 +290,29 @@ def grounded_locations(result, sources):
         )
         tokens = re.findall(r'[a-z0-9]+', street.lower())
         tokens = [abbreviations.get(token, token) for token in tokens]
+        # A city-named street such as Addison Rd can resemble a city/state
+        # suffix. Restore only street abbreviations that cannot be US state
+        # codes, so a state such as CT cannot supply a missing street type.
+        if (not any(token in street_types for token in tokens[1:])
+            and re.search(r'\b(?:rd|dr|st|ln|pl)\.?\s*$', untrimmed_street, re.I)):
+            # A city word inside the street name is not a separate locality.
+            locality_text = evidence_whitespace(quote).replace(
+                evidence_whitespace(address), ' ')
+            if not re.search(r'(?<!\w)' + re.escape(evidence_whitespace(city))
+                + r'(?!\w)', locality_text):
+                return []
+            street = untrimmed_street
+            tokens = [abbreviations.get(token, token)
+                for token in re.findall(r'[a-z0-9]+', street.lower())]
+        broadway_address = (tokens[1:] == ['broadway']
+            or (len(tokens) == 3 and tokens[1] in {'n', 's', 'e', 'w'}
+                and tokens[2] == 'broadway'))
         if (
             not tokens
             or not re.fullmatch(r'\d+[a-z]?', tokens[0])
-            or len(tokens) < 3
-            or not any(
-                token
-                in {
-                    'st',
-                    'ave',
-                    'blvd',
-                    'rd',
-                    'dr',
-                    'ln',
-                    'ct',
-                    'pkwy',
-                    'hwy',
-                    'pl',
-                    'ter',
-                    'way',
-                    'paseo',
-                    'camino',
-                    'calle',
-                    'avenida',
-                    'via',
-                }
-                for token in tokens[1:]
-            )
+            or (len(tokens) < 3 and not broadway_address)
+            or (not broadway_address
+                and not any(token in street_types for token in tokens[1:]))
         ):
             return []
         key = (tuple(tokens), tuple(re.findall(r'[a-z0-9]+', city_name.lower())))

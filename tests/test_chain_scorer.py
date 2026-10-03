@@ -13,6 +13,84 @@ except ModuleNotFoundError:
 
 
 class SourceRetrievalTest(unittest.TestCase):
+    def test_broadway_requires_number_and_optional_direction_only(self):
+        import chain_sources as src
+        for street in ('Broadway', 'N Broadway', 'South Broadway'):
+            entries = [dict(source=0, quote=f'{145+i} {street}, New York',
+                address=f'{145+i} {street}', city='New York', operating=True)
+                for i in range(6)]
+            with self.subTest(street=street):
+                self.assertEqual(len(src.grounded_locations(dict(count=6, locations=entries),
+                    [' '.join(e['quote'] for e in entries)])), 6)
+        entries = [dict(source=0, quote=f'{145+i} shows on Broadway, New York',
+            address=f'{145+i} shows on Broadway', city='New York', operating=True)
+            for i in range(6)]
+        self.assertEqual(src.grounded_locations(dict(count=6, locations=entries),
+            [' '.join(e['quote'] for e in entries)]), [])
+
+    def test_city_named_road_requires_locality_outside_address(self):
+        import chain_sources as src
+        for suffix in ('', ' Open daily. 15101 Addison Rd', ', Addisonville'):
+            entries = [dict(source=0, quote=f'{15101+i} Addison Rd{suffix}',
+                address=f'{15101+i} Addison Rd', city='Addison', operating=True)
+                for i in range(6)]
+            # Keep repeated street mentions identical to each entry's address.
+            for entry in entries:
+                entry['quote'] = entry['quote'].replace('15101 Addison Rd', entry['address'])
+            with self.subTest(suffix=suffix):
+                self.assertEqual(src.grounded_locations(dict(count=6, locations=entries),
+                    [' '.join(e['quote'] for e in entries)]), [])
+        entries = [dict(source=0, quote=f'{15101+i} Addison Rd, Addison, TX',
+            address=f'{15101+i} Addison Rd', city='Addison', operating=True)
+            for i in range(6)]
+        self.assertEqual(len(src.grounded_locations(dict(count=6, locations=entries),
+            [' '.join(e['quote'] for e in entries)])), 6)
+
+    def test_grounded_addresses_accept_broadway_and_circle_but_reject_nonaddresses(self):
+        import chain_sources as src
+        addresses = ['145 N Broadway', '760 Briarwood Cir', '100 Main St',
+            '101 Main St', '102 Main St', '103 Main St']
+        entries = [dict(source=0, quote=f'{address}, City{i}', address=address,
+            city=f'City{i}', operating=True) for i, address in enumerate(addresses)]
+        source = ' '.join(e['quote'] for e in entries)
+        result = dict(count=6, locations=entries)
+        self.assertEqual(len(src.grounded_locations(result, [source])), 6)
+        expanded = [dict(e) for e in entries]
+        expanded[1].update(address='760 Briarwood Circle',
+            quote='760 Briarwood Circle, City1')
+        self.assertEqual(len(src.grounded_locations(dict(count=6, locations=expanded),
+            [' '.join(e['quote'] for e in expanded)])), 6)
+        aliases = [dict(e) for e in entries]
+        aliases[2].update(address='760 Briarwood Circle', city='City1',
+            quote='760 Briarwood Circle, City1')
+        alias_source = ' '.join(e['quote'] for e in aliases)
+        self.assertEqual(src.grounded_locations(dict(count=6, locations=aliases),
+            [alias_source]), [])
+        for invalid in ('145 dinner menu', '760 Briarwood'):
+            altered = [dict(e) for e in entries]
+            altered[0].update(address=invalid, quote=f'{invalid}, City0')
+            invalid_source = ' '.join(e['quote'] for e in altered)
+            self.assertEqual(src.grounded_locations(dict(count=6, locations=altered),
+                [invalid_source]), [])
+
+    def test_city_named_road_is_retained_and_full_address_duplicate_rejected(self):
+        import chain_sources as src
+        addresses = ['15101 Addison Rd'] + [f'{i} Main St' for i in range(100, 105)]
+        entries = [dict(source=0, quote=f'{address}, Addison, TX 75001',
+            address=address, city='Addison', operating=True) for address in addresses]
+        source = ' '.join(e['quote'] for e in entries)
+        self.assertEqual(len(src.grounded_locations(dict(count=6, locations=entries),
+            [source])), 6)
+        invalid = [dict(e) for e in entries]
+        invalid[0].update(address='15101 Main, Addison CT',
+            quote='15101 Main, Addison CT')
+        self.assertEqual(src.grounded_locations(dict(count=6, locations=invalid),
+            [' '.join(e['quote'] for e in invalid)]), [])
+        entries[-1] = dict(entries[0], address='15101 Addison Rd, Addison TX 75001',
+            quote='15101 Addison Rd, Addison TX 75001')
+        self.assertEqual(src.grounded_locations(dict(count=6, locations=entries),
+            [' '.join(e['quote'] for e in entries)]), [])
+
     def test_address_quotes_allow_html_whitespace_but_not_changed_words(self):
         import chain_sources as src
         entries = [dict(source=0, quote=f'{100+i} Main St City{i}',
