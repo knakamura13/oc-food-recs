@@ -178,6 +178,19 @@
     "snapshot_text_sha256": "769843edd674732a816263cf5a2e1e8eb31b6f41b62401a1c488605fb6aa11f2"
   },
   {
+    "id": 517,
+    "name": "Tacos Los Cholos",
+    "city": "Anaheim",
+    "label": true,
+    "count": 6,
+    "complete": false,
+    "scope": "worldwide",
+    "basis": "official_operating_location_list",
+    "url": "https://www.tacosloscholos.net/locations.html",
+    "note": "Official site explicitly states six current locations and lists Anaheim. This confirms the saved Anaheim identity and a worldwide lower bound.",
+    "checked_date_utc": "2026-10-03"
+  },
+  {
     "id": 525,
     "name": "El Nopal",
     "city": "Anaheim",
@@ -397,6 +410,27 @@
     "url": "https://www.houstons.com/locations/",
     "checked_date_utc": "2026-10-03",
     "note": "The official locations index lists ten distinct Houston\u2019s addresses, including Irvine at 2991 Michelson Drive. Count only Houston\u2019s branches, not other Hillstone brands. Evidence was available through the primary-site search index; the direct fetch failed."
+  },
+  {
+    "id": 1351,
+    "name": "Rare Society",
+    "city": "",
+    "label": true,
+    "count": 6,
+    "complete": false,
+    "scope": "worldwide",
+    "basis": "official_operating_location_list",
+    "url": "https://raresociety.com/san-clemente",
+    "note": "Six Rare Society branch pages identify distinct street addresses and operating hours: University Heights, Solana Beach, Santa Barbara, Mill Creek, San Clemente and Las Vegas. The distinctive brand matches the saved name; no local city was supplied. This is a worldwide lower bound, not a complete total.",
+    "checked_date_utc": "2026-10-03",
+    "evidence_urls": [
+      "https://raresociety.com/university-heights",
+      "https://raresociety.com/solana-beach",
+      "https://raresociety.com/santa-barbara",
+      "https://raresociety.com/mill-creek",
+      "https://raresociety.com/san-clemente",
+      "https://raresociety.com/las-vegas"
+    ]
   },
   {
     "id": 1444,

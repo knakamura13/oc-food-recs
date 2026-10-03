@@ -1,8 +1,8 @@
 # Chain candidate audit results
 
-The saved #200 evaluation contains 1,214 unique restaurant IDs. A public-source review of all 28 active chain candidates confirms 16, leaves 12 unknown, and repairs three active retrieval misses (Pitfire, Moulin and Corky's). The replay therefore contains 19 reviewed active chains and 1,129 active unknowns. No unknown is asserted independent.
+The saved #200 evaluation contains 1,214 unique restaurant IDs. A public-source review of all 28 active chain candidates confirms 16 and leaves 12 unknown. Five additional active retrieval misses are confirmed: Pitfire, Moulin, Corky's, Tacos Los Cholos ID 517 and Rare Society ID 1351. With the current 33-record audit input, the replay therefore contains 21 reviewed active chains and 1,127 active unknowns. No unknown is asserted independent.
 
-This is manual audit assistance. Automated recall on the 66 excluded-chain controls remains 31/66 (46.97%). The automated scorer is not ready to drive production exclusions. The 19 eligible IDs are source-reviewed candidates, not authorization to write production or an estimate of automated precision.
+This is manual audit assistance applied to the original saved evaluation, not the later source-retrieval evaluation. Automated recall in that original input is 31/66 (46.97%) and is unchanged by this replay. The automated scorer is not ready to drive production exclusions. The 21 eligible IDs are source-reviewed candidates, not authorization to write production or an estimate of automated precision.
 
 ## Evidence and limitations
 
@@ -10,7 +10,7 @@ The checked inputs are in `scripts/chain_candidate_audits.json`. Each audit name
 
 Twelve original candidates remain unknown: both Kimmie's rows, Hong Kong Express, Board and Brew, Sunrise Cafe, El Nopal, the La Palma Taqueria de Anda row, Panda Inn, Ballast Point, Bread Basket, Gina's Pizza and Mr. Wok. Wrong-domain matches, fewer listed current locations, missing rendered data and unresolved local identity are distinct reasons. A below-six regional list does not prove a complete worldwide total.
 
-Shared directory domains and phones currently supply inferred identity. This audit rejects specific bad matches, but does not make that automated identity mechanism reliable. Missing directory matches also prevent official-site retrieval for many known chains. Both remain blockers for automated exclusions.
+The original saved evaluation used shared directory domains and phones to supply inferred identity. This audit rejects specific bad matches, but does not make that automated identity mechanism reliable. Missing directory matches also prevent official-site retrieval for many known chains. Both remain blockers for automated exclusions.
 
 ## Implementation
 
@@ -33,10 +33,11 @@ No API key, model inference or database connection is needed. Results and the re
 
 ## Verification
 
-- All 231 Python tests pass, including rejected S1 evidence, identity checks, preserved input bytes, unresolved decisions, conflict retention, five/six boundary behavior and ingest confidence refresh.
+- The original implementation passed all 231 Python tests, including rejected S1 evidence, identity checks, preserved input bytes, unresolved decisions, conflict retention, five/six boundary behavior and ingest confidence refresh.
 - The exact ingest ON CONFLICT statement was executed against disposable Postgres 18 for active, queued, human-reviewed and denylist-upgraded rows. All four expected status/reason/confidence outcomes passed. The disposable container was removed afterward.
 - Independent code review found no actionable defects. Public-source labels were reviewed by the primary agent, not independently corroborated by the code reviewer.
-- Replay covers all 1,214 IDs, audits 31 active rows and makes zero model calls.
+- Replay covers all 1,214 IDs, audits 33 active rows and makes zero model calls.
+- Current audit input SHA-256: `bab022efc879cb04ec67e99b7ed0f5636e43eb0fa9fc845f97e46b9d9e8c03da`.
 - Original results SHA-256: `600bfe0edceacfab3d5de605762c95afdca5d900aa42ce550a5e8d784bd30fff`.
 - Saved scratch public-table fingerprints still match. No production writes or backfill apply were performed.
 
