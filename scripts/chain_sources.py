@@ -176,6 +176,11 @@ def global_cache_matches(meta, selection):
     )
 
 
+def evidence_whitespace(text):
+    """Normalize HTML whitespace only; retain every word and punctuation mark."""
+    return re.sub(r'\s+', ' ', text).strip()
+
+
 def grounded_count(result, sources):
     count, quote, index = result.get('count'), result.get('quote'), result.get('source')
     return (
@@ -187,7 +192,7 @@ def grounded_count(result, sources):
         and 0 <= index < len(sources)
         and isinstance(quote, str)
         and len(quote.strip()) >= 12
-        and quote in sources[index]
+        and evidence_whitespace(quote) in evidence_whitespace(sources[index])
         and count in explicit_location_counts(quote)
     )
 
@@ -234,9 +239,9 @@ def grounded_locations(result, sources):
             type(index) is not int
             or not 0 <= index < len(sources)
             or not all(isinstance(v, str) and v.strip() for v in (quote, address, city))
-            or quote not in sources[index]
-            or address not in quote
-            or city not in quote
+            or evidence_whitespace(quote) not in evidence_whitespace(sources[index])
+            or evidence_whitespace(address) not in evidence_whitespace(quote)
+            or evidence_whitespace(city) not in evidence_whitespace(quote)
             or entry.get('operating') is not True
             or re.search(
                 r'\b(?:closed|coming soon|planned|opening(?!\s+(?:hours|times))|future location)\b',

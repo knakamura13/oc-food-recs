@@ -13,6 +13,17 @@ except ModuleNotFoundError:
 
 
 class SourceRetrievalTest(unittest.TestCase):
+    def test_address_quotes_allow_html_whitespace_but_not_changed_words(self):
+        import chain_sources as src
+        entries = [dict(source=0, quote=f'{100+i} Main St City{i}',
+            address=f'{100+i} Main St', city=f'City{i}', operating=True) for i in range(6)]
+        source = '\n'.join(e['quote'].replace(' ', '\u00a0') for e in entries)
+        result = dict(count=6, locations=entries)
+        self.assertEqual(len(src.grounded_locations(result, [source])), 6)
+        entries[0]['quote'] = entries[0]['quote'].replace('Main', 'Oak')
+        entries[0]['address'] = entries[0]['address'].replace('Main', 'Oak')
+        self.assertEqual(src.grounded_locations(result, [source]), [])
+
     def test_local_domain_survives_speculative_locator_domains(self):
         import chain_evaluate as ce
         restaurant = dict(id=1, name='Example Cafe', location='Tustin',
