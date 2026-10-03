@@ -82,34 +82,36 @@ Gemma attempted one repair on 68/1,205 rows (5.64%). Twenty-one repaired rows en
 
 Fifteen have independently supported six-location lower bounds. Four are rejected identity/category matches. Seven remain unresolved, including a cross-publisher count and rows without local identity fields. No unresolved record was relabeled independent. The 15/26 supported fraction is an audit outcome, not a binary precision estimate: unresolved rows are not verified negative labels.
 
-| ID | Restaurant | Audit | Supported lower bound | Evidence and limitation |
-| --- | --- | --- | ---: | --- |
-| 34 | Pitfire | supported | 6 | Official Pitfire branch pages include the saved Costa Mesa address and six distinct operating addresses. [Source](https://www.pitfirepizza.com/location/costa-mesa/) |
-| 38 | Mother's Market | supported count overstated | 7 | Official listing identifies saved Costa Mesa address and seven expressly open cafes. Scorer counted twelve store addresses, which does not prove twelve restaurant/cafe branches. [Source](https://www.mothersmarket.com/locations/) |
-| 60 | Cassidy's | rejected identity | unverified | Saved 2603 Newport Blvd belongs to Cassidy Bar & Grill. The eight counted addresses belong to Cassidy Corner Cafe. No affiliation evidence. [Source](https://cassidys.us/) |
-| 132 | Chronic tacos | supported | 7 | Official Chronic Tacos locator includes saved 1460 Baker St Costa Mesa and the seven operating addresses counted. [Source](https://www.chronictacos.com/locations/cat_menu) |
-| 148 | The Taco Stand | supported | 6 | Official Taco Stand pages identify saved Costa Mesa Bristol address and six distinct restaurant branches. [Source](https://www.letstaco.com/locations) |
-| 207 | Baekjeong | unresolved cross publisher | unverified | Count combines five US Baekjeong addresses with one Canadian Baekjeong address. US official publisher anchors Buena Park. No source establishes Canadian business affiliation, so the sixth entry cannot currently be accepted. [Source](https://www.baekjeongkbbq.com/book-your-reservation/) |
-| 265 | Prime Pizza | supported | 7 | Official Prime Pizza locator anchors saved 235 E Imperial Hwy Brea and at least seven distinct currently operating addresses. Future openings excluded. [Source](https://primepizza.com/locations) |
-| 329 | BCD | supported | 6 | Official BCD locator anchors Buena Park at 5321 Beach Blvd and lists at least six operating branches with hours. [Source](https://www.bcdtofuhouse.com/locations) |
-| 333 | Holdaak | supported | 8 | Directly read current fetched official homepage. Fullerton 1201 S Euclid Ste B anchors identity. Eight branch addresses show hours. Live web-tool follow-up timed out, so use saved HTTP extraction as evidence. [Source](https://holdaak.com/) |
-| 361 | Rare Society | supported | 6 | All six official Rare Society branch pages checked. San Clemente Avenida Del Mar anchors identity. Las Vegas shows current hours and reservations. [Source](https://raresociety.com/san-clemente) |
-| 376 | Pizza Port | supported | 6 | Six brewpub addresses verified on official homepage including saved San Clemente address. Scorer reports seven including San Marcos Port Side, which was not independently counted as a brewpub. [Source](https://www.pizzaport.com/) |
-| 413 | Buona Forchetta | supported | 6 | Official San Clemente page anchors saved address, explicitly calls it the sixth location, shows hours and links other operating restaurants. [Source](https://buonaforchettasd.com/location/san-clemente/) |
-| 496 | Moulin | supported | 6 | Official cafes page has six distinct buildings. Newport cafe and bakery duplicate 1000 Bristol St N. San Clemente 120 Avenida Pico anchors identity. [Source](https://www.moulin.com/our-cafes/) |
-| 538 | Tacos Guelaguetza | unresolved saved identity | unverified | Evidence is a Milwaukee Restaurant Guelaguetza group with food trucks. Saved target is Tacos Guelaguetza in Anaheim with no street. Supplied sources do not establish that these are the same business. [Source](https://restaurantguelaguetza.com/) |
-| 542 | Birrieria Guadalajara | supported | 7 | Directly read current fetched official locator. Saved 1750 W Lincoln Ave Anaheim is listed, with seven distinct addresses and hours. Live web-tool request failed. [Source](https://www.birrieriaguadalajara.com/locations) |
-| 548 | El Torito X | supported closed local branch | 6 | Official El Torito Anaheim page anchors saved 2020 E Ball Rd but states Temporarily Closed. Other six named branches show operating details. Chain affiliation is supported, local opening state requires separate review. [Source](https://www.eltorito.com/location/anaheim/) |
-| 577 | Tasty Noodle House | unresolved saved identity | unverified | Official Tasty Noodle House list supports seven branches. Saved row has no city or street, so exact local entity cannot be independently anchored. [Source](https://www.tastynoodlehouse.us/order-now) |
-| 597 | Azteca | rejected identity | unverified | City of Garden Grove identifies Azteca Restaurant & Lounge at saved 12911 Main St. Scorer cites a Washington restaurant chain with no demonstrated affiliation. [Source](https://ggcity.org/bigg/azteca-restaurant-lounge) |
-| 631 | Puesto | unresolved saved identity | unverified | Official Puesto sources support at least six current branches. Saved row has no city or street, leaving exact local entity unanchored. [Source](https://www.eatpuesto.com/all-locations/) |
-| 643 | Navarros | rejected identity and category | unverified | Official Navarro Taqueria contact page anchors saved Santa Ana address and three local branches. Scorer counted Miami Navarro Discount Pharmacy addresses. Three listed restaurants are not a verified worldwide negative. [Source](https://www.navarrostaqueria.co/contact-us/) |
-| 793 | Tasty Noodle House | supported | 7 | Official Tasty Noodle House list anchors saved 15333 Culver Dr Irvine and seven pickup restaurant addresses. [Source](https://www.tastynoodlehouse.us/order-now) |
-| 885 | Panini Kabob Grill | unresolved saved identity | unverified | Official Panini Kabob Grill locator confirms a large operating brand and OC branches. Saved row lacks city and street. Exact row affiliation remains unverified in this audit. [Source](https://paninikabobgrill.com/locations/) |
-| 892 | Gus's World Famous Fried Chicken | supported | 6 | Official Gus Santa Ana page anchors 102 N Sycamore St. Official pages list six distinct currently operating restaurant branches. [Source](https://www.gusfriedchicken.com/locations/santa-ana-california) |
-| 949 | Huckleberry's | rejected identity | unverified | Saved 15891 Gothard St is Huckleberry Famous Sandwich, identified in current menu and historical city visitor directory. Scorer counted the separate Huckleberry Southern Cookin franchise. No affiliation source. [Source](https://www.allmenus.com/ca/huntington-beach/799555-huckleberrys-famous-sandwich/menu/) |
-| 1340 | Shin Sen Gumi | unresolved saved identity | unverified | Official Shin-Sen-Gumi footer lists multiple named restaurants, but the extracted count also includes Piano Lounge Courage. Saved row has no city or street. Brand count and saved identity need separate verification. [Source](https://shinsengumigroup.com/locations/alhambra/) |
-| 1376 | Handel’s Ice cream | unresolved saved identity | unverified | Official Handel locator supports numerous operating ice cream shops. Saved row has no city or street, preventing an independent local entity anchor. [Source](https://handelsicecream.com/stores/) |
+| ID | Restaurant | Signal | Audit | Supported lower bound | Evidence and limitation |
+| --- | --- | --- | --- | ---: | --- |
+| 34 | Pitfire | S6 | supported | 6 | Official Pitfire branch pages include the saved Costa Mesa address and six distinct operating addresses. [Source](https://www.pitfirepizza.com/location/costa-mesa/) |
+| 38 | Mother's Market | S6 | supported count overstated | 7 | Official listing identifies saved Costa Mesa address and seven expressly open cafes. Scorer counted twelve store addresses, which does not prove twelve restaurant/cafe branches. [Source](https://www.mothersmarket.com/locations/) |
+| 60 | Cassidy's | S6 | rejected identity | unverified | Saved 2603 Newport Blvd belongs to Cassidy Bar & Grill. The eight counted addresses belong to Cassidy Corner Cafe. No affiliation evidence. [Source](https://cassidys.us/) |
+| 132 | Chronic tacos | S6 | supported | 7 | Official Chronic Tacos locator includes saved 1460 Baker St Costa Mesa and the seven operating addresses counted. [Source](https://www.chronictacos.com/locations/cat_menu) |
+| 148 | The Taco Stand | S6 | supported | 6 | Official Taco Stand pages identify saved Costa Mesa Bristol address and six distinct restaurant branches. [Source](https://www.letstaco.com/locations) |
+| 207 | Baekjeong | S6 | unresolved cross publisher | unverified | Count combines five US Baekjeong addresses with one Canadian Baekjeong address. US official publisher anchors Buena Park. No source establishes Canadian business affiliation, so the sixth entry cannot currently be accepted. [Source](https://www.baekjeongkbbq.com/book-your-reservation/) |
+| 265 | Prime Pizza | S6 | supported | 7 | Official Prime Pizza locator anchors saved 235 E Imperial Hwy Brea and at least seven distinct currently operating addresses. Future openings excluded. [Source](https://primepizza.com/locations) |
+| 329 | BCD | S6 | supported | 6 | Official BCD locator anchors Buena Park at 5321 Beach Blvd and lists at least six operating branches with hours. [Source](https://www.bcdtofuhouse.com/locations) |
+| 333 | Holdaak | S6 | supported | 8 | Directly read current fetched official homepage. Fullerton 1201 S Euclid Ste B anchors identity. Eight branch addresses show hours. Live web-tool follow-up timed out, so use saved HTTP extraction as evidence. [Source](https://holdaak.com/) |
+| 361 | Rare Society | S6 | supported | 6 | All six official Rare Society branch pages checked. San Clemente Avenida Del Mar anchors identity. Las Vegas shows current hours and reservations. [Source](https://raresociety.com/san-clemente) |
+| 376 | Pizza Port | S6 | supported | 6 | Six brewpub addresses verified on official homepage including saved San Clemente address. Scorer reports seven including San Marcos Port Side, which was not independently counted as a brewpub. [Source](https://www.pizzaport.com/) |
+| 413 | Buona Forchetta | S6 | supported | 6 | Official San Clemente page anchors saved address, explicitly calls it the sixth location, shows hours and links other operating restaurants. [Source](https://buonaforchettasd.com/location/san-clemente/) |
+| 496 | Moulin | S6 | supported | 6 | Official cafes page has six distinct buildings. Newport cafe and bakery duplicate 1000 Bristol St N. San Clemente 120 Avenida Pico anchors identity. [Source](https://www.moulin.com/our-cafes/) |
+| 538 | Tacos Guelaguetza | S6 | unresolved saved identity | unverified | Evidence is a Milwaukee Restaurant Guelaguetza group with food trucks. Saved target is Tacos Guelaguetza in Anaheim with no street. Supplied sources do not establish that these are the same business. [Source](https://restaurantguelaguetza.com/) |
+| 542 | Birrieria Guadalajara | S6 | supported | 7 | Directly read current fetched official locator. Saved 1750 W Lincoln Ave Anaheim is listed, with seven distinct addresses and hours. Live web-tool request failed. [Source](https://www.birrieriaguadalajara.com/locations) |
+| 548 | El Torito X | S6 | supported closed local branch | 6 | Official El Torito Anaheim page anchors saved 2020 E Ball Rd but states Temporarily Closed. Other six named branches show operating details. Chain affiliation is supported, local opening state requires separate review. [Source](https://www.eltorito.com/location/anaheim/) |
+| 577 | Tasty Noodle House | S6 | unresolved saved identity | unverified | Official Tasty Noodle House list supports seven branches. Saved row has no city or street, so exact local entity cannot be independently anchored. [Source](https://www.tastynoodlehouse.us/order-now) |
+| 597 | Azteca | S6 | rejected identity | unverified | City of Garden Grove identifies Azteca Restaurant & Lounge at saved 12911 Main St. Scorer cites a Washington restaurant chain with no demonstrated affiliation. [Source](https://ggcity.org/bigg/azteca-restaurant-lounge) |
+| 631 | Puesto | S6 | unresolved saved identity | unverified | Official Puesto sources support at least six current branches. Saved row has no city or street, leaving exact local entity unanchored. [Source](https://www.eatpuesto.com/all-locations/) |
+| 643 | Navarros | S6 | rejected identity and category | unverified | Official Navarro Taqueria contact page anchors saved Santa Ana address and three local branches. Scorer counted Miami Navarro Discount Pharmacy addresses. Three listed restaurants are not a verified worldwide negative. [Source](https://www.navarrostaqueria.co/contact-us/) |
+| 793 | Tasty Noodle House | S6 | supported | 7 | Official Tasty Noodle House list anchors saved 15333 Culver Dr Irvine and seven pickup restaurant addresses. [Source](https://www.tastynoodlehouse.us/order-now) |
+| 885 | Panini Kabob Grill | S6 | unresolved saved identity | unverified | Official Panini Kabob Grill locator confirms a large operating brand and OC branches. Saved row lacks city and street. Exact row affiliation remains unverified in this audit. [Source](https://paninikabobgrill.com/locations/) |
+| 892 | Gus's World Famous Fried Chicken | S6 | supported | 6 | Official Gus Santa Ana page anchors 102 N Sycamore St. Official pages list six distinct currently operating restaurant branches. [Source](https://www.gusfriedchicken.com/locations/santa-ana-california) |
+| 949 | Huckleberry's | S6 | rejected identity | unverified | Saved 15891 Gothard St is Huckleberry Famous Sandwich, identified in current menu and historical city visitor directory. Scorer counted the separate Huckleberry Southern Cookin franchise. No affiliation source. [Source](https://www.allmenus.com/ca/huntington-beach/799555-huckleberrys-famous-sandwich/menu/) |
+| 1340 | Shin Sen Gumi | S6 | unresolved saved identity | unverified | Official Shin-Sen-Gumi footer lists multiple named restaurants, but the extracted count also includes Piano Lounge Courage. Saved row has no city or street. Brand count and saved identity need separate verification. [Source](https://shinsengumigroup.com/locations/alhambra/) |
+| 1376 | Handel’s Ice cream | S6 | unresolved saved identity | unverified | Official Handel locator supports numerous operating ice cream shops. Saved row has no city or street, preventing an independent local entity anchor. [Source](https://handelsicecream.com/stores/) |
+
+All 26 audited new flags came from **S6**: 15 supported lower bounds, four rejected identity/category matches, and seven unresolved cases. These are limitations of the audited S6 subset, not a precision estimate for all 31 active S6 decisions. The two active **S3+S1** flags are Polly's Pies (1166) and Polly's Pies Restaurant (1199). Both were retained from the previous run and are outside this new-flag audit. The four rejected identities therefore do not implicate S3+S1, but this audit does not establish that path's precision for #201.
 
 **F1 (wrong business identity):** Cassidy's at 2603 Newport Blvd was counted using Cassidy's Corner Cafe addresses. Navarros at 1535 S Standard Ave was counted using Navarro Discount Pharmacy in Miami. Azteca in Garden Grove and Huckleberry's Famous Sandwich in Huntington Beach were also assigned other same-name businesses. The S6 model's `identity_verified` assertion currently suffices even when the page judgment does not establish that publisher as the official source for the saved entity. A local entity anchor and branch affiliation proof must precede a supported count.
 
@@ -169,14 +171,44 @@ The first 31 probe names represent the distinct-name F6 list from #199. The tabl
 | TK Burger | 55: unknown | None | unverified |
 | The Taco Stand | 148: chain | True | True |
 
-All 62 threshold-question comparisons completed for both models with no request errors, reusing exact cached requests where available. The supported policy reference has 15 positive labels and **zero verified negative labels**. Jev answers 3/15 positives correctly (20.00% recall) and Gemma 4/15 (26.67%). The other 47 references remain unlabeled. False-positive performance and policy precision cannot be estimated from this reference.
+All 62 threshold-question requests completed for both models with no request errors, reusing exact cached requests where available. Request completion is separate from answer coverage. Jev has a numeric probability on every probe; Gemma has a Boolean answer on 60 probes and abstains on two.
+
+| Model | Usable answers, all 62 probes | Response coverage | Abstentions, probe IDs |
+| --- | ---: | ---: | --- |
+| Jev | 62/62 | 100.00% | none |
+| Gemma | 60/62 | 96.77% | 6 (Taquerias Guadalajara), 27 (Hong Kong Express) |
+
+The supported policy reference has 15 positive labels and **zero verified negative labels**. Both models answer all 15, so policy-reference coverage is 100%, with no abstentions. Jev answers 3/15 positives correctly (20.00% overall and conditional recall/accuracy) and Gemma 4/15 (26.67% overall and conditional recall/accuracy). The other 47 references remain unlabeled, although Jev answers all 47 and Gemma answers 45/47. False-positive performance and policy precision cannot be estimated from this reference.
+
+Gemma records zero confidence on 11 probes: nine raw Boolean false answers and two abstentions. The Boolean answers count as answered in the coverage and agreement metrics; their zero confidence does not establish independence. No zero-confidence Boolean true answers occurred.
+
+| Probe ID | Restaurant | Raw Gemma answer | Confidence |
+| --- | --- | --- | ---: |
+| 1 | Taqueria de Anda | false | 0 |
+| 6 | Taquerias Guadalajara | null (abstention) | 0 |
+| 15 | El Torito X | false | 0 |
+| 18 | Pedro's tacos | false | 0 |
+| 19 | Panda Inn | false | 0 |
+| 27 | Hong Kong Express | null (abstention) | 0 |
+| 28 | Gaucho Grill | false | 0 |
+| 37 | California Tofu Grill | false | 0 |
+| 38 | Real Thai Food | false | 0 |
+| 55 | M&M Donuts | false | 0 |
+| 57 | The Taco Shop | false | 0 |
 
 | Model | Disagreements with positive policy labels, probe IDs |
 | --- | --- |
 | jev | 1, 5, 8, 9, 11, 13, 15, 17, 19, 25, 26, 31 |
 | gemma | 1, 5, 8, 9, 11, 13, 15, 17, 19, 25, 31 |
 
-The weaker directory reference labels 55 items and leaves seven unlabeled. Its model metrics remain in `comparison.json`, separately from policy metrics. Neither a low observed count nor a zero-confidence false answer supplies a verified negative policy label.
+The weaker directory reference labels 55 items (11 positives and 44 proxy negatives) and leaves seven unlabeled. Its agreement metrics are separate from policy metrics:
+
+| Model | Answered / labeled | Coverage | Overall recall | Conditional recall | Overall accuracy | Conditional accuracy | Abstentions, probe IDs |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| Jev | 55/55 | 100.00% | 18.18% | 18.18% | 81.82% | 81.82% | none |
+| Gemma | 53/55 | 96.36% | 27.27% | 30.00% | 83.64% | 86.79% | 6, 27 |
+
+Overall metrics include abstentions as misses; conditional metrics use answered references only. Neither a low observed count nor a zero-confidence false answer supplies a verified negative policy label.
 
 ## Private artifacts and replay
 
