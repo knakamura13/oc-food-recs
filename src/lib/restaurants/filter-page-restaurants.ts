@@ -16,8 +16,6 @@ export interface PageFilterState {
   activeCuisines: string[];
   activeCities: string[];
   showUnmapped: boolean;
-  /** Default ON. When true, hide likely_chain rows. */
-  showMomAndPop?: boolean;
   freshnessCutoff: number | null;
 }
 
@@ -37,7 +35,6 @@ export function filterBeforeFreshness(
     | "activeCuisines"
     | "activeCities"
     | "showUnmapped"
-    | "showMomAndPop"
   >,
   ctx: Pick<PageFilterContext, "threadSubreddit" | "subredditSliceCache">,
 ): Restaurant[] {
@@ -78,9 +75,7 @@ export function filterBeforeFreshness(
     result = result.filter((r) => !isUnmappedRestaurant(r));
   }
 
-  if (state.showMomAndPop !== false) {
-    result = result.filter((r) => passesMomAndPopFilter(r));
-  }
+  result = result.filter((r) => passesMomAndPopFilter(r));
 
   return result;
 }
@@ -184,7 +179,7 @@ export interface FacetPopulations {
 
 /**
  * Per-facet populations for the filter menus: every active filter (including search,
- * recency, unmapped and mom & pop) EXCEPT the facet's own, so a count equals the number
+ * recency and unmapped) EXCEPT the facet's own, so a count equals the number
  * of rows the list would show after selecting that option (standard faceted counts).
  */
 export function filterPageFacetPopulations(

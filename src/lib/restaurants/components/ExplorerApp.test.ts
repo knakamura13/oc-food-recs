@@ -4,6 +4,7 @@ import { flushSync } from "svelte";
 import ExplorerApp from "./ExplorerApp.svelte";
 import type { ExplorerPageData } from "$lib/restaurants/explorer-page-data";
 import { appState } from "$lib/restaurants/stores.svelte";
+import { parseSearchParams } from "$lib/restaurants/url-state";
 import { makeRestaurant, resetAppState } from "$lib/restaurants/test-utils";
 import { SEARCH_DEBOUNCE_MS } from "$lib/debounce";
 
@@ -141,6 +142,18 @@ describe("ExplorerApp URL sync", () => {
     const url = String(nav.replaceState.mock.calls[0][0]);
     expect(url).toContain("sort=name");
     expect(url).toContain("sortdir=asc");
+  });
+
+  it("keeps likely chains out of rendered results from an old shared link", () => {
+    const data = makeHomeData();
+    data.dataset.restaurants.push(makeRestaurant({
+      name: "Synthetic Chain", slug: "synthetic-chain", chain_confidence: "likely_chain",
+    }));
+    data.urlState = parseSearchParams(new URLSearchParams("mompop=0"));
+    render(ExplorerApp, { data, routerReady: false });
+    flushSync();
+    expect(document.querySelector("#restaurant-taco-palace")).not.toBeNull();
+    expect(document.querySelector("#restaurant-synthetic-chain")).toBeNull();
   });
 
   it("wraps the explorer chrome in a main landmark", () => {

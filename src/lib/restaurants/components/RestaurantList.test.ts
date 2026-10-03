@@ -649,7 +649,6 @@ function sortQuery() {
     freshnessCutoff: appState.freshnessCutoff,
     freshnessSource: appState.freshnessSource,
     showUnmapped: appState.showUnmapped,
-    showMomAndPop: appState.showMomAndPop,
     sortKey: appState.sortKey,
     sortDirection: appState.sortDirection,
     selectedRestaurantSlug: appState.selectedRestaurantSlug,
@@ -941,11 +940,14 @@ describe("RestaurantList drawer actions", () => {
     ).toHaveAttribute("href", "https://reddit.com/r/x/comments/1");
   });
 
-  it("reports a chain and queues the slug locally", async () => {
+  it.each([
+    ["queued", "Thanks for reporting"],
+    ["already_queued", "Already reported"],
+  ])("acknowledges a %s chain report and remembers the slug", async (result, message) => {
     const user = userEvent.setup();
     const fetchMock = vi.fn(async (url: string) => {
       if (String(url).includes("report-chain")) {
-        return { ok: true, json: async () => ({ result: "queued" }) };
+        return { ok: true, json: async () => ({ result }) };
       }
       return {
         ok: true,
@@ -977,7 +979,7 @@ describe("RestaurantList drawer actions", () => {
         { method: "POST" },
       );
     });
-    expect(mocks.toastSuccess).toHaveBeenCalledWith("Queued for review");
+    expect(mocks.toastSuccess).toHaveBeenCalledWith(message);
     expect(appState.reportedChainSlugs).toEqual(["la-taco-spot"]);
   });
 

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { parseSearchParams } from "./url-state";
 import { applyUrlStateSnapshot } from "./apply-url-state";
 import { appState } from "./stores.svelte";
 import { makeRestaurant, resetAppState } from "./test-utils";
@@ -28,13 +29,10 @@ describe("applyUrlStateSnapshot", () => {
     expect(appState.sortDirection).toBe("asc");
   });
 
-  it("turns the Mom & pop chip off from parsed URL state", () => {
-    applyUrlStateSnapshot({
-      searchQuery: "tacos",
-      showMomAndPop: false,
-    });
-    expect(appState.showMomAndPop).toBe(false);
+  it("applies other fields from a legacy Mom & pop link", () => {
+    applyUrlStateSnapshot(parseSearchParams(new URLSearchParams("q=tacos&mompop=0")));
     expect(appState.searchQuery).toBe("tacos");
+    expect(appState).not.toHaveProperty("showMomAndPop");
   });
 
   it("keeps default score sort when the URL omits sort", () => {

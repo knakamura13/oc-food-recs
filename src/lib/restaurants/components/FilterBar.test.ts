@@ -189,7 +189,6 @@ describe("FilterBar", () => {
     expect(appState.activeCities).toEqual([]);
     expect(appState.showUnmapped).toBe(false);
     expect(appState.searchQuery).toBe("");
-    expect(appState.showMomAndPop).toBe(true);
     expect(
       screen.queryByRole("button", { name: /clear all/i }),
     ).not.toBeInTheDocument();
@@ -302,22 +301,14 @@ describe("FilterBar", () => {
     expect(appState.showUnmapped).toBe(false);
   });
 
-  it("defaults Mom & pop on and toggles it off", async () => {
-    const user = userEvent.setup();
+  it("has no public chain toggle", () => {
     render(FilterBar, {
       restaurants,
       threadSubreddit,
       restaurantsForHistogram: restaurants,
       dateExtent,
     });
-    const toggle = screen.getByRole("button", { name: /mom & pop/i });
-    expect(toggle).toHaveAttribute("aria-pressed", "true");
-    expect(toggle).toHaveAccessibleName(
-      /no franchises or big chains — independent spots with up to three locations still count/i,
-    );
-    await user.click(toggle);
-    expect(appState.showMomAndPop).toBe(false);
-    expect(toggle).toHaveAttribute("aria-pressed", "false");
+    expect(screen.queryByRole("button", { name: /mom & pop/i })).not.toBeInTheDocument();
   });
 
   it("hides include unmapped when none match", () => {

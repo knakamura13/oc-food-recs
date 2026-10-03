@@ -12,7 +12,6 @@ export const EVENT_SPECS = {
 			'city',
 			'subreddit',
 			'recency',
-			'mom_and_pop',
 			'saved',
 			'unmapped',
 			'new_since_visit',

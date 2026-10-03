@@ -387,7 +387,6 @@
 			activeSubreddits: appState.activeSubreddits,
 			freshnessCutoff: appState.freshnessCutoff,
 			showUnmapped: appState.showUnmapped,
-			showMomAndPop: appState.showMomAndPop,
 			sortKey: appState.sortKey,
 			sortDirection: appState.sortDirection,
 			selectedRestaurantSlug: slug
@@ -437,11 +436,11 @@
 			switch (result) {
 				case 'queued':
 					rememberReportedSlug(restaurant.slug);
-					toast.success('Queued for review');
+					toast.success('Thanks for reporting');
 					break;
 				case 'already_queued':
 					rememberReportedSlug(restaurant.slug);
-					toast.success('Already in review');
+					toast.success('Already reported');
 					break;
 				case 'already_excluded':
 					toast.info('Already excluded');

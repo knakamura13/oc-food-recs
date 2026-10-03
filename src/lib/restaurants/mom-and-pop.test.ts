@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  MOM_AND_POP_HELP,
   passesMomAndPopFilter,
   type ChainConfidence,
 } from "./mom-and-pop";
@@ -24,9 +23,4 @@ describe("passesMomAndPopFilter", () => {
     expect(passesMomAndPopFilter(spot("independent", "habit"))).toBe(true);
   });
 
-  it("keeps the locked site copy", () => {
-    expect(MOM_AND_POP_HELP).toBe(
-      "No franchises or big chains — independent spots with up to three locations still count.",
-    );
-  });
 });
