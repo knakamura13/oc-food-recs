@@ -560,6 +560,9 @@ class WriteToDbTest(unittest.TestCase):
         m1_sql, m1_params = executions[4]
         self.assertIn("INSERT INTO mentions", m1_sql)
         self.assertIn("'primary', NULL", m1_sql)
+        self.assertIn("removed.status = 'taken_down'", m1_sql)
+        self.assertIn("removed.comment_id = incoming.comment_id", m1_sql)
+        self.assertNotIn("status = EXCLUDED.status", m1_sql)
         self.assertIn(
             "ON CONFLICT (thread_id, comment_id, restaurant_id) DO UPDATE", m1_sql
         )
@@ -1454,6 +1457,7 @@ class WriteToDbDedupTest(WriteToDbTest):
         self.assertEqual(len(delete_mentions), 1)
         sql, params = delete_mentions[0]
         self.assertIn("id != ALL(%s)", sql)
+        self.assertIn("status = 'published'", sql)
         self.assertEqual(params, ("oc-x", [1000]))
 
     def test_write_to_db_deletes_all_mentions_when_zero_restaurants(self):
@@ -1492,6 +1496,7 @@ class WriteToDbDedupTest(WriteToDbTest):
         self.assertEqual(len(delete_mentions), 1)
         sql, params = delete_mentions[0]
         self.assertNotIn("ALL", sql)
+        self.assertIn("status = 'published'", sql)
         self.assertEqual(params, ("oc-x",))
 
     def test_write_to_db_skips_permanently_closed_restaurants(self):

@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import { countsTowardScore } from './counts-toward-score';
+import { publicRestaurantVisibility } from './public-visibility';
 
 export interface CommentSearchResult {
 	slug: string;
@@ -21,8 +22,7 @@ export function commentSearchQuery(query: string, limit: number) {
 			JOIN threads t ON t.id = m.thread_id
 			CROSS JOIN search
 			WHERE m.body_tsv @@ search.query
-				AND r.status <> 'excluded'
-				AND COALESCE(r.chain_confidence, 'unknown') <> 'likely_chain'
+				AND ${publicRestaurantVisibility('r')}
 				AND t.included_in_publish = true
 				AND m.status = 'published'
 				AND ${countsTowardScore('m')}

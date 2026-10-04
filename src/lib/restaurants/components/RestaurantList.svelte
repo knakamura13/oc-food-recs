@@ -32,7 +32,7 @@
 		normalizeCuisine,
 		VOICE_SHRINK_PRIOR
 	} from '$lib/restaurants/stores.svelte';
-	import { buildCanonicalShareUrl } from '$lib/restaurants/page-meta';
+	import { opensDrawer } from '$lib/restaurants/detail-navigation';
 	import { isSaved, toggleSaved } from '$lib/restaurants/saved-restaurants.svelte';
 	import { getLastVisitMs, hasNewMentionsSince } from '$lib/restaurants/visit-tracker';
 	import { consumeSkipToList } from '$lib/restaurants/skip-to-list';
@@ -397,17 +397,7 @@
 	}
 
 	function shareUrl(slug: string): string {
-		return buildCanonicalShareUrl(window.location.origin, window.location.pathname, {
-			searchQuery: appState.searchQuery,
-			activeCuisines: appState.activeCuisines,
-			activeCities: appState.activeCities,
-			activeSubreddits: appState.activeSubreddits,
-			freshnessCutoff: appState.freshnessCutoff,
-			showUnmapped: appState.showUnmapped,
-			sortKey: appState.sortKey,
-			sortDirection: appState.sortDirection,
-			selectedRestaurantSlug: slug
-		});
+		return `${window.location.origin}/r/${encodeURIComponent(slug)}`;
 	}
 
 	async function copyShareLink(restaurant: Restaurant) {
@@ -657,10 +647,11 @@
 						>
 							<div class="row-header">
 								<h2 class="row-heading">
-									<button
-										type="button"
+									<a
+										href={`/r/${encodeURIComponent(slug)}`}
 										class="row-toggle"
-										onclick={() => toggleRow(restaurant)}
+										onclick={event => { if (opensDrawer(event)) { event.preventDefault(); toggleRow(restaurant); } }}
+										onkeydown={event => { if (event.key === ' ' && !event.metaKey && !event.ctrlKey && !event.altKey) { event.preventDefault(); toggleRow(restaurant); } }}
 										onfocus={() => setHovered(restaurant)}
 										onblur={() => clearHovered(restaurant)}
 										aria-label={rowToggleLabel(restaurant)}
@@ -706,7 +697,7 @@
 												</p>
 											{/if}
 										</div>
-									</button>
+									</a>
 								</h2>
 								<div class="row-stats">
 									<span class="score-wrap">
@@ -1281,6 +1272,10 @@
 	}
 
 	.row-toggle {
+		text-decoration: none;
+		color: inherit;
+		font: inherit;
+		line-height: normal;
 		flex: 1;
 		width: 100%;
 		min-width: 0;

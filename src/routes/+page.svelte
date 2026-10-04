@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { page } from '$app/state';
 	import { afterNavigate } from '$app/navigation';
 	import ExplorerApp from '$lib/restaurants/components/ExplorerApp.svelte';
 	import ExplorerSkeleton from '$lib/restaurants/components/ExplorerSkeleton.svelte';
@@ -30,6 +31,7 @@
 
 <svelte:head>
 	<title>{activePageMeta.title}</title>
+	<meta name="robots" content={page.url.searchParams.size ? 'noindex,follow' : 'index,follow'} />
 	<meta name="description" content={activePageMeta.description} />
 	<meta property="og:title" content={activePageMeta.title} />
 	<meta property="og:description" content={activePageMeta.description} />
@@ -44,7 +46,7 @@
 	<meta name="twitter:description" content={activePageMeta.description} />
 	<meta name="twitter:image" content={ogImageUrl} />
 	<meta name="twitter:image:alt" content="Screenshot of the OC Food Recs explorer showing a cream restaurant list beside an Orange County map" />
-	<link rel="canonical" href={activePageMeta.shareUrl} />
+	<link rel="canonical" href={`${data.pageOrigin}/`} />
 	<link rel="dns-prefetch" href="https://a.tile.openstreetmap.org" />
 	<link rel="dns-prefetch" href="https://b.tile.openstreetmap.org" />
 	<link rel="dns-prefetch" href="https://c.tile.openstreetmap.org" />

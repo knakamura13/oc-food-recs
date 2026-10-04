@@ -367,7 +367,7 @@ describe("RestaurantList", () => {
       restaurants: [makeRestaurant({ name: "Taco Place", dish_rec_count: 3 })],
     });
     expect(
-      screen.getByRole("button", { name: /taco place.*3 dish recs/i }),
+      screen.getByRole("link", { name: /taco place.*3 dish recs/i }),
     ).toBeInTheDocument();
   });
 
@@ -562,7 +562,7 @@ describe("RestaurantList", () => {
       ],
     });
 
-    const toggle = screen.getByRole("button", {
+    const toggle = screen.getByRole("link", {
       name: "La Taco Spot, Mexican, Santa Ana",
     });
     expect(toggle).toHaveAttribute("aria-expanded", "false");
@@ -593,7 +593,7 @@ describe("RestaurantList", () => {
     });
 
     expect(
-      screen.getByRole("button", {
+      screen.getByRole("link", {
         name: "Secret Kitchen, Thai, Irvine, not on the map",
       }),
     ).toBeInTheDocument();

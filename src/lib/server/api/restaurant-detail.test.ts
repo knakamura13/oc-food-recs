@@ -13,7 +13,7 @@ describe("GET /api/r/[slug].json", () => {
 
   it("returns JSON mentions for a slug", async () => {
     executeMock.mockResolvedValue({
-      rows: [
+      rows: [{ mentions: [
         {
           comment_id: "t1_abc",
           thread_id: "thread-1",
@@ -25,11 +25,12 @@ describe("GET /api/r/[slug].json", () => {
           classification: null,
           comment_date: "2024-01-01T00:00:00Z",
         },
-      ],
+      ] }],
     });
     const { GET } = await import("../../../routes/api/r/[slug].json/+server");
     const res = await GET({ params: { slug: "taco-spot" } } as never);
     expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toBe("public, s-maxage=300, must-revalidate");
     const data = await res.json();
     expect(data).toHaveLength(1);
     expect(data[0].body).toBe("Great tacos");
@@ -41,5 +42,6 @@ describe("GET /api/r/[slug].json", () => {
     const res = await GET({ params: { slug: "missing" } } as never);
     const data = await res.json();
     expect(data).toEqual([]);
+    expect(res.headers.get("cache-control")).toBe("no-store");
   });
 });
