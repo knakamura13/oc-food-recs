@@ -7,7 +7,7 @@ import copy
 import difflib
 import html as html_mod
 import json
-import chain_policy
+import importlib.util
 import os
 import re
 import shutil
@@ -40,6 +40,14 @@ except ImportError:  # pragma: no cover - environment-dependent
 
 
 ROOT = Path(__file__).resolve().parents[1]
+# Resolve the sibling even when loaded by file path from an unrelated working directory.
+_policy_path = Path(__file__).resolve().with_name('chain_policy.py')
+chain_policy = sys.modules.get('chain_policy')
+if chain_policy is None or Path(chain_policy.__file__).resolve() != _policy_path:
+    _policy_spec = importlib.util.spec_from_file_location('chain_policy', _policy_path)
+    chain_policy = importlib.util.module_from_spec(_policy_spec)
+    _policy_spec.loader.exec_module(chain_policy)
+    sys.modules['chain_policy'] = chain_policy
 DATA_ROOT = ROOT / "data"
 THREADS_ROOT = DATA_ROOT / "threads"
 UNINGESTED_ROOT = DATA_ROOT / "uningested-threads"
@@ -2817,9 +2825,9 @@ def write_to_db(
                             WHEN restaurants.reviewed_at IS NOT NULL THEN restaurants.status
                             WHEN (EXCLUDED.exclusion_reason = 'verified_chain' OR EXCLUDED.chain_confidence = 'independent' OR
                                   (restaurants.exclusion_reason = 'verified_chain' AND EXCLUDED.status = 'active')) AND (
-                                lower(btrim(coalesce(restaurants.name, ''))) <> lower(btrim(coalesce(EXCLUDED.name, ''))) OR
-                                lower(btrim(coalesce(restaurants.location, ''))) <> lower(btrim(coalesce(EXCLUDED.location, ''))) OR
-                                lower(btrim(coalesce(restaurants.street, ''))) <> lower(btrim(coalesce(EXCLUDED.street, '')))
+                                btrim(regexp_replace(translate(coalesce(restaurants.name, ''), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '[^a-z0-9]+', ' ', 'g')) <> btrim(regexp_replace(translate(coalesce(EXCLUDED.name, ''), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '[^a-z0-9]+', ' ', 'g')) OR
+                                btrim(regexp_replace(translate(coalesce(restaurants.location, ''), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '[^a-z0-9]+', ' ', 'g')) <> btrim(regexp_replace(translate(coalesce(EXCLUDED.location, ''), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '[^a-z0-9]+', ' ', 'g')) OR
+                                btrim(regexp_replace(translate(coalesce(restaurants.street, ''), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '[^a-z0-9]+', ' ', 'g')) <> btrim(regexp_replace(translate(coalesce(EXCLUDED.street, ''), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '[^a-z0-9]+', ' ', 'g'))
                             ) THEN restaurants.status
                             WHEN EXCLUDED.status = 'excluded' THEN 'excluded'
                             WHEN restaurants.status = 'pending_review' AND restaurants.exclusion_reason IN ('llm_suspected_chain', 'many_locations', 'multi_city_density') THEN EXCLUDED.status
@@ -2831,9 +2839,9 @@ def write_to_db(
                             WHEN restaurants.reviewed_at IS NOT NULL THEN restaurants.exclusion_reason
                             WHEN (EXCLUDED.exclusion_reason = 'verified_chain' OR EXCLUDED.chain_confidence = 'independent' OR
                                   (restaurants.exclusion_reason = 'verified_chain' AND EXCLUDED.status = 'active')) AND (
-                                lower(btrim(coalesce(restaurants.name, ''))) <> lower(btrim(coalesce(EXCLUDED.name, ''))) OR
-                                lower(btrim(coalesce(restaurants.location, ''))) <> lower(btrim(coalesce(EXCLUDED.location, ''))) OR
-                                lower(btrim(coalesce(restaurants.street, ''))) <> lower(btrim(coalesce(EXCLUDED.street, '')))
+                                btrim(regexp_replace(translate(coalesce(restaurants.name, ''), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '[^a-z0-9]+', ' ', 'g')) <> btrim(regexp_replace(translate(coalesce(EXCLUDED.name, ''), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '[^a-z0-9]+', ' ', 'g')) OR
+                                btrim(regexp_replace(translate(coalesce(restaurants.location, ''), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '[^a-z0-9]+', ' ', 'g')) <> btrim(regexp_replace(translate(coalesce(EXCLUDED.location, ''), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '[^a-z0-9]+', ' ', 'g')) OR
+                                btrim(regexp_replace(translate(coalesce(restaurants.street, ''), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '[^a-z0-9]+', ' ', 'g')) <> btrim(regexp_replace(translate(coalesce(EXCLUDED.street, ''), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '[^a-z0-9]+', ' ', 'g'))
                             ) THEN restaurants.exclusion_reason
                             WHEN EXCLUDED.status = 'excluded' THEN EXCLUDED.exclusion_reason
                             WHEN restaurants.status = 'pending_review' AND restaurants.exclusion_reason IN ('llm_suspected_chain', 'many_locations', 'multi_city_density') THEN EXCLUDED.exclusion_reason
@@ -2845,9 +2853,9 @@ def write_to_db(
                             WHEN restaurants.reviewed_at IS NOT NULL THEN restaurants.chain_confidence
                             WHEN (EXCLUDED.exclusion_reason = 'verified_chain' OR EXCLUDED.chain_confidence = 'independent' OR
                                   (restaurants.exclusion_reason = 'verified_chain' AND EXCLUDED.status = 'active')) AND (
-                                lower(btrim(coalesce(restaurants.name, ''))) <> lower(btrim(coalesce(EXCLUDED.name, ''))) OR
-                                lower(btrim(coalesce(restaurants.location, ''))) <> lower(btrim(coalesce(EXCLUDED.location, ''))) OR
-                                lower(btrim(coalesce(restaurants.street, ''))) <> lower(btrim(coalesce(EXCLUDED.street, '')))
+                                btrim(regexp_replace(translate(coalesce(restaurants.name, ''), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '[^a-z0-9]+', ' ', 'g')) <> btrim(regexp_replace(translate(coalesce(EXCLUDED.name, ''), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '[^a-z0-9]+', ' ', 'g')) OR
+                                btrim(regexp_replace(translate(coalesce(restaurants.location, ''), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '[^a-z0-9]+', ' ', 'g')) <> btrim(regexp_replace(translate(coalesce(EXCLUDED.location, ''), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '[^a-z0-9]+', ' ', 'g')) OR
+                                btrim(regexp_replace(translate(coalesce(restaurants.street, ''), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '[^a-z0-9]+', ' ', 'g')) <> btrim(regexp_replace(translate(coalesce(EXCLUDED.street, ''), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '[^a-z0-9]+', ' ', 'g'))
                             ) THEN restaurants.chain_confidence
                             WHEN EXCLUDED.status = 'excluded' THEN EXCLUDED.chain_confidence
                             WHEN restaurants.status = 'pending_review' THEN EXCLUDED.chain_confidence

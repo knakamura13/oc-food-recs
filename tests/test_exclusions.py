@@ -356,8 +356,7 @@ class TestChainSuspectThreading(unittest.TestCase):
         self.assertTrue(dataset["restaurants"][0]["chain_suspect"])
 
 
-if __name__ == "__main__":
-    unittest.main()
+
 
 
 class TestVerifiedPolicyIntegration(unittest.TestCase):
@@ -457,6 +456,8 @@ class TestIngestPolicyMerges(unittest.TestCase):
         sql = 'SELECT ' + ','.join(cases) + ' FROM ' + table + 'restaurants CROSS JOIN ' + table + 'excluded'
         with sqlite3.connect(':memory:') as conn:
             conn.create_function('btrim', 1, lambda value: value.strip())
+            conn.create_function('translate', 3, lambda value, source, target: value.translate(str.maketrans(source, target)))
+            conn.create_function('regexp_replace', 4, lambda value, pattern, replacement, flags: re.sub(pattern, replacement, value))
             return conn.execute(sql, list((row | saved).values()) + list((row | incoming).values())).fetchone()
 
     def test_expired_or_removed_chain_evidence_reactivates_on_ingest(self):
@@ -484,3 +485,15 @@ class TestIngestPolicyMerges(unittest.TestCase):
         saved = {'status': 'excluded', 'exclusion_reason': 'verified_chain', 'chain_confidence': 'likely_chain'}
         self.assertEqual(self.merge(saved, {'name': "Polly's Pies Restaurant"}, include_name=True),
                          ("Polly's Pies", 'excluded', 'verified_chain', 'likely_chain'))
+
+    def test_equivalent_punctuation_and_spacing_apply_verified_update(self):
+        incoming = {'status': 'excluded', 'exclusion_reason': 'verified_chain', 'chain_confidence': 'likely_chain'}
+        for changes in [{'name': 'Polly’s Pies'}, {'name': "  Polly's   Pies  "},
+                        {'street': '136 N. Raymond Ave.'}, {'location': ' FULLERTON '}]:
+            with self.subTest(changes=changes):
+                self.assertEqual(self.merge({}, incoming | changes),
+                                 ('excluded', 'verified_chain', 'likely_chain'))
+
+
+if __name__ == "__main__":
+    unittest.main()

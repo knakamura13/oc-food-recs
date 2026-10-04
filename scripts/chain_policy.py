@@ -10,13 +10,14 @@ from pathlib import Path
 import re
 
 MAX_AGE_DAYS = 90
+_ASCII_LOWER = str.maketrans('ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz')
 
 
 def identity(value):
-	"""Exact tokens, preserving word boundaries; no brand-prefix matching."""
+	"""ASCII tokens shared with the SQL guard; preserve word boundaries."""
 	if not isinstance(value, str):
 		return ''
-	return ' '.join(re.findall(r'[a-z0-9]+', value.casefold().replace('’', "'")))
+	return ' '.join(re.findall(r'[a-z0-9]+', value.translate(_ASCII_LOWER)))
 
 
 @lru_cache(maxsize=1)
