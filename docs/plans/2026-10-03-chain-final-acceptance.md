@@ -1,6 +1,8 @@
 # Chain scorer final scratch acceptance and integration recommendation
 
-The evaluation is complete at candidate commit `3ac531263e3b87448c8faaadbad6dc51954e3368` (PR #219). Its
+The full hosted evaluation at `3ac531263e3b87448c8faaadbad6dc51954e3368`
+was subsequently validated at repaired candidate commit
+`0465cdd550f7018a965ca43287dccafc6b0c66ba` (PR #219). Its
 production precision decision is conservative: keep model-based S4/S5/S6 evidence
 advisory, preserve unknown visibility, and consider the separately audited
 S3+S1 decisions for #201. This report does not apply exclusions or establish
@@ -8,10 +10,38 @@ that an unknown row is independent. #200's evaluation can be accepted without
 requiring an unsuccessful publisher-proof experiment to become production code.
 #201 still requires its own reviewed integration and scratch dry run.
 
+## Repaired-head cache validation
+
+A subsequent P1 review found that the third-party count path removed a street
+abbreviation period before splitting count quotes. This could join
+`Example Kitchen at 100 Main St. Tustin has six locations.` into a false
+attributed count. The focused repair retains that sentence boundary while
+preserving abbreviation periods before a comma and directional abbreviations
+internal to the saved street. Failing S4/S5 and end-to-end model-error tests
+reproduced the promotion before the repair. The repaired head passes 291 pipeline
+tests, including 94 scorer tests, and has green CI.
+
+At `0465cdd550f7018a965ca43287dccafc6b0c66ba`, the full 1,214-row cascade was
+recomputed into fresh checkpoints using the same public acquisition and exact
+model responses. A fail-closed adapter raises on a cache miss before any hosted
+or local model request. This replay finished in 104.02 seconds, with **zero new
+model requests and zero cache misses**. Final JSON/JSONL rows, summary and
+comparison are identical to the original evaluation; all seven public-table
+fingerprints remain unchanged. The hashes below therefore describe both runs.
+The original model-call cost and runtime remain the measurements for the hosted
+run; cached replay timing is not fresh inference throughput.
+
+Private replay artifacts and `cache-replay-verification.json` are in sibling
+`count-boundary-replay-20261003/`, with the repaired code/source hashes, frozen
+acquisition provenance and fresh per-row artifacts. Neither candidate-head
+verification nor green CI asserts that PR #219 has merged. This closes the
+observed count-path defect without converting unknowns into exclusions or
+revalidating the rejected publisher prompts as production authority.
+
 ## Inputs, safety and execution
 
 - Cohort: all 1,148 active restaurants and all 66 excluded-chain controls, 1,214 unique IDs.
-- Code: `3ac531263e3b87448c8faaadbad6dc51954e3368`; every imported chain source module is SHA-256 pinned in the private manifest. PR #219 supplies the locality-context fix; this is candidate-head evidence rather than a claim that it has landed on main.
+- Original hosted-run code: `3ac531263e3b87448c8faaadbad6dc51954e3368`; repaired replay: `0465cdd550f7018a965ca43287dccafc6b0c66ba`. Every imported chain source module is SHA-256 pinned in each private manifest. PR #219 supplies the locality/count-context fixes; this is candidate-head evidence rather than a claim that it has landed on main.
 - Restore: `prod-pre-154-20261001T035812Z.dump`, SHA-256 `f93ae84b892b299a73f7ca5f1a08802f23b807dc94257944c893058a1318910d`. Its checksum was reverified during this run.
 - Explicit loopback `ocfr200_scratch` database and `ocfr200_reader` role. Live privilege inspection confirms SELECT on all seven public tables, no table write/reference privileges, and no superuser/create-role/create-database privileges. All scorer transactions are forced read-only. The scorer loads no production `.env`.
 - Every public-table count/hash matched the saved restore before evaluation and matched again afterward: excluded_brands, geocode_cache, mentions, merge_log, restaurant_aliases, restaurants and threads.
