@@ -218,13 +218,6 @@
 		return w <= MOBILE_MAX_PX;
 	}
 
-	/** Viewport-space bottom edge of controls + gap; used as `top` for fixed expanded map */
-	function updateMobileMapTopOffsetVar() {
-		if (typeof document === 'undefined' || !controlsBarEl) return;
-		const bottom = Math.ceil(controlsBarEl.getBoundingClientRect().bottom);
-		document.documentElement.style.setProperty('--mobile-map-top-offset', `${bottom + 8}px`);
-	}
-
 	/** Scroll document so controls (search) sit at the top; bypasses `html { scroll-behavior: smooth }` */
 	function snapMobileShellToTop() {
 		if (typeof window === 'undefined') return;
@@ -284,6 +277,14 @@
 		mapExpanded = false;
 		mapOpener = null;
 		restoreMapFocus(opener, false);
+	}
+
+	let outsideMapPointer = false;
+	function isOutsideMap(event: PointerEvent) {
+		if (event.target !== mapPaneEl || !mapPaneEl) return false;
+		const rect = mapPaneEl.getBoundingClientRect();
+		return event.clientX < rect.left || event.clientX > rect.right ||
+			event.clientY < rect.top || event.clientY > rect.bottom;
 	}
 
 	function isMapDialogTabTrapActive() {
@@ -418,7 +419,7 @@
 		}
 	});
 
-	// Mobile expanded map: snap shell to top, lock page scroll, measure controls for map placement
+	// The full-screen mobile dialog locks document scrolling until it closes.
 	$effect(() => {
 		if (typeof window === 'undefined') return;
 
@@ -428,32 +429,12 @@
 
 		if (!expanded || !mobile) {
 			document.documentElement.classList.remove('mobile-map-expanded-lock');
-			document.documentElement.style.removeProperty('--mobile-map-top-offset');
 			return;
 		}
-
-		let cancelled = false;
-		let ro: ResizeObserver | null = null;
-
-		void tick().then(() => {
-			if (cancelled) return;
-			snapMobileShellToTop();
-			requestAnimationFrame(() => {
-				requestAnimationFrame(() => {
-					if (cancelled) return;
-					updateMobileMapTopOffsetVar();
-					ro = new ResizeObserver(() => updateMobileMapTopOffsetVar());
-					if (controlsBarEl) ro.observe(controlsBarEl);
-					document.documentElement.classList.add('mobile-map-expanded-lock');
-				});
-			});
-		});
+		document.documentElement.classList.add('mobile-map-expanded-lock');
 
 		return () => {
-			cancelled = true;
-			ro?.disconnect();
 			document.documentElement.classList.remove('mobile-map-expanded-lock');
-			document.documentElement.style.removeProperty('--mobile-map-top-offset');
 		};
 	});
 
@@ -716,6 +697,11 @@
 				inert={isMobileViewport() && !mapExpanded ? true : undefined}
 				onclose={handleMapDialogClose}
 				onkeydown={handleMapDialogKeydown}
+				onpointerdown={(event) => { outsideMapPointer = isOutsideMap(event); }}
+				onpointerup={(event) => {
+					if (outsideMapPointer && isOutsideMap(event)) closeMobileMap();
+					outsideMapPointer = false;
+				}}
 				onpointerenter={handleDesktopMapPointerEnter}
 				onpointerleave={handleDesktopMapPointerLeave}
 			>
@@ -975,18 +961,23 @@
 		.map-pane.portal-expanded {
 			display: block;
 			position: fixed;
-			top: var(--mobile-map-top-offset, 160px);
-			left: max(16px, env(safe-area-inset-left, 0px));
-			right: max(16px, env(safe-area-inset-right, 0px));
-			bottom: max(16px, env(safe-area-inset-bottom, 0px));
+			inset: 0;
+			margin: 0;
+			max-width: none;
+			max-height: none;
 			width: auto;
 			height: auto;
-			border-radius: 16px;
-			border: 4px solid white;
+			border-radius: 0;
+			border: none;
 			box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
 			z-index: 1400;
 			overflow: hidden;
 			overscroll-behavior: contain;
+		}
+
+		dialog.map-pane::backdrop {
+			background: rgba(0, 0, 0, 0.45);
+			pointer-events: auto;
 		}
 
 		.map-pane.portal-expanded .map-interactive-layer {
@@ -1017,6 +1008,8 @@
 		.map-interactive-layer {
 			position: absolute;
 			inset: 0;
+			padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
+				env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
 			z-index: 1;
 			min-height: 0;
 			display: flex;
@@ -1054,7 +1047,7 @@
 			background: #ffe4d6;
 		}
 
-		/* Expanded map sits below controls; keep shell overflow visible for dropdowns */
+		/* The modal fills the viewport; remove the shell's containing backdrop filter. */
 		.app-trap:has(.map-pane.portal-expanded) {
 			overflow: visible;
 			backdrop-filter: none;

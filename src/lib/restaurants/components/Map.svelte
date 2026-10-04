@@ -24,6 +24,7 @@
 	let mobileViewportQuery: MediaQueryList | null = null;
 	let mapInitializationGeneration = 0;
 	let destroyed = false;
+	let tooltipPanFrame: number | null = null;
 
 	let unmappedCount = $derived(restaurants.filter(isUnmappedRestaurant).length);
 	let mappedRestaurants = $derived(restaurants.filter((r) => !isUnmappedRestaurant(r)));
@@ -44,6 +45,7 @@
 	// Bumped per selection so a stale, slow-firing moveend callback from a previous focus
 	// can bail out instead of spiderfying the wrong (now off-screen) cluster.
 	let focusToken = 0;
+	let pendingFocus: { slug: string; lat: number; lng: number } | null = null;
 
 	// Center + zoom all the way in on a selected restaurant, then guarantee its individual pin
 	// is visible — spiderfying its cluster when near-duplicate coordinates keep it grouped even
@@ -52,6 +54,12 @@
 	// click from the list/search whether or not the restaurant was part of a cluster.
 	function focusOnRestaurant(slug: string, lat: number, lng: number) {
 		if (!leafletMap) return;
+		if (addingMarkerBatch) {
+			focusToken += 1;
+			pendingFocus = { slug, lat, lng };
+			return;
+		}
+		pendingFocus = null;
 		const token = ++focusToken;
 		const marker = markers.get(slug);
 		if (!marker || !clusterGroupRef) {
@@ -92,6 +100,8 @@
 	});
 
 	let clusterGroupRef: any = null;
+	let addingMarkerBatch = false;
+	const pendingMapDisposals = new Map<any, any>();
 	let L: any = null;
 	let dotIcon: any = null;
 
@@ -114,9 +124,13 @@
 	}
 
 	function disposeMap() {
+		pendingFocus = null;
 		if (locationMarker && leafletMap) leafletMap.removeLayer(locationMarker);
 		locationMarker = null;
-		leafletMap?.remove();
+		// markercluster does not cancel its internal chunk timer on removal.
+		if (addingMarkerBatch && clusterGroupRef) pendingMapDisposals.set(clusterGroupRef, leafletMap);
+		else leafletMap?.remove();
+		addingMarkerBatch = false;
 		leafletMap = undefined;
 		clusterGroupRef = null;
 		L = null;
@@ -165,7 +179,7 @@
 			syncScrollWheelZoom();
 
 			L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-				attribution: '&copy; OpenStreetMap contributors',
+				attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>',
 				maxZoom: 19
 			}).addTo(leafletMap);
 
@@ -195,8 +209,8 @@
 		mobileViewportQuery.addEventListener('change', handleViewportChange);
 		let observer: IntersectionObserver | null = null;
 
-		// On mobile, defer map init until visible; on desktop, init immediately
-		if (mobileViewportQuery.matches) {
+		// Defer the Leaflet imports until the map approaches either viewport.
+		{
 			observer = new IntersectionObserver(
 				(entries) => {
 					if (entries[0].isIntersecting) {
@@ -207,8 +221,6 @@
 				{ rootMargin: '100px' }
 			);
 			observer.observe(mapContainer);
-		} else {
-			void initMap();
 		}
 
 		return () => {
@@ -221,6 +233,7 @@
 			if (clusterHoverTimer) clearTimeout(clusterHoverTimer);
 			if (locationErrorTimer) clearTimeout(locationErrorTimer);
 			if (postInitInvalidateTimer) clearTimeout(postInitInvalidateTimer);
+			if (tooltipPanFrame !== null) cancelAnimationFrame(tooltipPanFrame);
 			hoverTimer = null;
 			clusterHoverTimer = null;
 			locationErrorTimer = null;
@@ -234,11 +247,38 @@
 		if (!leafletMap || !L) return null;
 		if (clusterGroupRef) return clusterGroupRef;
 
-		clusterGroupRef = L.markerClusterGroup({
+		const generation = mapInitializationGeneration;
+		const group = L.markerClusterGroup({
 			maxClusterRadius: 40,
 			spiderfyOnMaxZoom: true,
-			showCoverageOnHover: false
+			showCoverageOnHover: false,
+			chunkedLoading: true,
+			chunkProgress: (processed: number, total: number) => {
+				if (processed === total && pendingMapDisposals.has(group)) {
+					const map = pendingMapDisposals.get(group);
+					pendingMapDisposals.delete(group);
+					// The callback precedes the plugin's final render: dispose afterward.
+					queueMicrotask(() => map?.remove());
+					return;
+				}
+				if (processed === total && !destroyed && generation === mapInitializationGeneration) {
+					addingMarkerBatch = false;
+					// removeLayer cannot remove a marker still waiting in a chunk.
+					// Wait for the plugin's final render, then reconcile the latest filters.
+					queueMicrotask(() => {
+						if (destroyed || generation !== mapInitializationGeneration) return;
+						untrack(() => {
+							syncMarkers();
+							if (pendingFocus && pendingFocus.slug === appState.selectedRestaurantSlug) {
+								const { slug, lat, lng } = pendingFocus;
+								focusOnRestaurant(slug, lat, lng);
+							}
+						});
+					});
+				}
+			}
 		});
+		clusterGroupRef = group;
 
 		clusterGroupRef.on('clustermouseover', (e: any) => {
 			if (clusterHoverTimer) clearTimeout(clusterHoverTimer);
@@ -251,11 +291,12 @@
 				cluster
 					.bindTooltip(clusterTooltipHtml(childRestaurants), {
 						permanent: true,
-						direction: 'top',
+						direction: 'auto',
 						className: 'rec-tooltip rec-tooltip--cluster',
 						opacity: 1
 					})
 					.openTooltip();
+				panTooltipIntoView(cluster.getTooltip());
 				clusterHoverTimer = null;
 			}, 150);
 		});
@@ -329,7 +370,7 @@
 	}
 
 	function syncMarkers() {
-		if (!leafletMap || !L || !dotIcon) return;
+		if (!leafletMap || !L || !dotIcon || addingMarkerBatch) return;
 
 		const group = ensureClusterGroup();
 		if (!group) return;
@@ -344,6 +385,7 @@
 			}
 		}
 
+		const additions: any[] = [];
 		for (const r of mappedRestaurants) {
 			const existing = markers.get(r.slug);
 			if (existing) {
@@ -352,7 +394,11 @@
 			}
 			const marker = createMarker(r);
 			markers.set(r.slug, marker);
-			group.addLayer(marker);
+			additions.push(marker);
+		}
+		if (additions.length) {
+			addingMarkerBatch = true;
+			group.addLayers(additions);
 		}
 
 		applyHighlight();
@@ -360,6 +406,52 @@
 
 	function updateMarkers() {
 		syncMarkers();
+	}
+
+	// A cold/opened mobile dialog needs bounds calculated after its full-size layout.
+	// Explicit list/search focus takes precedence over fitting the whole population.
+	$effect(() => {
+		const expanded = mapExpanded;
+		if (!mapInitialized || !leafletMap) return;
+		let secondFrame: number | null = null;
+		const firstFrame = requestAnimationFrame(() => {
+			secondFrame = requestAnimationFrame(() => {
+				if (destroyed || !leafletMap) return;
+				leafletMap.invalidateSize({ animate: false });
+				untrack(() => {
+					const focused = appState.mapTarget ?? mappedRestaurants.find(
+						(r) => r.slug === appState.selectedRestaurantSlug
+					);
+					if (focused?.lat != null && focused.lng != null) {
+						focusOnRestaurant(focused.slug, focused.lat, focused.lng);
+					} else if (mappedRestaurants.length && (expanded || !mobileViewportQuery?.matches)) {
+						leafletMap.fitBounds(L.latLngBounds(mappedRestaurants.map((r) => [r.lat, r.lng])),
+							{ padding: [30, 30], maxZoom: 14, animate: false });
+					}
+				});
+			});
+		});
+		return () => {
+			cancelAnimationFrame(firstFrame);
+			if (secondFrame !== null) cancelAnimationFrame(secondFrame);
+		};
+	});
+
+	// Leaflet Tooltip has no Popup autoPan option: measure its actual overflow.
+	function panTooltipIntoView(tooltip: any) {
+		if (tooltipPanFrame !== null) cancelAnimationFrame(tooltipPanFrame);
+		tooltipPanFrame = requestAnimationFrame(() => {
+			tooltipPanFrame = null;
+			const element = tooltip?.getElement();
+			if (destroyed || !leafletMap || !mapContainer || !element?.isConnected) return;
+			const viewport = mapContainer.getBoundingClientRect();
+			const gutter = 12;
+			element.style.maxWidth = `${Math.max(0, viewport.width - gutter * 2)}px`;
+			const tip = element.getBoundingClientRect();
+			const dx = Math.max(0, tip.right - viewport.right + gutter) + Math.min(0, tip.left - viewport.left - gutter);
+			const dy = Math.max(0, tip.bottom - viewport.bottom + gutter) + Math.min(0, tip.top - viewport.top - gutter);
+			if (dx || dy) leafletMap.panBy([dx, dy], { animate: !reduceMotion() });
+		});
 	}
 
 	// Re-render markers when filtered restaurants change. Debounce so typing
@@ -524,11 +616,12 @@
 		next
 			.bindTooltip(tooltipHtml(r), {
 				permanent: true,
-				direction: 'top',
+				direction: 'auto',
 				className: 'rec-tooltip',
 				opacity: 1
 			})
 			.openTooltip();
+		panTooltipIntoView(next.getTooltip());
 		appliedSlug = active;
 	}
 </script>
@@ -771,7 +864,9 @@
 		font-family: 'DM Sans', sans-serif;
 		font-size: 0.8rem;
 		padding: 6px 10px;
-		white-space: nowrap;
+		white-space: normal;
+		overflow-wrap: anywhere;
+		box-sizing: border-box;
 	}
 
 	:global(.rec-tooltip.leaflet-tooltip-top::before) {

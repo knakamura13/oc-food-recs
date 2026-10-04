@@ -391,8 +391,18 @@
 		};
 		const resizeObserver = new ResizeObserver(update);
 		resizeObserver.observe(node);
-		const mutationObserver = new MutationObserver(update);
-		mutationObserver.observe(node, { childList: true });
+		const mutationObserver = new MutationObserver((changes) => {
+			for (const change of changes) {
+				const trigger = change.target as HTMLElement;
+				if (change.type === 'attributes' && trigger.matches('.dropdown-trigger.has-active') &&
+					!change.oldValue?.split(/\s+/).includes('has-active') && isCompactFilterViewport()) {
+					trigger.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+				}
+			}
+			update();
+		});
+		mutationObserver.observe(node, { childList: true, subtree: true, attributes: true,
+			attributeFilter: ['class'], attributeOldValue: true });
 		node.addEventListener('scroll', update, { passive: true });
 		window.addEventListener('resize', update);
 		const frame = requestAnimationFrame(update);
@@ -603,6 +613,26 @@
 			</div>
 		{/if}
 
+
+		<!-- New-since — only when a prior visit exists and the data has comments newer than it -->
+		{#if isNewSinceVisit || (lastVisitMs !== null && dateExtent.max > lastVisitMs)}
+			<button
+				class="dropdown-trigger mapped-only-toggle"
+				class:has-active={isNewSinceVisit}
+				aria-pressed={isNewSinceVisit}
+				onclick={toggleNewSinceVisit}
+			>
+				{#if isNewSinceVisit}
+					<span aria-hidden="true">✓</span>
+				{/if}
+				New since last visit
+			</button>
+		{/if}
+
+
+	</div>
+
+	<div class="filter-actions">
 		<!-- Saved — only once the user has bookmarked something (or the filter is on) -->
 		{#if savedCount > 0 || appState.showSavedOnly}
 			<button
@@ -622,24 +652,9 @@
 			</button>
 		{/if}
 
-		<!-- New-since — only when a prior visit exists and the data has comments newer than it -->
-		{#if isNewSinceVisit || (lastVisitMs !== null && dateExtent.max > lastVisitMs)}
-			<button
-				class="dropdown-trigger mapped-only-toggle"
-				class:has-active={isNewSinceVisit}
-				aria-pressed={isNewSinceVisit}
-				onclick={toggleNewSinceVisit}
-			>
-				{#if isNewSinceVisit}
-					<span aria-hidden="true">✓</span>
-				{/if}
-				New since last visit
-			</button>
-		{/if}
-
 		{#if unmappedCount > 0 || appState.showUnmapped}
 			<button
-				class="dropdown-trigger mapped-only-toggle"
+				class="dropdown-trigger mapped-only-toggle unmapped-toggle"
 				class:has-active={appState.showUnmapped}
 				aria-pressed={appState.showUnmapped}
 				aria-label={appState.showUnmapped
@@ -659,9 +674,7 @@
 				{/if}
 			</button>
 		{/if}
-	</div>
 
-	<div class="filter-actions">
 		{#if onMapToggle}
 			<button
 				type="button"
@@ -1079,10 +1092,6 @@
 			display: inline-flex;
 		}
 
-		.filter-row {
-			flex-wrap: nowrap;
-		}
-
 		.filter-controls {
 			flex: 1;
 			flex-wrap: nowrap;
@@ -1098,21 +1107,45 @@
 		}
 
 		.filter-controls.overflow-end {
-			box-shadow: inset -24px 0 12px -8px #faf7f2;
+			mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 24px), transparent);
 		}
 
 		.filter-controls.overflow-start {
-			box-shadow: inset 24px 0 12px -8px #faf7f2;
+			mask-image: linear-gradient(to right, transparent, #000 24px);
 		}
 
 		.filter-controls.overflow-start.overflow-end {
-			box-shadow: inset 24px 0 12px -8px #faf7f2, inset -24px 0 12px -8px #faf7f2;
+			mask-image: linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent);
+		}
+
+		/* A mask creates a stacking context and clips fixed descendants. */
+		.filter-controls:has(.dropdown-trigger[aria-expanded='true']) {
+			mask-image: none;
+			position: relative;
+			z-index: 2;
+		}
+
+		.filter-row {
+			flex-wrap: wrap;
+		}
+
+		.filter-controls {
+			flex-basis: 100%;
+		}
+
+		.pill,
+		.clear-filters {
+			min-height: 44px;
+			display: inline-flex;
+			align-items: center;
+			box-sizing: border-box;
 		}
 
 		.filter-actions {
+			width: 100%;
 			flex-shrink: 0;
-			flex-wrap: nowrap;
-			min-width: min-content;
+			flex-wrap: wrap;
+			min-width: 0;
 			position: relative;
 			z-index: 1;
 			background: #faf7f2;
@@ -1133,11 +1166,26 @@
 	}
 
 	@media (max-width: 480px) {
+		.filter-actions {
+			gap: 4px;
+		}
+
+		.saved-toggle,
+		.unmapped-toggle {
+			padding-left: 6px;
+			padding-right: 6px;
+			font-size: 0.8rem;
+		}
+
+		.saved-toggle :global(svg) {
+			display: none;
+		}
+
 		.action-label {
 			display: none;
 		}
 
-		.filter-actions .dropdown-trigger {
+		.filter-actions .dropdown-trigger:not(.saved-toggle):not(.unmapped-toggle) {
 			min-width: 44px;
 			min-height: 44px;
 			width: 44px;
@@ -1147,7 +1195,7 @@
 			gap: 0;
 		}
 
-		.filter-actions .dropdown-trigger :global(svg) {
+		.filter-actions .dropdown-trigger:not(.saved-toggle):not(.unmapped-toggle) :global(svg) {
 			width: 18px;
 			height: 18px;
 		}
