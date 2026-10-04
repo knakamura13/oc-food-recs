@@ -58,9 +58,9 @@ The automated review found that the raw SQL comparisons rejected punctuation/spa
 
 PR #220 merged as `9d182608af29a2de8f08838f7c32fb2b793edd32`. Both CI jobs passed on its repaired head `db9dfb2cccf11e5babcda1010b7c7ffea8c55b46`, and Railway production deployment `6bffba5f-88ce-4cfa-8fca-f4ff773b60d7` reached `SUCCESS` with the merged commit. #201 closed on merge.
 
-The production preview reproduced the scratch proposal exactly. A complete PostgreSQL custom-format backup was taken and its table-of-contents checked before writing. It includes all seven public tables and the Drizzle migration ledger. The private backup is `data/backups/prod-pre-201-20261004T065519Z.dump` (321,966 bytes; SHA-256 `9d99de093a3114d5df4654179aa6c5b8022f4879216e4dec76879a406a667b9f`).
+The production preview reproduced the scratch proposal exactly. A complete PostgreSQL custom-format backup was taken and its table-of-contents checked before writing. It includes all eight live public tables and the Drizzle migration ledger. The private backup is `data/backups/prod-pre-201-20261004T065519Z.dump` (321,966 bytes; SHA-256 `9d99de093a3114d5df4654179aa6c5b8022f4879216e4dec76879a406a667b9f`).
 
-At `2026-10-04T06:56:36Z`, one transaction applied the 1,133 previewed changes with exact row-state preconditions. Committed readback verified the two new exclusions and 1,131 active confidence changes to `unknown`. All 25 human-locked rows, unplanned rows and fields, and the other six public tables remained unchanged. No model requests, registry changes or schema changes ran.
+At `2026-10-04T06:56:36Z`, one transaction applied the 1,133 previewed changes with exact row-state preconditions. Committed readback verified the two new exclusions and 1,131 active confidence changes to `unknown`. All 25 human-locked rows, unplanned rows and fields, and the other seven live public tables remained unchanged. No model requests, registry changes or schema changes ran.
 
 | Committed production result | Count |
 | --- | ---: |
