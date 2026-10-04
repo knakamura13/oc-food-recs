@@ -13,6 +13,18 @@ except ModuleNotFoundError:
 
 
 class SourceRetrievalTest(unittest.TestCase):
+    def test_local_address_anchor_preserves_periods_in_business_names(self):
+        import chain_evaluate as ev
+        for name in ['Mr. BBQ', 'O.C. Fish Grill']:
+            row = dict(name=name, street='100 Main St', location='Tustin')
+            source = dict(kind='S5', url='https://example.com/locations',
+                text=name+' 100 Main St, Tustin, CA 92780', official_source=True)
+            with self.subTest(name=name):
+                self.assertTrue(ev.count_identity(row, source, [source], listed=True))
+        row = dict(name='Irvine.Grill', street='100 Main St', location='Irvine')
+        source['text'] = 'Irvine.Grill 100 Main St Irvine.Grill'
+        self.assertFalse(ev.source_identity(row, source, [source]))
+
     def test_local_city_cannot_come_from_another_locator_listing(self):
         import chain_evaluate as ev
         row = dict(name='Example Kitchen', street='100 Main St', location='Tustin')

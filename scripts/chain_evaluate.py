@@ -90,7 +90,9 @@ def source_identity(row, source, sources):
         text = ' __listing__ '.join(identity_text(part)
             for part in re.split(r'[.!?;|]+', raw))
         street_pattern = r'(?<!\w)' + re.escape(street) + r'(?!\w)'
-        name_pattern = r'(?<!\w)' + re.escape(name) + r'(?!\w)'
+        # Periods inside names such as Mr. BBQ are not listing boundaries.
+        name_pattern = (r'(?<!\w)' + r'(?:\s+__listing__)?\s+'.join(
+            re.escape(token) for token in name.split()) + r'(?!\w)')
         official_header = (anchor.get('kind') == 'S5'
             and anchor.get('official_source') is True
             and re.search(name_pattern, text[:200]))
