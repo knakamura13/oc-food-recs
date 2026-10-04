@@ -2,6 +2,7 @@ import {
 	bigint,
 	bigserial,
 	boolean,
+	customType,
 	index,
 	integer,
 	jsonb,
@@ -11,6 +12,9 @@ import {
 	timestamp,
 	uniqueIndex,
 } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
+
+const tsvector = customType<{ data: string }>({ dataType: () => 'tsvector' });
 
 /**
  * One row per Reddit thread we've ingested.
@@ -89,6 +93,9 @@ export const mentions = pgTable(
 		permalink: text('permalink'),
 		author: text('author').notNull(),
 		body: text('body').notNull(),
+		bodyTsv: tsvector('body_tsv').generatedAlwaysAs(
+			sql`to_tsvector('english'::regconfig, coalesce(body, ''))`
+		),
 		score: integer('score').notNull(),
 		role: text('role').notNull(), // 'primary' | 'endorsement'
 		classification: text('classification'), // 'dish_rec' | 'personal_story' | 'endorsement' | 'filler' | 'question' | NULL (primaries)
@@ -114,6 +121,7 @@ export const mentions = pgTable(
 		threadIdx: index('mentions_thread_idx').on(table.threadId),
 		// Supports per-user lookups across threads ("has this user recommended this before?").
 		authorIdx: index('mentions_author_idx').on(table.author),
+		bodyTsvIdx: index('mentions_body_tsv_idx').using('gin', table.bodyTsv),
 	})
 );
 

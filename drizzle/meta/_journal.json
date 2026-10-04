@@ -71,6 +71,13 @@
       "when": 1790828360512,
       "tag": "0009_add_mention_status_and_events",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791100172348,
+      "tag": "0010_comment_attribute_search",
+      "breakpoints": true
     }
   ]
 }
