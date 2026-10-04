@@ -203,3 +203,220 @@ abstention when ownership remains unclear. Saved-address formats, aliases and
 extraction failures remain separate recall blockers. A full rerun and the broader
 acceptance criteria in `CHAIN_SCORER_RESUME_PLAN.md` are still required before any
 production exclusion decision.
+
+## Follow-up: operator evidence and a fresh sparse-publisher holdout
+
+The follow-up keeps the original benchmark inputs and judgments above unchanged.
+It freezes a stricter operator-quote prompt before reviewing new references,
+then compares it with the same complete-quotes prompt. This remains a file-only
+experiment on the merged #217 evaluator, not a production publisher gate.
+
+### Operator evidence for the four unresolved pages
+
+A blinded reviewer assessed each original page separately from newly acquired
+same-publisher pages. All four original pages remain `unknown` under that review;
+the expanded evidence supports `first_party_local` attribution for all four:
+
+| Restaurant | Additional restaurant-publisher evidence | Local binding and limitations |
+| --- | --- | --- |
+| Memphis Cafe | [Home page](https://www.memphiscafe.com/) speaks as the restaurant about its cooking and staff. | [Hours/location](https://www.memphiscafe.com/hours-location) binds 2920 Bristol St to Costa Mesa. The home-page acquisition hit the byte cap; unseen footer content remains unverified. |
+| Honda-ya | [About page](https://www.izakayahondaya.com/home/about-hondaya/) describes operating Honda-ya in first-person restaurant narration. | The same page identifies 556 El Camino Real, Tustin. An initial web-tool view showed an account-suspended redirect; subsequent direct extraction and web reads returned restaurant content. That inconsistency is acquisition uncertainty, not evidence of a confirmed outage. |
+| Olive Pit | [Our Story](https://www.olivepitgrill.com/our-story) identifies its founders and describes the restaurant's food in its own voice. | The story page lists 240 S. Brea Blvd, Brea. The original homepage's uncredited history remains insufficient on its own. |
+| Hatam | [Home page](https://www.hatamrestaurant.net/) identifies named family owners and speaks as the restaurant about its service. | The home page explicitly identifies 2383 W Lincoln Ave, Anaheim. The contact page also contains a Brookhurst address and inconsistent hours; current location chronology remains unresolved. |
+
+Additional external records associate Memphis's domain and saved address in
+[BizStanding](https://bizstanding.com/p/memphis%2Brestaurant-172281877), Olive Pit's
+in [Yellow Pages](https://www.yellowpages.com/brea-ca/mip/olive-pit-mediterranean-grill-551517740?lid=551517740),
+and Hatam's in [BBB](https://www.bbb.org/us/ca/anaheim/profile/banquet-facilities/hatam-restaurant-1126-1000119057).
+These were inspected through the web tool after the direct extractor returned
+403 responses. They corroborate domain/address association, not legal ownership
+or authenticated website control. The listings can be stale or user-supplied;
+BBB explicitly disclaims verification of third-party information. Honda-ya's
+external listing timed out, so its follow-up attribution lacks acquired external
+corroboration. Search snippets were not treated as evidence.
+
+The reviewer assessed only the saved extractor packets, in which all four external
+fetches were unavailable. The separate `browser-corroboration.json` records the
+runner's later web observations. No external listing, manual judgment, or reference
+label was injected into either hosted lane. The hosted follow-up bundle contains
+only successfully extracted pages on the same publisher host; combining these
+pages is an experimental input format, not implemented retrieval behavior.
+
+### Frozen rule and holdout construction
+
+The stricter prompt requires a substantive operator statement rather than a
+title, copyright notice, navigation, address, customer review, or uncredited
+third-person history. Its publisher quote must include the business name and
+either identify owners/operators or bind the business to the publisher speaking
+about operating its restaurant. Quote containment and the merged deterministic
+local-address check remain unchanged. The rule does not add a deterministic
+semantic validator, and a model can still violate its instructions.
+
+The new holdout contains 24 distinct saved restaurants with no restaurant overlap
+with the preceding 54-page benchmark:
+
+- Twenty cached pages were sampled with seed `200218` from 85 pages across 57
+  saved rows whose extracted text lacked a fixed set of operator/first-person
+  phrases. Prior benchmark hosts and rows were excluded, then one row and host
+  were retained per sampled page. This wording screen is a selection heuristic,
+  not an ownership label. The earlier URL/text deduplication limitation still
+  applies.
+- Four reserved restaurants supply freshly acquired platform challenges: three
+  Restaurantji pages and one NetWaiter page. Restaurantji is a familiar platform,
+  so this is a restaurant/page holdout, not an entirely unseen-publisher test.
+- Zuzu's Petals and Matty's Patty's cached acquisitions are flagged truncated.
+  The independent reviewer assessed the supplied text, not unseen source content.
+  Cached pages are held-out snapshots, not uniformly refreshed live pages.
+
+A fresh blinded reviewer labeled all 24 cases without model outputs, prompts,
+prior labels, or selection cohorts. The references are three `first_party_local`,
+four `third_party`, 17 `unknown`, and zero `identity_mismatch`. The three positives
+are Zuzu's Petals, Hickory & Spice BBQ, and The Dock. Hickory's About-page
+attribution is interpretive: its detailed history names a person and describes
+him tending its smokers, rather than explicitly authenticating the publisher.
+This is independent session review, not cross-vendor reference adjudication or
+production precision validation.
+
+### Fresh holdout results
+
+| Reference class | Cases | Complete-quotes accepted | Operator-quote accepted |
+| --- | ---: | ---: | ---: |
+| Supported restaurant-operated publisher | 3 | 3 | 3 |
+| Known third-party publisher | 4 | 0 | 0 |
+| Unresolved publisher attribution | 17 | 15 | 1 |
+| Identity mismatch | 0 | 0 | 0 |
+
+Accepted unresolved cases are not proven false positives. The stricter prompt
+reduces unsupported promotion under this reference threshold, but the three
+positive and four negative references are too few and too selectively sampled
+to establish a safe general precision or recall rate.
+
+| Case | Saved restaurant | Reference | Complete-quotes accepted | Operator-quote accepted |
+| --- | --- | --- | --- | --- |
+| 000 | Shik Do Rak | unknown | yes | no |
+| 001 | Beale's Texas BBQ | unknown | yes | no |
+| 002 | Tio Flaco's Tacos | unknown | no | no |
+| 003 | Bravo Avo | unknown | yes | no |
+| 004 | Bagel Shack | unknown | yes | yes |
+| 005 | Nova Kitchen & Bar | unknown | yes | no |
+| 006 | Simply Fish! | unknown | yes | no |
+| 007 | Hanuman Thai Eatery | unknown | yes | no |
+| 008 | Pho Dakao | unknown | yes | no |
+| 009 | Mastros | unknown | yes | no |
+| 010 | El Paraiso | unknown | yes | no |
+| 011 | Zuzu's Petals | first_party_local | yes | yes |
+| 012 | Huntington Ramen | unknown | yes | no |
+| 013 | Kawamata Seafood | unknown | no | no |
+| 014 | Shabu Shabu Bar | unknown | yes | no |
+| 015 | Cha Cha's | unknown | yes | no |
+| 016 | Hickory & Spice BBQ | first_party_local | yes | yes |
+| 017 | The Dock | first_party_local | yes | yes |
+| 018 | Matty's Patty's Burger Club | unknown | yes | no |
+| 019 | Windsor Browns | unknown | yes | no |
+| 020 | Eat Chow — Restaurantji | third_party | no | no |
+| 021 | Bangkok Corner — Restaurantji | third_party | no | no |
+| 022 | Poppy & Seed — Restaurantji | third_party | no | no |
+| 023 | Roll and Grill — NetWaiter | third_party | no | no |
+
+Bagel Shack's accepted publisher quote is an ordering invitation for Portola
+Hills; its local quote identifies the saved San Clemente branch in the page's
+larger list. The reviewer found the local branch but no substantive operator
+attribution. It is therefore an ownership ambiguity, not a demonstrated
+wrong-address case. The model calls Kawamata's Gogiw page third-party; the
+reviewer leaves its sparse publisher attribution unresolved. Both lanes abstain
+from accepting that page.
+
+On the four original unresolved pages, complete-quotes accepts 4/4 and the
+operator-quote lane accepts 1/4: Olive Pit's uncredited history still passes.
+Both lanes accept all four expanded same-publisher evidence bundles. Even there,
+the stricter lane sometimes returns a weak title/history quote instead of the
+substantive operator evidence available elsewhere in the bundle. Its accepted
+Zuzu's and Hickory quotes likewise lack the fuller operator context that supported
+the reference labels. A positive page reference does not prove the model's
+selected publisher quote meets the stronger rule.
+
+### Synthetic controls expose a remaining address-proof gap
+
+Eight synthetic cases supplement the 32 real-page/bundle cases: two explicit
+positive publishers, five negative identity/publisher cases, and one unresolved
+branding-only page. The complete-quotes lane accepts 2/2 positives; the stricter
+lane accepts 1/2 because it invents a local quote for the explicit-operator case,
+which the exact-containment check correctly rejects. Both reject the copied fan
+site, directory quoting restaurant copy, wrong-locality case, and another
+business's address. Only the complete-quotes lane accepts the branding-only
+unresolved page.
+
+**Both lanes incorrectly accept the missing-city synthetic negative.** The
+invented source contains:
+
+```text
+Example Kitchen is owned and operated by Robin Cook. We serve our guests here.
+Visit us at 100 Main St. Tustin is part of the name of our regional dining guide.
+```
+
+Both models select the exact substring `Visit us at 100 Main St. Tustin` as their
+local quote. The substring is present, and `source_identity` returns true:
+the city suffix check accepts `Tustin` without requiring the following text to be
+locality metadata. The complete original source also passes, including a variant
+with `Main Street.` that preserves a listing separator before the city. Quote
+clipping and abbreviated-street period removal are therefore not necessary causes.
+Checking the full source alone is insufficient; the validator must distinguish
+an address/listing's locality from adjacent narrative. Exact quote
+containment plus a city suffix therefore does not prove locality in the original
+source's complete address/listing context. This is a known synthetic failure,
+distinct from the unresolved real-page references.
+No chain counts were supplied to these requests, so the experiment reproduces
+an identity-gate error, not a newly observed chain classification.
+
+### Answer coverage, cost, reproduction and next gate
+
+Each lane completes 40/40 requests with valid verdicts and no request errors.
+Across all 40 cases, the complete-quotes raw verdicts are 30 first-party, nine
+third-party and one unknown; all 30 first-party answers pass the current quote
+checks. The operator-quote raw verdicts are 12 first-party, seven third-party and
+21 unknown, with one first-party answer rejected for an invented quote. On the
+24 holdouts alone those raw counts are respectively 18/5/1 and 4/5/15.
+No numeric confidence field was requested, so zero-confidence answers are not
+measured. Explicit unknowns and deterministic proof rejections are reported
+separately from positive-reference recovery.
+
+The experiment uses the same hosted Gemma model/settings and price ceilings as
+the earlier run: temperature 0, reasoning disabled, 2,048 requested output tokens,
+eight workers, a 12,000-character excerpt cap and a 16,000-byte complete-prompt
+cap. There are 76 new successful request-cache records and four exact prior
+request hits, reporting **$0.00681803** new usage. A first attempt cached answers
+but stopped while packing synthetic output metadata because `restaurant_id` was
+missing. Adding that non-prompt field and replaying preserved both prompt hashes,
+the evaluator hash and successful caches. The final replay took 21.32 seconds;
+that cache-assisted timing excludes the earlier attempt and is not fresh-call
+throughput. No database access, local inference, committed scorer-code changes, chain
+rerun, threshold changes, or production exclusions occurred.
+
+New private artifacts are in
+`output/chain-scorer/issue-200/publisher-ownership-20261003/`: `prepare.py`,
+`selection.json`, standalone and operator reviewer packets/references,
+`browser-corroboration.json`, `fetches.json`, `run.py`, frozen `prompts.json`,
+`request-inputs.json`, `manifest.json`, both result lanes, `score.py`,
+`scored-summary.json`, `run-summary.json`, `identity-regression.json`,
+`inherited-cache.json`, and both fetch
+and model caches. `reproduction-dependencies.json` pins these files, imported
+source modules and sibling adapters/inputs. Reproduction also needs the earlier
+expanded benchmark candidates/inputs and its 114 successful request-cache files,
+the broad saved-row results, the pilot adapter and `/private/tmp/ocfr200-cache`
+metadata. The new folder includes inherited model caches but alone does not supply
+all preparation dependencies.
+
+| New pin | SHA-256 |
+| --- | --- |
+| Holdout `inputs.json` | `6029b6afadc03225a993d5a8f42371332b87db905fd78e040e4597aae7373519` |
+| Complete `request-inputs.json` | `4fe96406f4d18d181415ebc9c9867e337a12d29940e05b647b0d1979364cf9f8` |
+| Operator reviewer input | `511742c4e8d5fc4125f015b21ba4a8a13097bec407b78a48b206a05ff00a0211` |
+| Frozen `prompts.json` | `cb2fb606026500fb3afb59b76052bad0b9ff6e6e47f69d1054d9494d31563e23` |
+
+Keep #200 open and #201 gated. Next: bind the selected local quote to its complete
+original-source address/listing context and reproduce the missing-city rejection;
+then validate publisher evidence semantically or preserve abstention when the
+quote is only a title/history/ordering invitation. Replay the known controls and
+fresh holdout before another broader chain evaluation. The full scratch rerun,
+66 excluded controls, F6 disagreements and current five-to-seven-location audit
+remain required by `CHAIN_SCORER_RESUME_PLAN.md`.
