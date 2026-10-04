@@ -42,6 +42,8 @@ Run `npm run check`, `npm test`, the PostgreSQL integration test, and `tests/com
 
 Local validation on 2026-10-04: 331 unit tests pass, five PostgreSQL integration cases pass, and six mobile/desktop browser cases pass. Svelte diagnostics report no errors or warnings. No production DB or local/hosted model was used.
 
+Independent review approved the implementation and ran 49 focused tests successfully. A temporary local merge with #165 / PR #224 (`de41bd3`) combined cleanly and passed Svelte checks, 335 unit tests, and the complete browser suite against a synthetic fixture database (63 passed, 51 expected project skips). The temporary merge was then discarded to keep the PRs independent. Land #224 first and refresh this branch against main before its final merge.
+
 ## Deployment considerations
 
 The stored generated column computes existing bodies when added, then updates automatically on ingest. The migration takes the ordinary ALTER TABLE/index locks; deploy through the existing pre-deploy migration workflow. This work adds no production data repair and does not change takedown or chain status. API responses use `no-store` so query excerpts do not persist in public caches after moderation.
