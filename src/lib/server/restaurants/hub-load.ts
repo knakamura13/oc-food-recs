@@ -1,6 +1,6 @@
 import { error } from '@sveltejs/kit';
 import { listPublicRestaurants } from './public-restaurant';
-import { deploymentOrigin, jsonLd, publicHubs, sourceUrl, type HubKind } from './public-pages';
+import { deploymentOrigin, jsonLd, publicHubs, hubExplorerUrl, sourceUrl, type HubKind } from './public-pages';
 import { SOURCE_CACHE_CONTROL } from '$lib/server/cache-control';
 export async function loadHub(kind: HubKind, slug: string, setHeaders: (headers: Record<string, string>) => void) {
 	const hub = publicHubs(await listPublicRestaurants(), kind).find(h => h.slug === slug);
@@ -17,7 +17,7 @@ export async function loadHub(kind: HubKind, slug: string, setHeaders: (headers:
 		excerpt_url: r.mentions.find(m => m.body.trim()) ? sourceUrl(r.mentions.find(m => m.body.trim())!) : null
 	})) }, canonical, title,
 		description: `${hub.restaurant_count} restaurants with published community recommendations. ${hub.eligible_count} have mapped locations and enough distinct source evidence for indexing.`,
-		explorerUrl: `/?${kind}=${encodeURIComponent(hub.label)}`,
+		explorerUrl: hubExplorerUrl(hub),
 		structuredData: jsonLd({ '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: [
 			{ '@type': 'ListItem', position: 1, name: 'OC Food Recs', item: origin },
 			{ '@type': 'ListItem', position: 2, name: hub.label, item: canonical }

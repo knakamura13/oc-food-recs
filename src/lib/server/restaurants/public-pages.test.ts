@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { publicHubs, jsonLd, restaurantStructuredData, sitemapXml } from './public-pages';
+import { publicHubs, hubExplorerUrl, jsonLd, restaurantStructuredData, sitemapXml } from './public-pages';
+import { parseSearchParams } from '$lib/restaurants/url-state';
 import { sourceUrl } from '$lib/restaurants/source-url';
 import type { PublicRestaurant } from './public-restaurant';
 const restaurant = (id: number, extra: Partial<PublicRestaurant> = {}): PublicRestaurant => ({
@@ -19,6 +20,10 @@ describe('public hub, sitemap and structured-data policies', () => {
 	it('combines categories that normalize to one canonical slug', () => {
 		const hubs = publicHubs([restaurant(1, { cuisine: 'Test Cuisine' }), restaurant(2, { cuisine: 'Test-Cuisine' })], 'cuisine');
 		expect(hubs).toHaveLength(1); expect(hubs[0].slug).toBe('test-cuisine'); expect(hubs[0].restaurant_count).toBe(2);
+		const state = parseSearchParams(new URL(hubExplorerUrl(hubs[0]), 'https://example.test').searchParams);
+		expect(state.activeCuisines).toEqual(['Test Cuisine', 'Test-Cuisine']);
+		const cities = publicHubs([restaurant(1, { location: 'Test City' }), restaurant(2, { location: 'Test-City' })], 'city');
+		expect(parseSearchParams(new URL(hubExplorerUrl(cities[0]), 'https://example.test').searchParams).activeCities).toEqual(['Test City', 'Test-City']);
 	});
 	it('omits unavailable schema properties, anonymous people and unsupported ratings', () => {
 		const data = restaurantStructuredData(restaurant(1, { street: null, location: null, cuisine: null, lat: null, lng: null,

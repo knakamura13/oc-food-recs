@@ -14,29 +14,32 @@ export function categorySlug(label: string): string {
 }
 export type HubKind = 'city' | 'cuisine';
 export interface PublicHub {
-	kind: HubKind; label: string; slug: string; indexable: boolean;
+	kind: HubKind; label: string; labels: string[]; slug: string; indexable: boolean;
 	restaurant_count: number; eligible_count: number; thread_count: number;
 	lastmod: string | null; restaurants: PublicRestaurant[];
 }
 export function publicHubs(restaurants: PublicRestaurant[], kind: HubKind): PublicHub[] {
-	const groups = new Map<string, { label: string; members: PublicRestaurant[] }>();
+	const groups = new Map<string, { label: string; labels: Set<string>; members: PublicRestaurant[] }>();
 	for (const restaurant of restaurants) {
 		const label = kind === 'city' ? normalizeCity(restaurant.location) : restaurant.cuisine ? cuisineFacetKey(restaurant.cuisine) : null;
 		if (!label || !categorySlug(label)) continue;
 		const slug = categorySlug(label);
 		const group = groups.get(slug);
-		if (group) { group.members.push(restaurant); if (label.localeCompare(group.label) < 0) group.label = label; }
-		else groups.set(slug, { label, members: [restaurant] });
+		if (group) { group.members.push(restaurant); group.labels.add(label); if (label.localeCompare(group.label) < 0) group.label = label; }
+		else groups.set(slug, { label, labels: new Set([label]), members: [restaurant] });
 	}
-	return [...groups].map(([slug, { label, members }]) => {
+	return [...groups].map(([slug, { label, labels, members }]) => {
 		const eligible = members.filter(r => r.indexable);
 		const threads = new Set(eligible.flatMap(r => r.mentions.map(m => m.thread_id)));
 		const dates = members.flatMap(r => r.lastmod ? [r.lastmod] : []).sort();
-		return { kind, label, slug, indexable: eligible.length >= 5 && threads.size >= 2,
+		return { kind, label, labels: [...labels].sort(), slug, indexable: eligible.length >= 5 && threads.size >= 2,
 			restaurant_count: members.length, eligible_count: eligible.length, thread_count: threads.size,
 			lastmod: dates.at(-1) ?? null,
 			restaurants: [...members].sort((a, b) => Number(b.indexable) - Number(a.indexable) || b.aggregate_score - a.aggregate_score || a.name.localeCompare(b.name)) };
 	}).sort((a, b) => a.label.localeCompare(b.label));
+}
+export function hubExplorerUrl(hub: Pick<PublicHub, 'kind' | 'labels'>): string {
+	return `/?${hub.kind}=${encodeURIComponent(hub.labels.join(','))}`;
 }
 export function jsonLd(value: unknown): string {
 	return JSON.stringify(value).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026');
