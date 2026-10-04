@@ -11,7 +11,7 @@ boundary under the approved workday plan. Do not close #167 until deployed accep
 Standalone pages and comment search share restaurant visibility: exclude registry
 `excluded` and `likely_chain`; unknown confidence remains public. Evidence requires a
 published thread, published mention, and `countsTowardScore`. The interactive explorer
-retains its existing optional Mom & pop filter; its full drawer bodies remain available
+retains its existing mandatory chain-confidence filter; its full drawer bodies remain available
 through the API, while standalone load data and JSON-LD contain only public excerpts.
 Eager explorer metadata now excludes taken-down/non-naming evidence too.
 
