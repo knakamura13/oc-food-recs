@@ -39,3 +39,5 @@ Fresh local validation on October 4, 2026:
 - Independent review approved the final diff after fixing pending marker filter, focus and unmount races.
 
 These are local results, not CI or deployment proof. The browser checks read the existing dataset with analytics disabled; saved geocodes and production data were not changed. The reported Da Rae coordinate is a separate data follow-up. Full-screen map geometry exposes no normal outside region, so Close/Escape are its visible dismissal controls; outside-pointer handling remains available for an exposed backdrop.
+
+PR #224's first CI run exposed two fixture-dependent assertions: the two-restaurant corpus does not always overflow the facet rail or provide a long enough comment to scroll. The rail assertion now compares the indicator with measured overflow; the sticky-header test supplies a long synthetic comment through the detail API. Independent review approved those test changes. The affected browser suites also passed against a separate local database seeded with CI's two restaurants: 42 passed, 42 expected skips. Current-head CI is still required before landing.

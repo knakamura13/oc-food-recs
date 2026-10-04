@@ -62,19 +62,28 @@ test('mobile map occupies the viewport and retains modal focus and Escape', asyn
 test('expanded mobile row keeps its collapse header available while reading', async ({ page }, info) => {
 	test.skip(info.project.name !== 'Mobile Chrome');
 	await page.setViewportSize({ width: 390, height: 844 });
+	// Supply a long primary comment so this tests reading, even with CI's small corpus.
+	await page.route('**/api/r/*.json', (route) => route.fulfill({ json: [{
+		comment_id: 'phone-reading-fixture', thread_id: 'orangecounty-e2e1',
+		permalink: null, author: 'phone-fixture', score: 15,
+		role: 'primary', classification: 'dish_rec', comment_date: '2024-06-01T12:00:00Z',
+		body: 'A long restaurant recommendation for testing the reading experience. '.repeat(80)
+	}] }));
 	await page.goto('/');
 	const row = page.locator('.row').first();
 	await row.locator('.row-toggle').click();
 	await expect(row).toHaveClass(/expanded/);
 	expect(await row.locator('.row-header').evaluate((el) => getComputedStyle(el).position)).toBe('sticky');
+	await expect(row.locator('.primary-comment')).toBeVisible();
 	const list = page.locator('.list-scroll');
-	await page.mouse.move(180, 700);
+	const listBox = await list.boundingBox();
+	await page.mouse.move(listBox!.x + listBox!.width / 2, listBox!.y + listBox!.height - 20);
 	await page.mouse.wheel(0, 200);
 	await expect.poll(() => list.evaluate(el => el.scrollTop)).toBeGreaterThan(100);
 	await expect.poll(() => row.locator('.row-header').evaluate(el => {
 		const viewport = el.closest('.list-scroll')!.getBoundingClientRect();
-		return Math.round(el.getBoundingClientRect().top - viewport.top);
-	})).toBe(0);
+		return Math.abs(el.getBoundingClientRect().top - viewport.top);
+	})).toBeLessThanOrEqual(1);
 	await row.locator('.row-toggle').click();
 	await expect(row).not.toHaveClass(/expanded/);
 });
