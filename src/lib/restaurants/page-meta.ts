@@ -5,7 +5,7 @@ import type { Restaurant, RestaurantData } from "./types";
 import { buildSearchParams, type UrlStateSnapshot } from "./url-state";
 
 export const DEFAULT_TITLE =
-  "Best Mom & Pop Restaurants in Orange County | Reddit Community Picks";
+  "Best Mom & Pop Restaurants in Orange County | OC Food Recs";
 
 export function buildPageTitle(
   state: Partial<UrlStateSnapshot>,

@@ -150,7 +150,8 @@ test.describe("Shareable URL state", () => {
 		/<meta property="og:description" content="[^"]*community-recommended mom and pop restaurants/,
 	);
 	expect(head).toMatch(/<meta property="og:url" content="[^"]*cuisine=Mexican/);
-	expect(head).toMatch(/<link rel="canonical" href="[^"]*cuisine=Mexican/);
+	expect(head).toMatch(/<link rel="canonical" href="https?:\/\/[^"]+\/"/);
+	expect(head).toContain('name="robots" content="noindex,follow"');
 	expect(head).toMatch(/<meta property="og:image" content="[^"]*\/screenshot\.jpeg/);
   });
 });
