@@ -13,6 +13,72 @@ except ModuleNotFoundError:
 
 
 class SourceRetrievalTest(unittest.TestCase):
+    def test_local_city_must_be_address_metadata_not_adjacent_narrative(self):
+        import chain_evaluate as ev
+        row = dict(name='Example Kitchen', street='100 Main St', location='Tustin')
+        for street in ['100 Main St.', '100 Main Street.', '100 Main St,']:
+            for narrative in ['Tustin is part of our dining guide.',
+                'Tustin diners recommend our food.', 'Tustin Dining Guide welcomes readers.',
+                'Tustin has six locations featured in our dining guide.']:
+                source = dict(kind='S5', url='https://example.com/locations',
+                    text='Example Kitchen. Visit us at '+street+' '+narrative,
+                    official_source=True)
+                with self.subTest(street=street, narrative=narrative):
+                    self.assertFalse(ev.source_identity(row, source, [source]))
+                    self.assertFalse(ev.count_identity(row, source, [source], listed=True))
+                    clipped = {**source, 'text':'Example Kitchen. '+street+' Tustin'}
+                    self.assertFalse(ev.source_identity(row, clipped, [source]))
+
+    def test_local_city_metadata_preserves_postal_and_operating_suffixes(self):
+        import chain_evaluate as ev
+        row = dict(name='Example Kitchen', street='100 Main St', location='Tustin')
+        for suffix in ['Tustin', 'Tustin. Our dining guide has more stories.',
+            'Tustin, CA 92780', 'Tustin 92780', 'Tustin Open daily',
+            'Tustin Hours Monday - Friday', 'Tustin Phone 714-555-0100',
+            'Tustin Business Hours Monday 11am - 10pm', 'Tustin Saturday 11am - 10pm',
+            'Tustin, CA Closed Monday', 'Tustin, CA USA 92780',
+            'Tustin, CA United States 92780', 'Tustin, CA USA Top of page',
+            "Tustin, CA Today's Hours Sat 11:00am - 10:00pm"]:
+            source = dict(kind='S5', url='https://example.com/locations',
+                text='Example Kitchen 100 Main St, '+suffix, official_source=True)
+            with self.subTest(suffix=suffix):
+                self.assertTrue(ev.count_identity(row, source, [source], listed=True))
+
+    def test_city_count_sentence_cannot_supply_locality_after_street_abbreviation(self):
+        import chain_evaluate as ev
+        row = dict(name='Example Kitchen', street='100 Main St', location='Tustin')
+        for street in ['100 Main St.', '100 Main Street.']:
+            source = dict(kind='S5', url='https://example.com/locations', official_source=True,
+                text='Example Kitchen at '+street+' Tustin has six locations featured in our dining guide.')
+            with self.subTest(street=street):
+                self.assertFalse(ev.count_identity(row, source, [source], listed=True))
+        source['text'] = 'Example Kitchen at 100 Main St, Tustin has six locations worldwide.'
+        self.assertTrue(ev.count_identity(row, source, [source], listed=True))
+
+    def test_narrative_city_cannot_license_gemma_address_list(self):
+        import chain_evaluate as ev
+        import json
+        import tempfile
+        entries = [dict(source=0, quote=f'{200+i} Oak St, Tustin Open daily',
+            address=f'{200+i} Oak St', city='Tustin', operating=True) for i in range(6)]
+        class Model:
+            def gemma(self, prompt):
+                return {'seconds':0, 'response':{'done':True, 'message':{'content':json.dumps(
+                    dict(decision='chain', count=6, complete=False, identity_verified=True,
+                        locations=entries))}}}
+        for narrative in ['Tustin is part of our dining guide.',
+            'Tustin has six locations featured in our dining guide.']:
+            row = dict(id=1, name='Example Kitchen', street='100 Main St', location='Tustin',
+                decision='unknown', evidence=[])
+            source = dict(kind='S5', url='https://example.com/locations', official_source=True,
+                text='Example Kitchen. Visit us at 100 Main St. '+narrative+' '+
+                    ' '.join(e['quote'] for e in entries))
+            with self.subTest(narrative=narrative), tempfile.TemporaryDirectory() as folder:
+                ev.gemma_unresolved([row], {1:[source]}, Model(), Path(folder))
+                self.assertEqual(row['decision'], 'unknown')
+                self.assertFalse(row['evidence'][0]['identity_verified'])
+                self.assertEqual(len(row['evidence'][0]['locations']), 6)
+
     def test_local_address_anchor_preserves_periods_in_business_names(self):
         import chain_evaluate as ev
         for name in ['Mr. BBQ', 'O.C. Fish Grill']:

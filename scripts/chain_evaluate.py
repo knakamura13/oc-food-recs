@@ -89,6 +89,10 @@ def source_identity(row, source, sources):
             r'\1', anchor.get('text') or '', flags=re.I)
         text = ' __listing__ '.join(identity_text(part)
             for part in re.split(r'[.!?;|]+', raw))
+        # Count prose needs the original sentence breaks, including a period
+        # after a street abbreviation that may end the address sentence.
+        count_text = ' __listing__ '.join(identity_text(part)
+            for part in re.split(r'[.!?;|]+', anchor.get('text') or ''))
         street_pattern = r'(?<!\w)' + re.escape(street) + r'(?!\w)'
         # Periods inside names such as Mr. BBQ are not listing boundaries.
         name_pattern = (r'(?<!\w)' + r'(?:\s+__listing__)?\s+'.join(
@@ -109,9 +113,25 @@ def source_identity(row, source, sources):
             # numbered street rather than finish the saved address.
             tail = locality[city_match.end():] if city_match else ''
             tail = re.sub(r'^\s+(?:ca|california)\b', '', tail)
+            tail = re.sub(r'^\s+(?:usa|us|united states)\b', '', tail)
             next_street = (re.match(r'\s+(?:address\s+)?\d+\b', tail)
                 and not re.match(r'\s+\d{5}(?:\s+__listing__|\s*$)', tail))
             postal = re.match(r'\s+\d{5}\b', tail)
+            # A city prefix in prose ("Tustin is part of our guide") is not
+            # postal locality. Require the listing to end or continue with
+            # recognizable address/operating metadata. Keep the explicitly
+            # attributed count format used by third-party count evidence.
+            weekday = r'(?:mon(?:day)?|tue(?:sday)?|wed(?:nesday)?|thu(?:rsday)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?)'
+            metadata = (not tail.strip() or postal or re.match(
+                r'\s+(?:__listing__\b|top of page\b|(?:open|closed)\s+(?:daily|now|24|'+weekday+r')\b'
+                r'|(?:(?:business|todays?)\s+)?hours\s+(?:'+weekday+r'\b|\d)'
+                r'|'+weekday+r'\s+\d|(?:phone|telephone|tel|fax)\s+\d)', tail))
+            count_subject = re.search(r'(?:^|__listing__\s+)' + name_pattern
+                + r'(?:\s+(?:at|located at))?\s+' + re.escape(street)
+                + r'\s+(?:in\s+)?' + re.escape(city)
+                + r'(?:\s+(?:ca|california))?(?:\s+\d{5})?'
+                + r'\s+(?:has|operates|runs|maintains|owns)\s+(?:a total of\s+)?', count_text)
+            attributed_count = count_subject and COUNT_RE.match(count_text[count_subject.end():])
             if postal:
                 # A ZIP may precede phone/hours text, but cannot disguise a
                 # five-digit house number or a following numbered address.
@@ -121,7 +141,7 @@ def source_identity(row, source, sources):
                     r'pkwy|parkway|ter|terrace|cir|circle|broadway)\b')
                 next_street = (re.match(street_tail, tail)
                     or re.match(street_tail, tail[postal.end():]))
-            if (city_match and not next_street
+            if (city_match and (metadata or attributed_count) and not next_street
                 and (official_header or re.search(name_pattern, window))):
                 return True
     return False
