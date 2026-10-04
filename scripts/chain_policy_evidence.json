@@ -1,0 +1,28 @@
+{
+	"version": 1,
+	"report": "docs/plans/2026-10-03-chain-final-acceptance.md",
+	"entries": [
+		{
+			"name": "Polly's Pies",
+			"location": "Fullerton",
+			"street": "136 N Raymond Ave",
+			"location_count": 12,
+			"count_kind": "worldwide_lower_bound",
+			"checked_at": "2026-10-04",
+			"local_source": "https://www.pollyspies.com/locations/fullerton/",
+			"count_source": "https://www.pollyspies.com/locations/",
+			"signals": ["S3+S1", "primary_source_audit"]
+		},
+		{
+			"name": "Polly's Pies Restaurant",
+			"location": "Santa Ana",
+			"street": "2660 N Main St",
+			"location_count": 12,
+			"count_kind": "worldwide_lower_bound",
+			"checked_at": "2026-10-04",
+			"local_source": "https://www.pollyspies.com/locations/santa-ana/",
+			"count_source": "https://www.pollyspies.com/locations/",
+			"signals": ["S3+S1", "primary_source_audit"]
+		}
+	]
+}

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Backfill Mom & pop policy v1 over existing restaurants.
+"""Backfill Mom & pop policy v2 over existing restaurants.
 
 Idempotent. Safe without DATABASE_URL (prints a skip message and exits 0), so CI
 can invoke it without production credentials.
@@ -7,15 +7,13 @@ can invoke it without production credentials.
 What it does:
   1. Upserts ``scripts/exclusions_seed.json`` into ``excluded_brands`` (unless
      ``--skip-seed``).
-  2. Reclassifies every restaurant with ``reviewed_at IS NULL`` using the same
-     matcher as ingest: denylist -> ``excluded`` / ``likely_chain``; 6+ distinct
-     cities -> ``pending_review`` / ``unknown``; otherwise
-     ``active`` / ``unknown``. Counts remain unverified review hints.
+  2. Reclassifies unreviewed rows through the shared registry + reviewed,
+     identity-bound worldwide evidence policy. Verified six-plus counts exclude;
+     complete worldwide counts of one to five establish independence; other
+     rows stay unknown. Automated LLM/count/density queues are retired.
 
-Human-reviewed rows are never touched. LLM ``chain_suspect`` is ingest-time only
-and is not replayed here. Unreviewed ``pending_review`` rows (including
-``user_reported_chain``) stay in the admin queue unless the denylist upgrades
-them to ``excluded``.
+Human-reviewed rows are never touched. Visitor/dedupe queues remain queued unless
+an authoritative exclusion upgrades them. No model call runs during backfill.
 
 Usage:
   python3 scripts/backfill_chain_policy.py                 # dry run (default)

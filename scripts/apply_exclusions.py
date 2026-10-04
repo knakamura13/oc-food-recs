@@ -2,7 +2,7 @@
 """Re-apply chain / corporate-group exclusions across the existing restaurants corpus.
 
 For every restaurant WHERE ``reviewed_at IS NULL`` (i.e. not human-locked in the admin UI),
-recompute the publish status from the registry + multi-city density and update
+recompute the publish status from the registry + reviewed worldwide evidence and update
 ``status`` / ``exclusion_reason`` / ``chain_confidence``. Human-reviewed rows are never touched.
 
 Run this:
@@ -11,11 +11,10 @@ Run this:
 
 Prefer ``scripts/backfill_chain_policy.py`` for the full seed + classify pass.
 
-Note: the LLM ``chain_suspect`` and optional Google location-count signals are ingest-time
-only and not stored, so this sweep applies the registry + density signals (the deterministic
-ones). It only ever sets 'excluded' (registry) or 'pending_review' (density) -- never hides
-a row that a human has reviewed. Queued ``pending_review`` rows (including
-``user_reported_chain``) stay queued unless the denylist upgrades them to ``excluded``.
+The reviewed evidence ledger is shared with ingest and requires exact name,
+city and street identity. Unproven automated hints are advisory. Legacy automated
+review queues become active/unknown; visitor and dedupe queues stay queued unless
+an authoritative exclusion upgrades them. Human-reviewed rows are never touched.
 
 Usage:
   python3 scripts/apply_exclusions.py            # dry run (default)
@@ -70,7 +69,7 @@ def main(pending_registry_rows: list[dict] | None = None) -> int:
     print(f"Loaded {len(registry)} registry brands.")
 
     cur.execute(
-        "SELECT id, name, location, status, exclusion_reason, chain_confidence "
+        "SELECT id, name, location, street, status, exclusion_reason, chain_confidence "
         "FROM restaurants WHERE reviewed_at IS NULL ORDER BY id"
     )
     cols = [d[0] for d in cur.description]
@@ -86,7 +85,7 @@ def main(pending_registry_rows: list[dict] | None = None) -> int:
             r, registry=registry, city_counts=city_counts
         )
         classified_confidence = rp.chain_confidence_for(
-            classified_status, classified_reason
+            classified_status, classified_reason, restaurant=r
         )
         new_status, new_reason, new_confidence = rp.merge_unreviewed_classification(
             r["status"] or "active",

@@ -1615,5 +1615,19 @@ class NamesRestaurantTest(unittest.TestCase):
         self.assertTrue(nr("vox is great", "The Vox Kitchen"))
 
 
+
+
+
+class PipelinePolicyImportTest(unittest.TestCase):
+    def test_policy_loads_from_script_path_in_isolated_process(self):
+        import subprocess
+        import sys
+        code = "import importlib.util; s=importlib.util.spec_from_file_location('pipeline', " + repr(str(SCRIPT_PATH)) + "); m=importlib.util.module_from_spec(s); s.loader.exec_module(m); assert m.chain_policy.identity(\"Polly’s Pies\") == 'polly s pies'"
+        with tempfile.TemporaryDirectory() as cwd:
+            result = subprocess.run([sys.executable, '-I', '-c', code], cwd=cwd,
+                                    capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()
