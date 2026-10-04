@@ -9,9 +9,9 @@
 	const REASON_LABELS: Record<string, string> = {
 		chain: 'Chain (registry)',
 		corporate_group: 'Corporate group (registry)',
-		llm_suspected_chain: 'LLM flagged as chain',
+		llm_suspected_chain: 'Legacy LLM hint',
 		many_locations: 'Many global locations',
-		multi_city_density: 'Same name across many cities',
+		multi_city_density: 'Legacy city-density hint',
 		user_reported_chain: 'Reported as a chain',
 		duplicate_candidate: 'Likely duplicate at same location',
 		closed: 'Closed'
@@ -36,9 +36,9 @@
 		<h1>Exclusions</h1>
 		<p class="subtitle">
 			Keep chains and corporate restaurant groups off the public Mom & pop set. The curated
-			registry auto-excludes known brands from the map. Fuzzy signals (LLM, location count,
-			multi-city density) land here with unknown chain confidence and remain visible
-			on the public map until you confirm an exclusion. Public “Report a chain” flags
+			registry and reviewed, identity-matched location evidence auto-exclude verified chains.
+			LLM, location-count and city-density hints do not create review requests.
+			Unverified restaurants remain visible. Public “Report a chain” flags
 			also queue review without hiding the spot. Rows already marked as likely chains
 			remain hidden until their confidence is refreshed or you keep them active.
 			Confirming or restoring a restaurant locks
@@ -94,8 +94,8 @@
 	<section class="data-section" aria-labelledby="pending-heading">
 		<h2 id="pending-heading">Pending review</h2>
 		<p class="section-hint">
-			{pendingReview.length} restaurant{pendingReview.length === 1 ? '' : 's'} flagged by a fuzzy
-			signal or a public chain report. A pending review does not itself hide a restaurant:
+			{pendingReview.length} restaurant{pendingReview.length === 1 ? '' : 's'} queued by a public chain report
+			or for deduplication. A pending review does not itself hide a restaurant:
 			unknown confidence remains visible, while likely-chain confidence stays hidden.
 			Confirm an exclusion or keep the restaurant active after reviewing it.
 		</p>

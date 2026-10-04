@@ -169,26 +169,26 @@ class TestClassifyStatus(unittest.TestCase):
         )
         self.assertEqual((status, reason), ("excluded", "chain"))
 
-    def test_llm_suspect_pending_review(self):
+    def test_llm_suspect_stays_active(self):
         status, reason = rp.classify_restaurant_status(
             {"name": "Some New Chain", "chain_suspect": True}, registry=REG
         )
-        self.assertEqual((status, reason), ("pending_review", "llm_suspected_chain"))
+        self.assertEqual((status, reason), ("active", None))
 
-    def test_many_locations_pending_review(self):
+    def test_unverified_many_locations_stay_active(self):
         status, reason = rp.classify_restaurant_status(
             {"name": "Mystery Spot", "chain_location_count": rp.CHAIN_LOCATION_THRESHOLD + 1},
             registry=REG,
         )
-        self.assertEqual((status, reason), ("pending_review", "many_locations"))
+        self.assertEqual((status, reason), ("active", None))
 
-    def test_location_count_at_threshold_is_pending(self):
+    def test_unverified_location_count_at_threshold_stays_active(self):
         # Policy v1: 4+ locations fails Mom & pop (threshold is inclusive).
         status, reason = rp.classify_restaurant_status(
             {"name": "Edge Spot", "chain_location_count": rp.CHAIN_LOCATION_THRESHOLD},
             registry=REG,
         )
-        self.assertEqual((status, reason), ("pending_review", "many_locations"))
+        self.assertEqual((status, reason), ("active", None))
 
     def test_location_count_below_threshold_is_active(self):
         status, reason = rp.classify_restaurant_status(
@@ -197,14 +197,14 @@ class TestClassifyStatus(unittest.TestCase):
         )
         self.assertEqual((status, reason), ("active", None))
 
-    def test_density_pending_review(self):
+    def test_density_stays_active(self):
         name = "Generic Tacos"
         cities = {f"city{i}" for i in range(rp.DENSITY_CITY_THRESHOLD)}
         counts = {rp.normalize_name(name): cities}
         status, reason = rp.classify_restaurant_status(
             {"name": name, "location": "Irvine"}, registry=REG, city_counts=counts
         )
-        self.assertEqual((status, reason), ("pending_review", "multi_city_density"))
+        self.assertEqual((status, reason), ("active", None))
 
     def test_density_below_threshold_active(self):
         name = "Two City Spot"
@@ -244,9 +244,9 @@ class TestClassifyStatus(unittest.TestCase):
             self.assertEqual(rp.chain_confidence_for('pending_review', reason),
                 rp.CHAIN_CONFIDENCE_UNKNOWN)
 
-    def test_five_locations_do_not_queue_but_six_do(self):
+    def test_unverified_five_and_six_locations_stay_active(self):
         for count, expected in [(5, ('active', None)),
-                (6, ('pending_review', 'many_locations'))]:
+                (6, ('active', None))]:
             self.assertEqual(rp.classify_restaurant_status(
                 {'name': 'Example Cafe', 'chain_location_count': count}, registry=[]), expected)
 
@@ -266,7 +266,7 @@ class TestClassifyStatus(unittest.TestCase):
                     ("pending_review", "user_reported_chain", new_confidence),
                 )
 
-    def test_merge_preserves_llm_queue(self):
+    def test_merge_retires_llm_queue(self):
         status, reason, confidence = rp.merge_unreviewed_classification(
             "pending_review",
             "llm_suspected_chain",
@@ -275,8 +275,8 @@ class TestClassifyStatus(unittest.TestCase):
             None,
             rp.CHAIN_CONFIDENCE_UNKNOWN,
         )
-        self.assertEqual(status, "pending_review")
-        self.assertEqual(reason, "llm_suspected_chain")
+        self.assertEqual(status, "active")
+        self.assertIsNone(reason)
         self.assertEqual(confidence, rp.CHAIN_CONFIDENCE_UNKNOWN)
 
     def test_merge_denylist_upgrades_queued_row(self):
@@ -358,3 +358,129 @@ class TestChainSuspectThreading(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestVerifiedPolicyIntegration(unittest.TestCase):
+    def setUp(self):
+        from unittest.mock import patch
+        from datetime import date
+        self.clock = patch('chain_policy.datetime')
+        self.clock.start().now.return_value.date.return_value = date(2026, 10, 4)
+        self.addCleanup(self.clock.stop)
+
+    def test_audited_local_identity_excludes_without_model(self):
+        row = {"name": "Polly's Pies", "location": "Fullerton", "street": "136 N Raymond Ave"}
+        self.assertEqual(rp.classify_restaurant_status(row, registry=[]),
+                         ("excluded", "verified_chain"))
+
+    def test_audited_name_cannot_exclude_wrong_city_or_street(self):
+        row = {"name": "Polly's Pies", "location": "Fullerton", "street": "136 N Raymond Ave"}
+        for changed in [{"location": "Tustin"}, {"street": "138 N Raymond Ave"},
+                        {"street": None}, {"name": "Other Polly's Pies"}]:
+            with self.subTest(changed=changed):
+                self.assertEqual(rp.classify_restaurant_status(row | changed, registry=[]),
+                                 ("active", None))
+
+    def test_retire_only_automated_queues(self):
+        for reason in ["llm_suspected_chain", "many_locations", "multi_city_density"]:
+            self.assertEqual(rp.merge_unreviewed_classification(
+                "pending_review", reason, "unknown", "active", None, "unknown"),
+                ("active", None, "unknown"))
+        for reason in ["user_reported_chain", "dedupe_candidate", None]:
+            self.assertEqual(rp.merge_unreviewed_classification(
+                "pending_review", reason, "unknown", "active", None, "unknown"),
+                ("pending_review", reason, "unknown"))
+
+
+class TestReviewedEvidence(unittest.TestCase):
+    def setUp(self):
+        import chain_policy
+        from datetime import date
+        self.policy = chain_policy
+        self.today = date(2026, 10, 4)
+        self.row = {"name": "Example Kitchen", "location": "Tustin", "street": "100 Main St"}
+        self.entry = self.row | {"checked_at": "2026-10-04", "location_count": 6,
+            "count_kind": "worldwide_lower_bound", "local_source": "https://example.org/tustin",
+            "count_source": "https://example.org/locations"}
+
+    def decide(self, **changes):
+        return self.policy.decision(self.row, entries=[self.entry | changes], today=self.today)
+
+    def test_five_six_and_complete_worldwide_counts(self):
+        self.assertEqual(self.decide(location_count=5), "unknown")
+        self.assertEqual(self.decide(location_count=6), "chain")
+        self.assertEqual(self.decide(location_count=5, count_kind="complete_worldwide"), "independent")
+        self.assertEqual(self.decide(location_count=6, count_kind="complete_worldwide"), "chain")
+
+    def test_stale_future_and_invalid_evidence_abstains(self):
+        for changed in [{"checked_at": "2026-07-05"}, {"checked_at": "2026-10-05"},
+                        {"checked_at": "invalid"}, {"location_count": True}, {"location_count": "6"},
+                        {"location_count": 0}, {"count_kind": "model_guess"},
+                        {"local_source": None}, {"count_source": "http://example.org"}]:
+            with self.subTest(changed=changed):
+                self.assertEqual(self.decide(**changed), "unknown")
+
+    def test_conflicting_current_entries_abstain(self):
+        negative = self.entry | {"location_count": 5, "count_kind": "complete_worldwide"}
+        self.assertEqual(self.policy.decision(self.row, entries=[self.entry, negative], today=self.today),
+                         "unknown")
+
+    def test_model_supplied_verified_fields_are_not_evidence(self):
+        row = self.row | {"identity_verified": True, "decision": "chain", "chain_location_count": 200}
+        self.assertEqual(self.policy.decision(row, entries=[], today=self.today), "unknown")
+
+    def test_complete_evidence_sets_independent_confidence(self):
+        from unittest.mock import patch
+        entry = self.entry | {"location_count": 5, "count_kind": "complete_worldwide"}
+        with patch.object(self.policy, "reviewed_entries", return_value=[entry]), patch.object(self.policy, "datetime") as clock:
+            clock.now.return_value.date.return_value = self.today
+            self.assertEqual(rp.classify_restaurant_status(self.row, registry=[]), ("active", None))
+            self.assertEqual(rp.chain_confidence_for("active", restaurant=self.row), "independent")
+
+
+class TestIngestPolicyMerges(unittest.TestCase):
+    """Execute the actual ingest CASE expressions against identity collisions."""
+    def merge(self, saved, incoming, *, include_name=False):
+        import re
+        import sqlite3
+        text = Path(rp.__file__).read_text()
+        start = text.index('ON CONFLICT (slug) DO UPDATE SET', text.index('def write_to_db'))
+        fragment = text[start:text.index('RETURNING id', start)]
+        fields = (('name',) if include_name else ()) + ('status', 'exclusion_reason', 'chain_confidence')
+        cases = [re.search(r'\b' + field + r' = (CASE.*?END),', fragment, re.S).group(1)
+                 for field in fields]
+        row = {'name': "Polly's Pies", 'location': 'Fullerton', 'street': '136 N Raymond Ave',
+               'status': 'active', 'exclusion_reason': None, 'chain_confidence': 'unknown',
+               'reviewed_at': None}
+        columns = list(row)
+        table = '(SELECT ' + ','.join('? AS ' + key for key in columns) + ') '
+        sql = 'SELECT ' + ','.join(cases) + ' FROM ' + table + 'restaurants CROSS JOIN ' + table + 'excluded'
+        with sqlite3.connect(':memory:') as conn:
+            conn.create_function('btrim', 1, lambda value: value.strip())
+            return conn.execute(sql, list((row | saved).values()) + list((row | incoming).values())).fetchone()
+
+    def test_expired_or_removed_chain_evidence_reactivates_on_ingest(self):
+        saved = {'status': 'excluded', 'exclusion_reason': 'verified_chain', 'chain_confidence': 'likely_chain'}
+        self.assertEqual(self.merge(saved, {}), ('active', None, 'unknown'))
+        self.assertEqual(self.merge(saved | {'reviewed_at': '2026-10-01'}, {}),
+                         ('excluded', 'verified_chain', 'likely_chain'))
+
+    def test_independence_does_not_transfer_to_a_different_saved_address(self):
+        incoming = {'street': '138 N Raymond Ave', 'chain_confidence': 'independent'}
+        self.assertEqual(self.merge({}, incoming), ('active', None, 'unknown'))
+        queued = {'status': 'pending_review', 'exclusion_reason': 'user_reported_chain'}
+        self.assertEqual(self.merge(queued, incoming), ('pending_review', 'user_reported_chain', 'unknown'))
+
+    def test_manual_queues_and_audited_exclusions_follow_shared_policy(self):
+        for reason in rp.AUTOMATED_REVIEW_REASONS:
+            self.assertEqual(self.merge({'status': 'pending_review', 'exclusion_reason': reason}, {}),
+                             ('active', None, 'unknown'))
+        incoming = {'status': 'excluded', 'exclusion_reason': 'verified_chain', 'chain_confidence': 'likely_chain'}
+        self.assertEqual(self.merge({}, incoming), ('excluded', 'verified_chain', 'likely_chain'))
+        self.assertEqual(self.merge({'street': '138 N Raymond Ave'}, incoming), ('active', None, 'unknown'))
+        self.assertEqual(self.merge({}, {'chain_confidence': 'independent'}), ('active', None, 'independent'))
+
+    def test_longer_incoming_name_cannot_relabel_a_preserved_audited_identity(self):
+        saved = {'status': 'excluded', 'exclusion_reason': 'verified_chain', 'chain_confidence': 'likely_chain'}
+        self.assertEqual(self.merge(saved, {'name': "Polly's Pies Restaurant"}, include_name=True),
+                         ("Polly's Pies", 'excluded', 'verified_chain', 'likely_chain'))
