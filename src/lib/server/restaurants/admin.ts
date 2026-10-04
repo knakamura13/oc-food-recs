@@ -115,7 +115,8 @@ export async function mergeRestaurants(
         cuisine: winner.cuisine ?? loser.cuisine,
         status: "active",
         exclusionReason: null,
-        chainConfidence: "independent",
+        // A merge approves identity/visibility, not a worldwide location count.
+        chainConfidence: "unknown",
         reviewedAt: sql`now()`,
         updatedAt: sql`now()`,
       })
@@ -170,7 +171,8 @@ export async function mergeRestaurants(
  * Rename a restaurant, keeping its slug. Snapshots the pre-rename row into
  * `restaurant_aliases` (source 'rename') so a re-ingest of the old spelling still
  * resolves to this row instead of forking a new one (#152, #156). Stamps `reviewed_at`
- * so the ingest upsert never reverts the human-chosen name.
+ * so the ingest upsert never reverts the human-chosen name. Confidence bound to
+ * the former identity is invalidated; a rename does not establish independence.
  */
 export async function renameRestaurant(
   id: number,
@@ -201,7 +203,12 @@ export async function renameRestaurant(
 
     await tx
       .update(restaurants)
-      .set({ name, reviewedAt: sql`now()`, updatedAt: sql`now()` })
+      .set({
+        name,
+        chainConfidence: "unknown",
+        reviewedAt: sql`now()`,
+        updatedAt: sql`now()`,
+      })
       .where(eq(restaurants.id, id));
   });
 }
@@ -279,6 +286,7 @@ export async function markRestaurantExcluded(
 /**
  * Restore a restaurant to the public site. Also stamps `reviewed_at` so a false-positive
  * fuzzy flag (or a registry hit the human disagrees with) is not re-applied on the next run.
+ * Restoring visibility is not evidence of a complete worldwide count.
  */
 export async function restoreRestaurantActive(
   restaurantId: number,
@@ -288,7 +296,7 @@ export async function restoreRestaurantActive(
     .set({
       status: "active",
       exclusionReason: null,
-      chainConfidence: "independent",
+      chainConfidence: "unknown",
       reviewedAt: sql`now()`,
       updatedAt: sql`now()`,
     })
