@@ -30,12 +30,13 @@
 	mobileOffset="max(16px, env(safe-area-inset-bottom, 0px))"
 />
 
-<a href="#main-content" class="skip-link" onclick={focusRestaurantList}>Skip to restaurant list</a>
+<a href="#main-content" class="skip-link" onclick={focusRestaurantList}>{page.url.pathname === '/' ? 'Skip to restaurant list' : 'Skip to main content'}</a>
 
 {@render children()}
 
 {#if !page.url.pathname.startsWith('/admin')}
 	<footer class="site-footer">
+		<a href="/browse">Browse cities and cuisines</a>
 		<a href="/about">About, sources and removal requests</a>
 		<span>Not affiliated with Reddit, Inc.</span>
 	</footer>
