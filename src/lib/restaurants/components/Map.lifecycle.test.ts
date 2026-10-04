@@ -103,6 +103,27 @@ it('resumes a pending explicit focus and spiderfies collocated pins after comple
 	expect(harness.map.setView).toHaveBeenLastCalledWith([target.lat, target.lng], 19, { animate: true });
 });
 
+it('drops pending focus when filters remove its restaurant before the batch completes', async () => {
+	const first = makeRestaurant({ slug: 'first', name: 'First', lat: 33.7, lng: -117.8 });
+	const target = makeRestaurant({ slug: 'target', name: 'Target', lat: 33.8, lng: -117.9 });
+	const view = render(MapView, { restaurants: [first, target], mapExpanded: true });
+	await waitFor(() => expect(harness.queued).toHaveLength(2));
+	flushSync(() => {
+		appState.selectedRestaurantSlug = target.slug;
+		appState.mapTarget = { slug: target.slug, lat: target.lat!, lng: target.lng! };
+	});
+	await view.rerender({ restaurants: [first], mapExpanded: true });
+	flushSync(() => { appState.fitBoundsTarget = [{ lat: first.lat!, lng: first.lng! }]; });
+	expect(harness.map.fitBounds).toHaveBeenCalledWith([[first.lat, first.lng]],
+		{ padding: [30, 30], maxZoom: 14, animate: true });
+	harness.map.setView.mockClear();
+	finishBatch();
+	await waitFor(() => expect([...harness.visible].map(marker => marker.name)).toEqual(['First']));
+	// Filtering retains selection state, but it must not restore a removed map target.
+	expect(appState.selectedRestaurantSlug).toBe(target.slug);
+	expect(harness.map.setView).not.toHaveBeenCalled();
+});
+
 
 it('lets a pending chunk finish before disposing its Leaflet map', async () => {
 	const view = render(MapView, { restaurants: [makeRestaurant()], mapExpanded: true });

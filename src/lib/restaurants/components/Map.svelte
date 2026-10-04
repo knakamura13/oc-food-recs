@@ -376,6 +376,7 @@
 		if (!group) return;
 
 		const nextSlugs = new Set(mappedRestaurants.map((r) => r.slug));
+		if (pendingFocus && !nextSlugs.has(pendingFocus.slug)) pendingFocus = null;
 
 		for (const [slug, marker] of [...markers.entries()]) {
 			if (!nextSlugs.has(slug)) {
