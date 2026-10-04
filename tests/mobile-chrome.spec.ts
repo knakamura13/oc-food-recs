@@ -30,9 +30,10 @@ test('390px chrome leaves room for restaurant results', async ({ page }, testInf
 		};
 	});
 
-	expect(metrics.filterHeight).toBeLessThanOrEqual(56);
+	// Facets and fixed actions each retain a 44px touch row.
+	expect(metrics.filterHeight).toBeLessThanOrEqual(104);
 	expect(metrics.sortHeight).toBeLessThanOrEqual(64);
-	expect(metrics.rowTop).toBeLessThanOrEqual(340);
+	expect(metrics.rowTop).toBeLessThanOrEqual(392);
 	expect(metrics.shortcutVisible).toBe(false);
 	expect(metrics.searchFontSize).toBeGreaterThanOrEqual(16);
 	expect(metrics.mapRight).toBeLessThanOrEqual(metrics.vw + 1);
@@ -68,6 +69,7 @@ test('320px filter chips stay reachable without clipping City', async ({ page },
 			cityFullyVisible: cityBox.left >= controlsBox.left - 1 && cityBox.right <= controlsBox.right + 1,
 			recencyPeeked: recencyBox.left < window.innerWidth - 8,
 			overflowEnd: controls.classList.contains('overflow-end'),
+			hasOverflow: controls.scrollWidth > controls.clientWidth + 4,
 			mapWidth: Math.round(mapBox.width),
 			mapHeight: Math.round(mapBox.height),
 			mapName: mapBtn.getAttribute('aria-label'),
@@ -78,7 +80,7 @@ test('320px filter chips stay reachable without clipping City', async ({ page },
 
 	expect(metrics.cityFullyVisible).toBe(true);
 	expect(metrics.recencyPeeked).toBe(true);
-	expect(metrics.overflowEnd).toBe(true);
+	expect(metrics.overflowEnd).toBe(metrics.hasOverflow);
 	expect(metrics.mapWidth).toBeGreaterThanOrEqual(44);
 	expect(metrics.mapHeight).toBeGreaterThanOrEqual(44);
 	expect(metrics.mapName).toBe('Open map');

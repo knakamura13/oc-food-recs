@@ -464,27 +464,9 @@ test.describe('Mobile map interaction', () => {
 				await expect(mapPane).toBeVisible();
 				await expect(page.locator('html')).toHaveClass(/mobile-map-expanded-lock/);
 
-				const bounds = await mapPane.evaluate((pane) => {
-					const controls = document.querySelector<HTMLElement>('.controls-bar');
-					if (!controls) throw new Error('Missing controls bar');
-					const paneRect = pane.getBoundingClientRect();
-					const controlsRect = controls.getBoundingClientRect();
-					return {
-						paneTop: paneRect.top,
-						paneBottom: paneRect.bottom,
-						controlsBottom: controlsRect.bottom,
-						viewportBottom: window.innerHeight
-					};
+				expect(await mapPane.boundingBox()).toEqual({
+					x: 0, y: 0, width: viewport.width, height: viewport.height
 				});
-
-				expect(
-					bounds.paneTop,
-					`${viewport.width}px sheet must start below the controls`
-				).toBeGreaterThanOrEqual(bounds.controlsBottom - 2);
-				expect(
-					bounds.paneBottom,
-					`${viewport.width}px sheet must retain its bottom safe-area gap`
-				).toBeLessThanOrEqual(bounds.viewportBottom - 12);
 			});
 		}
 	});

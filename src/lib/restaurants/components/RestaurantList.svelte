@@ -310,6 +310,14 @@
 			if (restaurant.lat != null && restaurant.lng != null) {
 				appState.mapTarget = { slug, lat: restaurant.lat, lng: restaurant.lng };
 			}
+			if (window.matchMedia('(max-width: 600px)').matches) {
+				void tick().then(() => {
+					if (appState.selectedRestaurantSlug === slug) {
+						// Give the sticky header and drawer actions room on short phones.
+						document.getElementById(`restaurant-${slug}`)?.scrollIntoView({ block: 'start', behavior: 'instant' });
+					}
+				});
+			}
 		}
 		scheduleRemeasure();
 	}
@@ -2062,6 +2070,13 @@
 	}
 
 	@media (max-width: 600px) {
+		.row.expanded .row-header {
+			position: sticky;
+			top: 0;
+			z-index: 2;
+			background: #faf7f2;
+		}
+
 		.row-header {
 			gap: 0.5rem;
 		}

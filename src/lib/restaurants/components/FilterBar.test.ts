@@ -71,6 +71,20 @@ describe("FilterBar", () => {
     });
   });
 
+  it("keeps Saved and Unmapped actions outside the scrolling facet rail", () => {
+    appState.showSavedOnly = true;
+    const { container } = render(FilterBar, {
+      restaurants,
+      threadSubreddit,
+      restaurantsForHistogram: restaurants,
+      dateExtent,
+      unmappedCount: 1,
+    });
+    expect(container.querySelector('.filter-actions .saved-toggle')).not.toBeNull();
+    expect(container.querySelector('.filter-actions .unmapped-toggle')).not.toBeNull();
+    expect(container.querySelector('.filter-controls .saved-toggle')).toBeNull();
+  });
+
   it("toggles a cuisine filter from the dropdown", async () => {
     const user = userEvent.setup();
     render(FilterBar, {
