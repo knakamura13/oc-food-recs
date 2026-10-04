@@ -13,6 +13,82 @@ except ModuleNotFoundError:
 
 
 class SourceRetrievalTest(unittest.TestCase):
+    def test_local_address_anchor_preserves_periods_in_business_names(self):
+        import chain_evaluate as ev
+        for name in ['Mr. BBQ', 'O.C. Fish Grill']:
+            row = dict(name=name, street='100 Main St', location='Tustin')
+            source = dict(kind='S5', url='https://example.com/locations',
+                text=name+' 100 Main St, Tustin, CA 92780', official_source=True)
+            with self.subTest(name=name):
+                self.assertTrue(ev.count_identity(row, source, [source], listed=True))
+        row = dict(name='Irvine.Grill', street='100 Main St', location='Irvine')
+        source['text'] = 'Irvine.Grill 100 Main St Irvine.Grill'
+        self.assertFalse(ev.source_identity(row, source, [source]))
+
+    def test_local_city_cannot_come_from_another_locator_listing(self):
+        import chain_evaluate as ev
+        row = dict(name='Example Kitchen', street='100 Main St', location='Tustin')
+        for text in [
+            'Example Kitchen Locations. 100 Main St, Anaheim. 200 Oak St, Tustin',
+            'Example Kitchen Locations. 100 Main St, Anaheim; 200 Oak St, Tustin',
+            'Example Kitchen Locations. 100 Main St Anaheim 200 Oak St Tustin',
+            'Example Kitchen Locations. 200 Oak St Tustin 100 Main St Anaheim',
+            'Example Kitchen Locations. Tustin 200 Oak St. Anaheim 100 Main St',
+            'Example Kitchen Locations. Anaheim 100 Main St. Tustin 200 Oak St',
+            'Example Kitchen Locations. Anaheim\n100 Main St\nTustin\n200 Oak St',
+            'Example Kitchen Locations. Anaheim 100 Main St. Tustin 145 N Broadway',
+            'Example Kitchen Locations. Anaheim 100 Main St. Tustin 200 Oak Circle',
+            'Example Kitchen Locations. Anaheim 100 Main St. Tustin Address: 200 Oak Parkway',
+            'Example Kitchen Locations. Anaheim 100 Main St. Tustin 15101 Addison Rd',
+            'Example Kitchen Locations. Anaheim, CA\n100 Main St\nTustin, CA\n200 Oak St',
+            'Example Kitchen Locations. Anaheim 100 Main St. Tustin CA 92780 200 Oak St',
+            'Example Kitchen Locations. Anaheim 100 Main St. Tustin CA 15101 Addison Rd',
+            'Example Kitchen Locations. 100 Main St. Other branch in Tustin',
+        ]:
+            source = dict(kind='S5', url='https://example.com/locations',
+                text=text, official_source=True)
+            with self.subTest(text=text):
+                self.assertFalse(ev.source_identity(row, source, [source]))
+                self.assertFalse(ev.count_identity(row, source, [source], listed=True))
+        for text in [
+            'Example Kitchen Locations. 100 Main Street, Tustin. 200 Oak St, Anaheim',
+            'Example Kitchen Locations. 100 Main St. Tustin, CA 92780',
+            'Example Kitchen Locations. 100 Main St, Suite B, Tustin, CA 92780',
+            'Example Kitchen Locations. 100 Main St, Ste 200, Tustin, CA 92780',
+            'Example Kitchen Locations. 100 Main St, Suite B-2, Tustin, CA 92780',
+            'Example Kitchen Locations. 100 Main St B-2, Tustin, CA 92780',
+            'Example Kitchen Locations. 100 Main St, Unit 2-B, Tustin, CA 92780',
+            'Example Kitchen Locations. 100 Main St, Tustin 92780',
+        ]:
+            source['text'] = text
+            with self.subTest(text=text):
+                self.assertTrue(ev.count_identity(row, source, [source], listed=True))
+
+    def test_other_branch_city_cannot_license_gemma_address_list(self):
+        import chain_evaluate as ev
+        import json
+        import tempfile
+
+        entries = [dict(source=0, quote=f'{200+i} Oak St, Tustin Open daily',
+            address=f'{200+i} Oak St', city='Tustin', operating=True) for i in range(6)]
+        class Model:
+            def gemma(self, prompt):
+                return {'seconds':0, 'response':{'done':True, 'message':{'content':json.dumps(
+                    dict(decision='chain', count=6, complete=False, identity_verified=True,
+                        locations=entries))}}}
+        for prefix in ['100 Main St, Anaheim. ', 'Anaheim 100 Main St. Tustin ',
+            'Anaheim 100 Main St. Tustin Address: ', 'Anaheim CA\n100 Main St\nTustin CA\n']:
+            row = dict(id=1, name='Example Kitchen', street='100 Main St',
+                location='Tustin', decision='unknown', evidence=[])
+            source = dict(kind='S5', url='https://example.com/locations',
+                text='Example Kitchen Locations. '+prefix+
+                    ' '.join(e['quote'] for e in entries), official_source=True)
+            with self.subTest(prefix=prefix), tempfile.TemporaryDirectory() as folder:
+                ev.gemma_unresolved([row], {1:[source]}, Model(), Path(folder))
+                self.assertEqual(row['decision'], 'unknown')
+                self.assertFalse(row['evidence'][0]['identity_verified'])
+                self.assertEqual(len(row['evidence'][0]['locations']), 6)
+
     def test_incorrect_jev_validation_cannot_promote_other_business_count(self):
         import chain_evaluate as ev
         import tempfile
@@ -191,6 +267,8 @@ class SourceRetrievalTest(unittest.TestCase):
             text='Example Kitchen 15101 Addison Rd Open daily')
         self.assertFalse(ev.source_identity(row, source, [source]))
         source['text'] += ', Addison'
+        self.assertFalse(ev.source_identity(row, source, [source]))
+        source['text'] = 'Example Kitchen 15101 Addison Rd, Addison Open daily'
         self.assertTrue(ev.source_identity(row, source, [source]))
         source['text'] = 'Example Kitchen ' + 'unrelated ' * 100 + '15101 Addison Rd, Addison'
         source['official_source'] = False
