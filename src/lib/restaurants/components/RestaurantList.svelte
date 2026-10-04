@@ -2124,7 +2124,7 @@
 			grid-template-columns: minmax(0, 1fr) 44px;
 			grid-template-rows: auto 44px;
 			column-gap: 0.5rem;
-			row-gap: 0.5rem;
+			row-gap: 0.375rem;
 			align-items: start;
 			padding: 0.75rem 0.75rem 0.5625rem;
 		}
