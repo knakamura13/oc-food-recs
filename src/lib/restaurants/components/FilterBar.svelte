@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Bookmark, ChevronDown, Map as MapIcon, Share2 } from 'lucide-svelte';
+	import { Bookmark, ChevronDown, Map as MapIcon, Share2, LocateFixed } from 'lucide-svelte';
 	import type { Restaurant } from '$lib/restaurants/types';
 	import {
 		appState,
@@ -16,6 +16,7 @@
 	import type { Attachment } from 'svelte/attachments';
 	import { toast } from '$lib/toast';
 	import { trackEvent, type EventProps } from '$lib/events';
+	import { requestUserLocation, forgetUserLocation } from '$lib/restaurants/location';
 	import RecencyHistogram from './RecencyHistogram.svelte';
 
 	interface Props {
@@ -58,6 +59,12 @@
 	let showSubredditDropdown = $state(false);
 	let showRecencyDropdown = $state(false);
 	let lastVisitMs = $state<number | null>(null);
+
+	async function nearMe() {
+		if (!await requestUserLocation()) return;
+		appState.sortKey = 'distance';
+		appState.sortDirection = 'asc';
+	}
 
 	function refreshLastVisit() {
 		lastVisitMs = getPriorVisitMs();
@@ -279,7 +286,7 @@
 			appState.activeSubreddits.length > 0 ||
 			appState.freshnessCutoff !== null ||
 			appState.showUnmapped ||
-			appState.showSavedOnly
+			appState.showSavedOnly || appState.radiusMiles !== null
 	);
 
 	function clearSearchFilter() {
@@ -633,6 +640,23 @@
 	</div>
 
 	<div class="filter-actions">
+		<button type="button" class="dropdown-trigger near-me"
+			class:has-active={appState.userLocation !== null}
+			disabled={appState.locating} aria-label="Near me" aria-describedby="location-disclosure"
+			onclick={nearMe}>
+			<LocateFixed size={13} aria-hidden="true" />
+			{appState.locating ? 'Locating…' : 'Near me'}
+		</button>
+		{#if appState.userLocation}
+			<select class="dropdown-trigger radius-control" aria-label="Distance radius"
+				value={appState.radiusMiles ?? ''}
+				onchange={event => { appState.radiusMiles = Number(event.currentTarget.value) || null; }}>
+				<option value="">Any distance</option>
+				{#each [1, 2, 5, 10, 25] as miles (miles)}
+					<option value={miles}>Within {miles} mi</option>
+				{/each}
+			</select>
+		{/if}
 		<!-- Saved — only once the user has bookmarked something (or the filter is on) -->
 		{#if savedCount > 0 || appState.showSavedOnly}
 			<button
@@ -702,9 +726,22 @@
 	</div>
 	</div>
 
+	<p id="location-disclosure" class="location-disclosure">
+		Near me uses your location for this session. <a href="/about#location-privacy">Location privacy</a>
+		{#if appState.userLocation || appState.locating}
+			<button type="button" onclick={forgetUserLocation}>Forget location</button>
+		{/if}
+	</p>
+	{#if appState.locationError}<p class="location-error" role="alert">{appState.locationError}</p>{/if}
+
 	<!-- Active filter pills — one dismissible chip per active constraint -->
 	{#if hasActiveFilters}
 		<div class="active-pills" aria-label="Active filters">
+			{#if appState.radiusMiles !== null}
+				<button class="pill" onclick={() => appState.radiusMiles = null} aria-label="Remove radius filter">
+					Within {appState.radiusMiles} mi &times;
+				</button>
+			{/if}
 			{#if searchPillLabel}
 				<button
 					class="pill search-pill"
@@ -798,6 +835,13 @@
 />
 
 <style>
+	.location-disclosure { margin: 0.35rem 0 0; font-size: 0.75rem; color: #64594e; }
+	.location-disclosure a { color: inherit; }
+	.location-disclosure button { margin-left: 0.5rem; min-height: 44px; border: 0; background: transparent; color: inherit; text-decoration: underline; cursor: pointer; }
+	.location-error { font-size: 0.85rem; color: #8a3025; margin: 0.35rem 0 0; }
+	.radius-control { max-width: 150px; }
+	.near-me, .radius-control { min-height: 44px; }
+
 	.filter-bar {
 		padding: 0.5rem 1rem;
 		border-bottom: 1px solid rgba(232, 224, 214, 0.5);
@@ -1185,7 +1229,7 @@
 			display: none;
 		}
 
-		.filter-actions .dropdown-trigger:not(.saved-toggle):not(.unmapped-toggle) {
+		.filter-actions .dropdown-trigger:not(.saved-toggle):not(.unmapped-toggle):not(.near-me):not(.radius-control) {
 			min-width: 44px;
 			min-height: 44px;
 			width: 44px;
@@ -1195,7 +1239,7 @@
 			gap: 0;
 		}
 
-		.filter-actions .dropdown-trigger:not(.saved-toggle):not(.unmapped-toggle) :global(svg) {
+		.filter-actions .dropdown-trigger:not(.saved-toggle):not(.unmapped-toggle):not(.near-me):not(.radius-control) :global(svg) {
 			width: 18px;
 			height: 18px;
 		}

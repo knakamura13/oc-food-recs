@@ -28,7 +28,7 @@ export function buildPageTitle(
   if (restaurantName) parts.push(restaurantName);
   else if (state.selectedRestaurantSlug)
     parts.push(state.selectedRestaurantSlug);
-  if (state.sortKey && state.sortKey !== "score" && state.sortKey !== "relevance") {
+  if (state.sortKey && state.sortKey !== "score" && state.sortKey !== "relevance" && state.sortKey !== "distance") {
     parts.push(state.sortKey === "name" ? "by name" : "by recency");
   }
   if (state.showUnmapped) parts.push("unmapped");

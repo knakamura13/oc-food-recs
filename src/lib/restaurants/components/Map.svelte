@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { requestUserLocation } from '$lib/restaurants/location';
 	import { onMount, untrack } from 'svelte';
 	import { SEARCH_DEBOUNCE_MS, scheduleDebounced } from '$lib/debounce';
 	import type { Restaurant } from '$lib/restaurants/types';
@@ -111,10 +112,7 @@
 	let clusterHoverTimer: ReturnType<typeof setTimeout> | null = null;
 	let appliedSlug: string | null = null;
 
-	let locating = $state(false);
-	let locationError = $state<string | null>(null);
 	let locationMarker: any = null;
-	let locationErrorTimer: ReturnType<typeof setTimeout> | null = null;
 
 	function syncScrollWheelZoom() {
 		if (!leafletMap) return;
@@ -231,12 +229,10 @@
 			mobileViewportQuery = null;
 			if (hoverTimer) clearTimeout(hoverTimer);
 			if (clusterHoverTimer) clearTimeout(clusterHoverTimer);
-			if (locationErrorTimer) clearTimeout(locationErrorTimer);
 			if (postInitInvalidateTimer) clearTimeout(postInitInvalidateTimer);
 			if (tooltipPanFrame !== null) cancelAnimationFrame(tooltipPanFrame);
 			hoverTimer = null;
 			clusterHoverTimer = null;
-			locationErrorTimer = null;
 			postInitInvalidateTimer = null;
 			focusToken += 1;
 			disposeMap();
@@ -512,47 +508,19 @@
 		};
 	});
 
-	function jumpToCurrentLocation() {
-		if (!leafletMap || !L || locating) return;
-		if (!navigator.geolocation) {
-			locationError = 'Geolocation is not supported by your browser';
-			return;
-		}
-		locating = true;
-		locationError = null;
-		navigator.geolocation.getCurrentPosition(
-			(position) => {
-				if (destroyed || !leafletMap || !L) return;
-				locating = false;
-				const { latitude, longitude } = position.coords;
-				if (locationMarker) {
-					leafletMap.removeLayer(locationMarker);
-					locationMarker = null;
-				}
-				locationMarker = L.circleMarker([latitude, longitude], {
-					radius: 8,
-					fillColor: '#4285f4',
-					fillOpacity: 1,
-					color: '#fff',
-					weight: 2.5
-				}).addTo(leafletMap);
-				leafletMap.setView([latitude, longitude], 14, { animate: true });
-			},
-			(error) => {
-				if (destroyed) return;
-				locating = false;
-				locationError =
-					error.code === error.PERMISSION_DENIED
-						? 'Location access denied'
-						: 'Unable to get your location';
-				if (locationErrorTimer) clearTimeout(locationErrorTimer);
-				locationErrorTimer = setTimeout(() => {
-					locationError = null;
-					locationErrorTimer = null;
-				}, 3500);
-			},
-			{ timeout: 10000, maximumAge: 60000 }
-		);
+	$effect(() => {
+		const location = appState.userLocation;
+		if (!mapInitialized || !leafletMap || !L) return;
+		if (locationMarker) leafletMap.removeLayer(locationMarker);
+		locationMarker = location ? L.circleMarker([location.lat, location.lng], {
+			radius: 8, fillColor: '#4285f4', fillOpacity: 1, color: '#fff', weight: 2.5
+		}).addTo(leafletMap) : null;
+	});
+
+	async function jumpToCurrentLocation() {
+		if (!await requestUserLocation() || destroyed || !leafletMap) return;
+		const location = appState.userLocation;
+		if (location) leafletMap.setView([location.lat, location.lng], 14, { animate: !reduceMotion() });
 	}
 
 	function escapeHtml(value: string): string {
@@ -648,13 +616,13 @@
 	{#if mapInitialized}
 		<button
 			class="locate-me-btn"
-			class:is-locating={locating}
+			class:is-locating={appState.locating}
 			onclick={jumpToCurrentLocation}
-			title={locating ? 'Getting your location…' : 'Jump to my location'}
+			title={appState.locating ? 'Getting your location…' : 'Jump to my location'}
 			aria-label="Jump to my current location"
-			disabled={locating}
+			disabled={appState.locating}
 		>
-			{#if locating}
+			{#if appState.locating}
 				<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true" class="spinner">
 					<path d="M12 2a10 10 0 1 0 10 10"/>
 				</svg>
@@ -665,8 +633,8 @@
 				</svg>
 			{/if}
 		</button>
-		{#if locationError}
-			<div class="location-error" role="alert">{locationError}</div>
+		{#if appState.locationError}
+			<div class="location-error" role="alert">{appState.locationError}</div>
 		{/if}
 	{/if}
 

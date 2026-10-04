@@ -59,6 +59,24 @@ const dateExtent = {
 };
 
 describe("FilterBar", () => {
+	it('requests location only on click, activates nearest sort, and offers radius outside the rail', async () => {
+		resetAppState();
+		const getCurrentPosition = vi.fn((success) => success({ coords: { latitude: 33.7, longitude: -117.8 } }));
+		Object.defineProperty(navigator, 'geolocation', { configurable: true, value: { getCurrentPosition } });
+		const { container } = render(FilterBar, { restaurants, threadSubreddit, restaurantsForHistogram: restaurants, dateExtent });
+		expect(getCurrentPosition).not.toHaveBeenCalled();
+		await userEvent.setup().click(screen.getByRole('button', { name: 'Near me' }));
+		expect(appState.userLocation).toEqual({ lat: 33.7, lng: -117.8 });
+		expect(appState.sortKey).toBe('distance');
+		expect(appState.sortDirection).toBe('asc');
+		expect(container.querySelector('.filter-actions .near-me')).toBeTruthy();
+		expect(container.querySelector('.filter-actions select[aria-label="Distance radius"]')).toBeTruthy();
+		await userEvent.setup().selectOptions(screen.getByRole('combobox', { name: 'Distance radius' }), '5');
+		expect(appState.radiusMiles).toBe(5);
+		await userEvent.setup().click(screen.getByRole('button', { name: 'Clear all' }));
+		expect(appState.radiusMiles).toBeNull();
+	});
+
   beforeEach(() => {
     resetAppState();
     localStorage.clear();

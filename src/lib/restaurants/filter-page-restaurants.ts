@@ -12,12 +12,16 @@ import { searchRankBySlug } from "./search-restaurants";
 import { passesMomAndPopFilter } from "./mom-and-pop";
 import type { CommentSearchHit } from './comment-search';
 
+import { distanceMiles, type Coordinates } from './distance';
+
 export interface PageFilterState {
   activeSubreddits: string[];
   activeCuisines: string[];
   activeCities: string[];
   showUnmapped: boolean;
   freshnessCutoff: number | null;
+  userLocation?: Coordinates | null;
+  radiusMiles?: number | null;
 }
 
 export interface PageFilterContext {
@@ -36,6 +40,8 @@ export function filterBeforeFreshness(
     | "activeCuisines"
     | "activeCities"
     | "showUnmapped"
+    | "userLocation"
+    | "radiusMiles"
   >,
   ctx: Pick<PageFilterContext, "threadSubreddit" | "subredditSliceCache">,
 ): Restaurant[] {
@@ -76,6 +82,12 @@ export function filterBeforeFreshness(
     result = result.filter((r) => !isUnmappedRestaurant(r));
   }
 
+  if (state.userLocation && state.radiusMiles != null) {
+    result = result.filter(r => {
+      const miles = distanceMiles(state.userLocation!, r);
+      return miles !== null && miles <= state.radiusMiles!;
+    });
+  }
   result = result.filter((r) => passesMomAndPopFilter(r));
 
   return result;

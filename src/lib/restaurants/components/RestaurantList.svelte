@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { Bookmark, ChevronRight, Flag, MapPin } from 'lucide-svelte';
+	import { distanceMiles } from '$lib/restaurants/distance';
 	import { getTrimmedSnippet } from '$lib/restaurants/snippet';
 	import CommentBody from '$lib/restaurants/components/CommentBody.svelte';
 	import { primaryMentions, primaryThreadCount } from '$lib/restaurants/drawer-comments';
@@ -27,6 +28,7 @@
 		clearExplorerFilters,
 		isUnmappedRestaurant,
 		latestMentionMs,
+		formatMonthYear,
 		normalizeCuisine,
 		VOICE_SHRINK_PRIOR
 	} from '$lib/restaurants/stores.svelte';
@@ -133,6 +135,7 @@
 	// Restaurants with no dated mentions sort last in either direction (null comparator rule).
 	const recencySort = table.createSort((r: Restaurant) => latestMentionMs(r));
 	const nameSort = table.createSort('name');
+	const distanceSort = table.createSort((r: Restaurant) => distanceMiles(appState.userLocation, r));
 	// `restaurants` arrives in search-relevance order while a query is active (see
 	// filterPageRestaurantsWithSearch); re-sorting by position keeps that order. Higher value =
 	// better match, so the default `desc` direction reads best-first like the other sorts.
@@ -146,12 +149,14 @@
 		{ key: 'score' as const, label: 'Score', sort: scoreSort },
 		{ key: 'recency' as const, label: 'Recent', sort: recencySort },
 		{ key: 'name' as const, label: 'Name', sort: nameSort },
+		{ key: 'distance' as const, label: 'Distance', sort: distanceSort },
 		{ key: 'relevance' as const, label: 'Relevance', sort: relevanceSort }
 	] as const;
 
 	// Relevance only means something while searching.
 	const visibleSortOptions = $derived(
-		appState.searchQuery.trim() ? sortOptions : sortOptions.filter((o) => o.key !== 'relevance')
+		sortOptions.filter(o => (o.key !== 'relevance' || appState.searchQuery.trim()) &&
+			(o.key !== 'distance' || appState.userLocation !== null))
 	);
 
 	function optionFor(key: SortKey) {
@@ -165,17 +170,19 @@
 	}
 
 	$effect(() => {
-		relevanceRank = new Map(restaurants.map((r, i) => [r.slug, i]));
-		table.setRows(restaurants);
-		const opt = optionFor(appState.sortKey);
-		// Named two-state sort: restore() after setRows can leave the wrong key
-		// (first paint) or the wrong direction (URL hydration that only changes sortdir).
-		if (
-			opt &&
-			(!opt.sort.isActive || opt.sort.direction !== appState.sortDirection)
-		) {
-			applySortFromAppState();
-		}
+		const rows = restaurants;
+		const key = appState.sortKey;
+		const direction = appState.sortDirection;
+		// Position changes must re-sort even when the key and direction stay the same.
+		void appState.userLocation?.lat;
+		void appState.userLocation?.lng;
+		// The table mutates its own reactive sort state. Only inputs belong in this effect.
+		untrack(() => {
+			relevanceRank = new Map(rows.map((r, i) => [r.slug, i]));
+			table.setRows(rows);
+			const opt = optionFor(key);
+			if (opt) direction === 'desc' ? opt.sort.desc() : opt.sort.asc();
+		});
 	});
 
 	function cycleSort(key: SortKey) {
@@ -214,6 +221,7 @@
 				observeElementRect,
 				observeElementOffset,
 				measureElement: measureVirtualElement,
+				useAnimationFrameWithResizeObserver: true,
 				getItemKey: (index) => table.rows[index]?.slug ?? index,
 				onChange: (inst) => {
 					syncVirtualState(inst);
@@ -608,7 +616,7 @@
 				{:else}
 					<span class="empty-icon" aria-hidden="true">&#x1F50D;</span>
 					<p class="empty-title">No restaurants found</p>
-					<p class="empty-hint">Try adjusting your filters or search terms</p>
+					<p class="empty-hint">{appState.radiusMiles !== null ? `No matches within ${appState.radiusMiles} miles with these filters. Remove the radius or adjust your filters.` : 'Try adjusting your filters or search terms'}</p>
 					<button
 						type="button"
 						class="empty-action"
@@ -622,6 +630,8 @@
 			<div class="virtual-spacer" style:height="{totalSize}px">
 				{#each virtualItems as virtualRow (virtualRow.key)}
 					{@const restaurant = table.rows[virtualRow.index]}
+					{@const miles = distanceMiles(appState.userLocation, restaurant)}
+					{@const latest = latestMentionMs(restaurant)}
 					{#if restaurant}
 					{@const slug = restaurant.slug}
 					{@const isOpen = appState.selectedRestaurantSlug === slug}
@@ -668,6 +678,12 @@
 												<div class="row-street">{restaurant.street}</div>
 											{/if}
 											<div class="row-tags">
+												{#if miles !== null}
+													<span class="tag distance-tag" title="Straight-line distance from your location">{miles.toFixed(1)} mi</span>
+												{/if}
+												<span class="tag mention-age-tag" title="Newest dated comment in this view; not a check that the restaurant is still open">
+													{latest === null ? 'Mention date unknown' : `Last mentioned ${formatMonthYear(latest)}`}
+												</span>
 												{#if restaurant.cuisine}
 													<span class="tag cuisine-tag">{normalizeCuisine(restaurant.cuisine)}</span>
 												{/if}
@@ -2108,7 +2124,7 @@
 			grid-template-columns: minmax(0, 1fr) 44px;
 			grid-template-rows: auto 44px;
 			column-gap: 0.5rem;
-			row-gap: 0.5rem;
+			row-gap: 0.375rem;
 			align-items: start;
 			padding: 0.75rem 0.75rem 0.5625rem;
 		}

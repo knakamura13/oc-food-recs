@@ -7,6 +7,7 @@ import { appState } from "$lib/restaurants/stores.svelte";
 import { parseSearchParams } from "$lib/restaurants/url-state";
 import { makeRestaurant, resetAppState } from "$lib/restaurants/test-utils";
 import { SEARCH_DEBOUNCE_MS } from "$lib/debounce";
+import { forgetUserLocation } from '$lib/restaurants/location';
 import * as bounds from '$lib/restaurants/explorer-bounds';
 
 const nav = vi.hoisted(() => ({
@@ -225,6 +226,24 @@ describe("ExplorerApp page search debounce", () => {
 		expect(document.querySelector('#restaurant-taco-palace')).not.toBeNull();
 		expect(document.body).toHaveTextContent('Comment search unavailable');
 	});
+
+  it('restores distance after search, but score after forgetting location', () => {
+    render(ExplorerApp, { data: makeHomeData(), routerReady: false });
+    flushSync();
+    appState.userLocation = { lat: 33.7, lng: -117.8 };
+    appState.sortKey = 'distance'; appState.sortDirection = 'asc';
+    flushSync();
+    expect(appState.sortKey).toBe('distance');
+    appState.searchQuery = 'taco'; flushSync();
+    expect(appState.sortKey).toBe('relevance');
+    appState.searchQuery = ''; flushSync();
+    expect(appState.sortKey).toBe('distance');
+    appState.searchQuery = 'taco'; flushSync();
+    forgetUserLocation(); flushSync();
+    appState.searchQuery = ''; flushSync();
+    expect(appState.sortKey).toBe('score');
+    expect(appState.sortDirection).toBe('desc');
+  });
 
   it("filters the list after debounce and restores the full list when cleared", () => {
     const data = makeHomeData();

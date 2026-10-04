@@ -106,3 +106,8 @@ test.describe("Recency filter", () => {
     expect(axisAfter).toBe(axisBefore);
   });
 });
+
+// Keep read-only QA interactions out of deployment analytics.
+test.beforeEach(async ({ page }) => {
+	await page.route('**/api/events', route => route.fulfill({ status: 204 }));
+});
