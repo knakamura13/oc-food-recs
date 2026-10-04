@@ -1,3 +1,4 @@
+import { distanceMiles } from './distance';
 import { describe, expect, it } from "vitest";
 import { createSliceCache } from "./filter-restaurants";
 import {
@@ -16,6 +17,15 @@ const pageFilterCtx = {
 };
 
 describe("filter-page-restaurants", () => {
+	it('includes an exact radius boundary and excludes a point beyond it', () => {
+		const origin = { lat: 0, lng: 0 };
+		const boundary = makeRestaurant({ slug: 'boundary', lat: 0, lng: 1 });
+		const beyond = makeRestaurant({ slug: 'beyond', lat: 0, lng: 1.001 });
+		const state = { activeSubreddits: [], activeCuisines: [], activeCities: [], showUnmapped: true,
+			freshnessCutoff: null, userLocation: origin, radiusMiles: distanceMiles(origin, boundary)!, searchQuery: '' };
+		expect(filterPageRestaurantsWithSearch([boundary, beyond], state, pageFilterCtx).filtered.map(r => r.slug)).toEqual(['boundary']);
+	});
+
 	it('applies radius to results, histogram population and facets without admitting unmapped rows', () => {
 		const rows = [makeRestaurant({ slug: 'near', lat: 0, lng: 0 }), makeRestaurant({ slug: 'far', lat: 0, lng: 1 }), makeRestaurant({ slug: 'unknown', lat: null, lng: null })];
 		const state = { activeSubreddits: [], activeCuisines: [], activeCities: [], showUnmapped: true, freshnessCutoff: null, searchQuery: '', userLocation: { lat: 0, lng: 0 }, radiusMiles: 5 };

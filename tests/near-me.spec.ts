@@ -46,3 +46,19 @@ for (const width of [320, 390, 1280]) {
 		expect(await page.evaluate(() => (window as any).locationRequests)).toBe(0);
 	});
 }
+
+test('the map shares and removes the session marker without enabling radius', async ({ page }, info) => {
+	await page.goto('/');
+	await page.getByRole('button', { name: 'Near me', exact: true }).click();
+	const radius = page.getByRole('combobox', { name: 'Distance radius' });
+	await expect(radius).toHaveValue('');
+	const mobile = info.project.name === 'Mobile Chrome';
+	if (mobile) await page.getByRole('button', { name: 'Open map', exact: true }).click();
+	await expect(page.locator('path[fill="#4285f4"]')).toHaveCount(1);
+	await page.getByRole('button', { name: 'Jump to my current location' }).click();
+	if (mobile) await page.getByRole('dialog', { name: 'Restaurant map' }).getByRole('button', { name: 'Close map', exact: true }).click();
+	await expect(radius).toHaveValue('');
+	await page.getByRole('button', { name: 'Forget location', exact: true }).click();
+	if (mobile) await page.getByRole('button', { name: 'Open map', exact: true }).click();
+	await expect(page.locator('path[fill="#4285f4"]')).toHaveCount(0);
+});
