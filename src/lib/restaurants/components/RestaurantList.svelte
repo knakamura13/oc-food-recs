@@ -446,7 +446,7 @@
 					toast.info('Already excluded');
 					break;
 				case 'reviewed_keep_active':
-					toast.info('Kept as independent');
+					toast.info('Kept on the site');
 					break;
 				case 'not_found':
 					toast.error('Restaurant not found');

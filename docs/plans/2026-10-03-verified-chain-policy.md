@@ -41,7 +41,7 @@ The actual exclusion and both backfill dry-run entry points were run against the
 | Legacy automated queues in this dump | 0 |
 | Existing excluded rows changing | 0 |
 
-The two new exclusions are #200 IDs 1166 and 1199. All other active identities receive no new chain decision, matching #200's 1,146 unknown active decisions. Fifteen active human-locked rows retain their manual confidence instead of being refreshed; ten excluded human-locked rows are also untouched. Existing denylist exclusions remain authoritative. The 66 known-chain evaluation controls and the ten additional corporate-group exclusions retain their status; the seven scorer-recovered controls are not seven new exclusions. The proposed resulting statuses are 1,146 active and 78 excluded. No claim is made that the dump exercises visitor queues: unit and SQL regressions cover those paths separately.
+The two new exclusions are #200 IDs 1166 and 1199. All other active identities receive no new chain decision, matching #200's 1,146 unknown active decisions. Fifteen active human-locked rows retain their legacy `independent` confidence instead of being refreshed; their locks come from merge/rename work, not confirmed worldwide independence (F4 in #199). Ten excluded human-locked rows are also untouched. Existing denylist exclusions remain authoritative. The 66 known-chain evaluation controls and ten closed restaurants retain their status; the seven scorer-recovered controls are not seven new exclusions. The proposed resulting statuses are 1,146 active and 78 excluded. No claim is made that the dump exercises visitor queues: unit and SQL regressions cover those paths separately.
 
 All seven public-table fingerprints remain identical. The verification executes seventeen native PostgreSQL SELECT scenarios using the actual ingest CASE expressions, including human locks, wrong city/street/name, legacy queue retirement, protected visitor/dedupe queues, expiry/removal, verified independence, and preservation of an audited name. SQLite unit regressions also execute those CASE expressions in CI. Independent review found three identity/expiry issues; each was reproduced by a failing test, fixed and re-reviewed without remaining findings.
 
@@ -53,3 +53,25 @@ Private reproduction artifacts remain in `output/chain-scorer/issue-201/`: `veri
 ### PR review follow-up
 
 The automated review found that the raw SQL comparisons rejected punctuation/spacing variants accepted by the ledger, and that a file-path import could not find the sibling policy module in isolation. Both were reproduced before fixing. The evidence matcher and all three SQL guards now share ASCII token normalization, preserving boundaries while accepting smart apostrophes, repeated whitespace and street punctuation. Ten input strings also match between Python and native PostgreSQL normalization. The loader resolves the sibling from the pipeline file and reuses its canonical module cache; an isolated subprocess regression imports from an unrelated directory with `-I`. The principal pipeline test module passes independently (49 tests), and the full suite passes 301 tests. Independent focused review approved the repair. The scratch proposal and all seven table fingerprints remain unchanged.
+
+## Production application and remaining confidence provenance
+
+PR #220 merged as `9d182608af29a2de8f08838f7c32fb2b793edd32`. Both CI jobs passed on its repaired head `db9dfb2cccf11e5babcda1010b7c7ffea8c55b46`, and Railway production deployment `6bffba5f-88ce-4cfa-8fca-f4ff773b60d7` reached `SUCCESS` with the merged commit. #201 closed on merge.
+
+The production preview reproduced the scratch proposal exactly. A complete PostgreSQL custom-format backup was taken and its table-of-contents checked before writing. It includes all seven public tables and the Drizzle migration ledger. The private backup is `data/backups/prod-pre-201-20261004T065519Z.dump` (321,966 bytes; SHA-256 `9d99de093a3114d5df4654179aa6c5b8022f4879216e4dec76879a406a667b9f`).
+
+At `2026-10-04T06:56:36Z`, one transaction applied the 1,133 previewed changes with exact row-state preconditions. Committed readback verified the two new exclusions and 1,131 active confidence changes to `unknown`. All 25 human-locked rows, unplanned rows and fields, and the other six public tables remained unchanged. No model requests, registry changes or schema changes ran.
+
+| Committed production result | Count |
+| --- | ---: |
+| Active restaurants | 1,146 |
+| Excluded restaurants | 78 |
+| Active `unknown` | 1,131 |
+| Active legacy `independent` protected by merge/rename locks | 15 |
+| Confirmed independent decisions established by this work | 0 |
+
+Railway's existing HTML cache briefly served the pre-backfill homepage. Purging only production HTML at `2026-10-04T06:58:59Z` resolved it. Fresh requests verified HTTP 200 from the homepage with neither excluded slug in its payload; `/api/health` reported 1,146 restaurants, 73 threads and 2,379 mentions. Both `/api/r/polly-s-pies.json` and `/api/r/polly-s-pies-restaurant.json` returned HTTP 200 with `[]`, as required by the public mention API's exclusion filter. The app has no `/restaurants/[slug]` detail route; a 404 there is not evidence of exclusion.
+
+Private live artifacts are under `output/chain-scorer/issue-201/live-20261003/`: the actual preview, backup TOC, before/after fingerprints, exact changes, committed readback record and `http-after-purge.json`. These describe a completed application, not instructions to rerun the write.
+
+The 15 protected legacy confidence labels remain a D2 provenance gap. `reviewed_at` also protects identity edits, so it cannot establish a complete worldwide count. Likewise, the admin restore action currently assigns `independent` without collecting count evidence. The public report acknowledgment now says "Kept on the site" instead of asserting independence. A follow-up must distinguish an identity/visibility override from a verified count, correct these legacy labels with a separately guarded preview, and preserve names, aliases, statuses, review timestamps and genuine evidence-backed decisions. #199 remains open until that gap is resolved; broader automatic ATP/Overture matching remains outside the accepted evidence gate.
