@@ -18,6 +18,28 @@ const pageFilterCtx = {
 describe("filter-page-restaurants", () => {
   const threadSubreddit = { t1: "orangecounty", t2: "irvine" };
 
+	it('unions comment matches below name hits while retaining city and confidence filters', () => {
+		const restaurants = [
+			makeRestaurant({ slug: 'name', name: 'Patio Cafe', location: 'Irvine' }),
+			makeRestaurant({ slug: 'body', name: 'Quiet Kitchen', location: 'Irvine', chain_confidence: 'unknown' }),
+			makeRestaurant({ slug: 'elsewhere', name: 'Other Kitchen', location: 'Tustin' }),
+			makeRestaurant({ slug: 'chain', name: 'Chain Kitchen', location: 'Irvine', chain_confidence: 'likely_chain' })
+		];
+		const state = {
+			activeSubreddits: [], activeCuisines: [], activeCities: ['Irvine'], showUnmapped: true,
+			freshnessCutoff: null, searchQuery: 'patio',
+			commentMatches: [
+				{ slug: 'body', rank: 10, quote: 'patio' },
+				{ slug: 'elsewhere', rank: 20, quote: 'patio' },
+				{ slug: 'chain', rank: 30, quote: 'patio' },
+				{ slug: 'name', rank: 40, quote: 'patio' },
+				{ slug: 'not-in-dataset', rank: 50, quote: 'patio' }
+			]
+		};
+		expect(filterPageRestaurantsWithSearch(restaurants, state, pageFilterCtx).filtered.map((r) => r.slug)).toEqual(['name', 'body']);
+		expect(filterPageFacetPopulations(restaurants, state, pageFilterCtx).city.map((r) => r.slug)).toEqual(['name', 'elsewhere', 'body']);
+	});
+
   it("filters by cuisine and city", () => {
     const restaurants = [
       makeRestaurant({ cuisine: "Mexican", location: "Santa Ana" }),

@@ -12,19 +12,24 @@
 	import { normalizeSearchText } from '$lib/restaurants/normalize-name';
 	import { SEARCH_DEBOUNCE_MS, scheduleDebounced } from '$lib/debounce';
 	import { trackEvent } from '$lib/events';
+	import type { CommentSearchHit } from '$lib/restaurants/comment-search';
 
 	interface Props {
 		restaurants: Restaurant[];
 		cuisineNames: string[];
 		cityNames: string[];
+		commentMatches?: CommentSearchHit[];
+		commentQuery?: string;
+		commentSearchStatus?: 'idle' | 'loading' | 'ready' | 'error';
+		commentLimitReached?: boolean;
 	}
 
 	type FilterMatch = { type: 'cuisine' | 'city'; value: string };
 	type SearchOption =
 		| { kind: 'filter'; match: FilterMatch; id: 'search-option-filter' }
-		| { kind: 'restaurant'; restaurant: Restaurant; id: string };
+		| { kind: 'restaurant'; restaurant: Restaurant; id: string; quote?: string };
 
-	let { restaurants, cuisineNames, cityNames }: Props = $props();
+	let { restaurants, cuisineNames, cityNames, commentMatches = [], commentQuery = '', commentSearchStatus = 'idle', commentLimitReached = false }: Props = $props();
 
 	let inputEl: HTMLInputElement | undefined = $state();
 	let showDropdown = $state(false);
@@ -87,11 +92,20 @@
 			});
 		}
 		if (filterOption && restaurantNameWins) list.splice(1, 0, filterOption);
+		if (queryTrimmed && queryTrimmed === commentQuery && appState.searchQuery.trim() === commentQuery) {
+			const seen = new Set(list.filter((option) => option.kind === 'restaurant').map((option) => option.restaurant.slug));
+			for (const match of commentMatches.slice(0, 10)) {
+				const restaurant = restaurants.find((row) => row.slug === match.slug);
+				if (!restaurant || seen.has(match.slug)) continue;
+				seen.add(match.slug);
+				list.push({ kind: 'restaurant', restaurant, id: `search-option-${match.slug}`, quote: match.quote });
+			}
+		}
 		return list;
 	});
 
 	let showNoResults = $derived(
-		Boolean(showDropdown && fuseRequested && queryTrimmed && options.length === 0)
+		Boolean(showDropdown && fuseRequested && queryTrimmed && options.length === 0 && commentSearchStatus !== 'loading' && commentSearchStatus !== 'error')
 	);
 	let showResultsDropdown = $derived(showDropdown && options.length > 0);
 
@@ -294,6 +308,7 @@
 					{:else}
 						<li
 							id={option.id}
+							class:comment-option={option.quote !== undefined}
 							class:highlighted={i === highlightIndex}
 							onmousedown={() => activateOption(i)}
 							onmouseenter={() => (highlightIndex = i)}
@@ -301,6 +316,10 @@
 							aria-selected={i === highlightIndex}
 						>
 							<span class="result-name">{option.restaurant.name}</span>
+							{#if option.quote !== undefined}
+								<span class="comment-label">Mentioned in comments</span>
+								<span class="comment-quote">“{option.quote}”</span>
+							{/if}
 							<span class="result-meta">
 								{#if option.restaurant.cuisine}
 									<span class="result-cuisine">{option.restaurant.cuisine}</span>
@@ -319,9 +338,39 @@
 			</div>
 		{/if}
 	</div>
+	{#if appState.searchQuery.trim() && commentSearchStatus === 'loading'}
+		<p class="comment-status" role="status">Searching comments…</p>
+	{:else if appState.searchQuery.trim() && commentSearchStatus === 'error'}
+		<p class="comment-status" role="status">Comment search unavailable; name matches still work.</p>
+	{:else if commentSearchStatus === 'ready' && commentLimitReached}
+		<p class="comment-status" role="status">Comment search reached its 100-match limit. Refine your query.</p>
+	{/if}
 </div>
 
 <style>
+	.comment-status {
+		margin: 0.35rem auto 0;
+		max-width: 640px;
+		font-size: 0.75rem;
+		color: #7a6e63;
+	}
+
+	li.comment-option {
+		flex-wrap: wrap;
+	}
+
+	.comment-label {
+		font-size: 0.7rem;
+		color: #7a6e63;
+	}
+
+	.comment-quote {
+		flex-basis: 100%;
+		font-size: 0.8rem;
+		font-weight: 400;
+		color: #7a6e63;
+		overflow-wrap: anywhere;
+	}
 	.search-container {
 		position: relative;
 		z-index: 1100;

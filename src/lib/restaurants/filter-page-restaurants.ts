@@ -10,6 +10,7 @@ import {
 } from "./filter-restaurants";
 import { searchRankBySlug } from "./search-restaurants";
 import { passesMomAndPopFilter } from "./mom-and-pop";
+import type { CommentSearchHit } from './comment-search';
 
 export interface PageFilterState {
   activeSubreddits: string[];
@@ -136,7 +137,7 @@ function applySearchRank(
  */
 export function filterPageRestaurantsWithSearch(
   allRestaurants: Restaurant[],
-  state: PageFilterState & { searchQuery: string },
+  state: PageFilterState & { searchQuery: string; commentMatches?: CommentSearchHit[] },
   ctx: PageFilterContext,
 ): {
   beforeFreshness: Restaurant[];
@@ -150,7 +151,7 @@ export function filterPageRestaurantsWithSearch(
   );
   const searched = applySearchRank(
     includingUnmapped.filtered,
-    searchRankBySlug(allRestaurants, state.searchQuery),
+    searchRankBySlug(allRestaurants, state.searchQuery, state.commentMatches),
   );
   const unmappedCount = searched.filter(isUnmappedRestaurant).length;
   if (state.showUnmapped) {
@@ -184,10 +185,10 @@ export interface FacetPopulations {
  */
 export function filterPageFacetPopulations(
   allRestaurants: Restaurant[],
-  state: PageFilterState & { searchQuery: string },
+  state: PageFilterState & { searchQuery: string; commentMatches?: CommentSearchHit[] },
   ctx: PageFilterContext,
 ): FacetPopulations {
-  const rank = searchRankBySlug(allRestaurants, state.searchQuery);
+  const rank = searchRankBySlug(allRestaurants, state.searchQuery, state.commentMatches);
   const without = (omit: Partial<PageFilterState>) =>
     applySearchRank(
       filterPageRestaurants(allRestaurants, { ...state, ...omit }, ctx).filtered,

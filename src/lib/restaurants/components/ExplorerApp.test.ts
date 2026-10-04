@@ -7,6 +7,7 @@ import { appState } from "$lib/restaurants/stores.svelte";
 import { parseSearchParams } from "$lib/restaurants/url-state";
 import { makeRestaurant, resetAppState } from "$lib/restaurants/test-utils";
 import { SEARCH_DEBOUNCE_MS } from "$lib/debounce";
+import * as bounds from '$lib/restaurants/explorer-bounds';
 
 const nav = vi.hoisted(() => ({
   replaceState: vi.fn(),
@@ -187,6 +188,43 @@ describe("ExplorerApp page search debounce", () => {
   afterEach(() => {
     vi.useRealTimers();
   });
+
+	it('adds matching comments to the list and clears them immediately on a new query', async () => {
+		const data = makeHomeData();
+		const fit = vi.spyOn(bounds, 'coordsForFitBounds');
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => {
+			await new Promise((resolve) => setTimeout(resolve, 300));
+			return [{ slug: 'taco-palace', rank: 0.1, quote: '<b>Happy hour</b> on the patio' }];
+		} }));
+		render(ExplorerApp, { data, routerReady: false });
+		flushSync();
+		appState.searchQuery = 'happy hour';
+		flushSync();
+		await vi.advanceTimersByTimeAsync(SEARCH_DEBOUNCE_MS + 300);
+		flushSync();
+		expect(document.querySelector('#restaurant-taco-palace')).not.toBeNull();
+		expect(document.querySelector('.comment-match')).toHaveTextContent('Mentioned in comments');
+		expect(document.querySelector('.comment-match')).toHaveTextContent('<b>Happy hour</b> on the patio');
+		expect(document.querySelector('.comment-match b')).toBeNull();
+		await vi.advanceTimersByTimeAsync(250);
+		flushSync();
+		expect(fit).toHaveBeenLastCalledWith(expect.arrayContaining([expect.objectContaining({ slug: 'taco-palace' })]));
+		fit.mockRestore();
+		appState.searchQuery = 'omakase';
+		flushSync();
+		expect(document.querySelector('.comment-match')).toBeNull();
+	});
+
+	it('reports comment search failure while preserving name search', async () => {
+		render(ExplorerApp, { data: makeHomeData(), routerReady: false });
+		flushSync();
+		appState.searchQuery = 'taco';
+		flushSync();
+		await vi.advanceTimersByTimeAsync(SEARCH_DEBOUNCE_MS);
+		flushSync();
+		expect(document.querySelector('#restaurant-taco-palace')).not.toBeNull();
+		expect(document.body).toHaveTextContent('Comment search unavailable');
+	});
 
   it("filters the list after debounce and restores the full list when cleared", () => {
     const data = makeHomeData();

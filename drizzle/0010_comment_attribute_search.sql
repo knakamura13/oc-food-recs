@@ -1,0 +1,2 @@
+ALTER TABLE "mentions" ADD COLUMN "body_tsv" "tsvector" GENERATED ALWAYS AS (to_tsvector('english'::regconfig, coalesce(body, ''))) STORED;--> statement-breakpoint
+CREATE INDEX "mentions_body_tsv_idx" ON "mentions" USING gin ("body_tsv");

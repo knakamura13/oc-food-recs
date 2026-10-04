@@ -38,6 +38,8 @@
 	import BackToTop from '$lib/restaurants/components/BackToTop.svelte';
 	import type { ExplorerPageData } from '$lib/restaurants/explorer-page-data';
 	import { trackEvent } from '$lib/events';
+	import { scheduleCommentSearch, type CommentSearchHit } from '$lib/restaurants/comment-search';
+	import { searchRankBySlug } from '$lib/restaurants/search-restaurants';
 
 	let {
 		data,
@@ -486,13 +488,31 @@
 		});
 	});
 
+	let commentMatches = $state<CommentSearchHit[]>([]);
+	let commentSearchStatus = $state<'idle' | 'loading' | 'ready' | 'error'>('idle');
+	$effect(() => {
+		const query = appState.searchQuery.trim();
+		commentMatches = [];
+		commentSearchStatus = query ? 'loading' : 'idle';
+		if (!query) return;
+		if (query.length > 160) {
+			commentSearchStatus = 'error';
+			return;
+		}
+		return scheduleCommentSearch(query, (matches) => {
+			commentMatches = matches;
+			commentSearchStatus = 'ready';
+		}, () => { commentSearchStatus = 'error'; });
+	});
+
 	const pageFilterState = $derived({
 		activeSubreddits: appState.activeSubreddits,
 		activeCuisines: appState.activeCuisines,
 		activeCities: appState.activeCities,
 		showUnmapped: appState.showUnmapped,
 		freshnessCutoff: appState.freshnessCutoff,
-		searchQuery: debouncedSearchQuery
+		searchQuery: debouncedSearchQuery,
+		commentMatches
 	});
 
 	// "Saved" narrows the population before the shared filters so the histogram,
@@ -524,6 +544,13 @@
 
 	const restaurantsBeforeFreshness = $derived(pageFilterResult.beforeFreshness);
 	const filteredRestaurants = $derived(pageFilterResult.filtered);
+	// Only body-only matches get the second-tier label; existing Fuse matches retain precedence.
+	const visibleCommentMatches = $derived.by(() => {
+		const nameRanks = searchRankBySlug(allRestaurants, debouncedSearchQuery);
+		const visible = new Set(filteredRestaurants.map((restaurant) => restaurant.slug));
+		return commentMatches.filter((match) => visible.has(match.slug) && !nameRanks?.has(match.slug));
+	});
+	const commentQuotes = $derived(Object.fromEntries(visibleCommentMatches.map((match) => [match.slug, match.quote])));
 
 	function fitBoundsForPopulation(filtered: Restaurant[], _all: Restaurant[]) {
 		return coordsForFitBounds(filtered);
@@ -571,7 +598,9 @@
 	let mapSearchTimer: ReturnType<typeof setTimeout> | undefined;
 	$effect(() => {
 		const searchKey = appState.searchQuery.trim();
+		const commentKey = commentMatches.map((match) => match.slug).join('|');
 		void searchKey;
+		void commentKey;
 		if (!searchMapInitialized) {
 			searchMapInitialized = true;
 			if (searchKey.length > 0) {
@@ -669,7 +698,9 @@
 
 	<div class="app-trap" bind:this={appTrapEl}>
 		<div class="controls-bar" bind:this={controlsBarEl}>
-			<SearchBar restaurants={allRestaurants} {cuisineNames} {cityNames} />
+			<SearchBar restaurants={allRestaurants} {cuisineNames} {cityNames}
+				commentMatches={visibleCommentMatches} commentQuery={appState.searchQuery.trim()}
+				{commentSearchStatus} commentLimitReached={commentMatches.length >= 100} />
 			<FilterBar
 				restaurants={allRestaurants}
 				cuisineFacetRestaurants={facetPopulations.cuisine}
@@ -728,6 +759,7 @@
 					totalCount={allRestaurants.length}
 					onShowOnMap={openMobileMap}
 					threadsById={threadsById}
+					{commentQuotes}
 				/>
 			</div>
 		</div>

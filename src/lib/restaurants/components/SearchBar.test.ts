@@ -72,6 +72,21 @@ describe("SearchBar", () => {
     stubMatchMedia(false);
   });
 
+	it('labels comment matches below name matches and renders quotes as escaped text', async () => {
+		const user = userEvent.setup();
+		const { container } = render(SearchBar, {
+			restaurants, cuisineNames, cityNames,
+			commentMatches: [{ slug: 'sushi-zen', rank: 10, quote: '<img src=x onerror=alert(1)> tacos on the patio' }],
+			commentQuery: 'taco'
+		});
+		await user.type(screen.getByRole('combobox'), 'taco');
+		await waitFor(() => expect(screen.getByText('Mentioned in comments')).toBeInTheDocument());
+		const options = screen.getAllByRole('option');
+		expect(options.findIndex((row) => row.textContent?.includes('Taco Palace'))).toBeLessThan(options.findIndex((row) => row.textContent?.includes('Sushi Zen')));
+		expect(screen.getByText('<img src=x onerror=alert(1)> tacos on the patio', { exact: false })).toBeInTheDocument();
+		expect(container.querySelector('img')).toBeNull();
+	});
+
   it("shows fuzzy search results as the user types", async () => {
     const user = userEvent.setup();
     render(SearchBar, { restaurants, cuisineNames, cityNames });

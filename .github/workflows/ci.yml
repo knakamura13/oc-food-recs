@@ -50,6 +50,10 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run db:migrate
+      - name: Verify comment search with PostgreSQL
+        run: npx vitest run src/lib/server/restaurants/comment-search.integration.test.ts
+        env:
+          COMMENT_SEARCH_TEST_DATABASE_URL: postgresql://test:test@localhost:5432/e2e
       - run: npm run db:seed-e2e
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e:ci

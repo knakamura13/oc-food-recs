@@ -2,6 +2,7 @@ import Fuse from "fuse.js";
 import type { IFuseOptions, FuseResult } from "fuse.js";
 import type { Restaurant } from "./types";
 import { normalizeSearchText } from "./normalize-name";
+import type { CommentSearchHit } from './comment-search';
 
 export interface SearchableRestaurant extends Restaurant {
   nameNormalized: string;
@@ -108,12 +109,18 @@ export function resetRestaurantFuseCache(): void {
 export function searchRankBySlug(
   restaurants: Restaurant[],
   query: string,
+  commentMatches: CommentSearchHit[] = [],
 ): Map<string, number> | null {
   const q = query.trim();
   if (!q) return null;
   const fuse = getCachedRestaurantFuse(restaurants);
   const ranked = rankSearchResults(fuse.search(q), q);
-  return new Map(ranked.map((r, i) => [r.item.slug, i]));
+  const rank = new Map(ranked.map((r, i) => [r.item.slug, i]));
+  const eligibleSlugs = new Set(restaurants.map((r) => r.slug));
+  for (const match of [...commentMatches].sort((a, b) => b.rank - a.rank || a.slug.localeCompare(b.slug))) {
+    if (eligibleSlugs.has(match.slug) && !rank.has(match.slug)) rank.set(match.slug, rank.size);
+  }
+  return rank;
 }
 
 export function filterRestaurantsByQuery(

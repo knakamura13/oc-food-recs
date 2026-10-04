@@ -44,9 +44,10 @@
 		onShowOnMap?: (opener: HTMLButtonElement) => void;
 		/** Thread metadata by id, for the "r/sub · title" attribution on each comment. */
 		threadsById?: Record<string, ThreadSummary>;
+		commentQuotes?: Record<string, string>;
 	}
 
-	let { restaurants, totalCount, onShowOnMap, threadsById = {} }: Props = $props();
+	let { restaurants, totalCount, onShowOnMap, threadsById = {}, commentQuotes = {} }: Props = $props();
 
 	let priorVisitMs = $state<number | null>(null);
 
@@ -680,7 +681,9 @@
 													<span class="tag unmapped-tag">Unmapped</span>
 												{/if}
 											</div>
-											{#if restaurant.top_comment_snippet}
+											{#if commentQuotes[slug] !== undefined}
+												<p class="dish-teaser comment-match"><small>Mentioned in comments</small> “{commentQuotes[slug]}”</p>
+											{:else if restaurant.top_comment_snippet}
 												{@const snippet = getTrimmedSnippet(restaurant.top_comment_snippet, restaurant.name, 150)}
 												<p class="dish-teaser">
 													“{#each snippet.segments as segment, i (i)}{#if segment.isMatch}<strong>{segment.text}</strong>{:else}{segment.text}{/if}{/each}”
