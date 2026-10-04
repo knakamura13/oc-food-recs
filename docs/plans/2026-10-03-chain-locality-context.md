@@ -35,6 +35,23 @@ Additional tests preserve postal/country fields and operating suffixes encounter
 in the cached source frame. Two direct-business-prefix variants also reject a
 separate city-led count sentence. All **288 pipeline tests** pass.
 
+### Follow-up: preserve the count-path boundary
+
+The initial source-anchor fix still left a separate third-party count path that
+removed the period after `St.` before passing a quoted span to `source_identity`.
+`Example Kitchen at 100 Main St. Tustin has six locations.` consequently verified
+an unrelated city-led count and allowed an erroneous Gemma response to promote
+the restaurant. New tests reproduced both S4/S5 identity failures and that
+end-to-end promotion before the repair.
+
+Count quotes now retain sentence-ending street periods. Only unambiguous
+abbreviations before a comma, or a directional abbreviation internal to the
+saved street, are protected before splitting. Directly attributed counts with
+`100 Main St., Tustin` and `100 N. Main St, Tustin` remain supported. The invalid
+city-led count stays unknown even when the model asserts verified identity.
+The follow-up passes **291 pipeline tests**, including 94 scorer tests. This
+repair changes neither the official publisher threshold nor branch counting.
+
 A private replay of the frozen publisher answers also requires the quoted local
 identity to agree with its **full original source**, using that source as the
 anchor supplied to `source_identity`. A clipped quote alone can end at the city

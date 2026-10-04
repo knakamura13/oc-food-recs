@@ -79,6 +79,50 @@ class SourceRetrievalTest(unittest.TestCase):
                 self.assertFalse(row['evidence'][0]['identity_verified'])
                 self.assertEqual(len(row['evidence'][0]['locations']), 6)
 
+    def test_third_party_count_preserves_sentence_break_after_street(self):
+        import chain_evaluate as ev
+        row = dict(name='Example Kitchen', street='100 Main St', location='Tustin')
+        for kind in ['S4', 'S5']:
+            for street in ['100 Main St.', '100 Main Street.']:
+                quote = 'Example Kitchen at '+street+' Tustin has six locations.'
+                source = dict(kind=kind, url='https://directory.example/food',
+                    text=quote, official_source=False)
+                with self.subTest(kind=kind, street=street):
+                    self.assertFalse(ev.count_identity(row, source, [source], quote, count=6))
+            quote = 'Example Kitchen at 100 Main St, Tustin has six locations worldwide.'
+            source['text'] = quote
+            self.assertTrue(ev.count_identity(row, source, [source], quote, count=6))
+
+    def test_city_sentence_count_cannot_promote_gemma_decision(self):
+        import chain_evaluate as ev
+        import json
+        import tempfile
+        quote = 'Example Kitchen at 100 Main St. Tustin has six locations.'
+        class Model:
+            def gemma(self, prompt):
+                return {'seconds':0, 'response':{'done':True, 'message':{'content':json.dumps(
+                    dict(decision='chain', count=6, complete=False, identity_verified=True,
+                        source=0, quote=quote))}}}
+        row = dict(id=1, name='Example Kitchen', street='100 Main St', location='Tustin',
+            decision='unknown', evidence=[])
+        source = dict(kind='S4', url='https://reddit.com/comments/example', text=quote)
+        with tempfile.TemporaryDirectory() as folder:
+            ev.gemma_unresolved([row], {1:[source]}, Model(), Path(folder))
+        self.assertEqual(row['decision'], 'unknown')
+        self.assertFalse(row['evidence'][0]['identity_verified'])
+
+    def test_attributed_count_preserves_unambiguous_street_abbreviations(self):
+        import chain_evaluate as ev
+        for street, quote in [
+            ('100 Main St', 'Example Kitchen at 100 Main St., Tustin has six locations worldwide.'),
+            ('100 N Main St', 'Example Kitchen at 100 N. Main St, Tustin has six locations worldwide.'),
+        ]:
+            row = dict(name='Example Kitchen', street=street, location='Tustin')
+            source = dict(kind='S5', url='https://directory.example/food',
+                text=quote, official_source=False)
+            with self.subTest(quote=quote):
+                self.assertTrue(ev.count_identity(row, source, [source], quote, count=6))
+
     def test_local_address_anchor_preserves_periods_in_business_names(self):
         import chain_evaluate as ev
         for name in ['Mr. BBQ', 'O.C. Fish Grill']:

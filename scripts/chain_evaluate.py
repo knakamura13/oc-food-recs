@@ -161,11 +161,18 @@ def count_identity(row, source, sources, quote=None, listed=False, count=None):
         return True
     if listed or not isinstance(quote, str):
         return False
-    # Preserve common street abbreviations before separating sentences/listings.
-    text = re.sub(r'\b(st|ave|blvd|rd|dr|ln|ct|pl|hwy|n|s|e|w)\.(?=\s|,)',
+    # A street abbreviation may end an address sentence. Preserve that break;
+    # only protect periods with an unambiguous comma or internal street context.
+    text = re.sub(r'\b(st|ave|blvd|rd|dr|ln|ct|pl|hwy|n|s|e|w)\.(?=\s*,)',
         r'\1', quote, flags=re.I)
     name = re.escape(identity_text(row.get('name')))
-    street = re.escape(identity_text((row.get('street') or '').split(',')[0]))
+    street_text = identity_text((row.get('street') or '').split(',')[0])
+    street = re.escape(street_text)
+    tokens = street_text.split()
+    if len(tokens) >= 3 and tokens[1] in {'n', 's', 'e', 'w'}:
+        direction = (r'\b(' + re.escape(tokens[0]) + r'\s+' + re.escape(tokens[1])
+            + r')\.(?=\s+' + re.escape(tokens[2]) + r'\b)')
+        text = re.sub(direction, r'\1', text, flags=re.I)
     city = re.escape(identity_text(row.get('location')))
     subject = (name + r'(?:\s+(?:at|located at))?\s+' + street
         + r'\s+(?:in\s+)?' + city + r'(?:\s+(?:ca|california))?(?:\s+\d{5})?')
