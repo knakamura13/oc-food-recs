@@ -1,6 +1,11 @@
 # Issue #200 resume decision
 
-Prepared October 2, 2026. The authorized 20-row calibration is complete; the full evaluation has not started.
+Historical checkpoint prepared October 2, 2026. At that point the authorized
+20-row calibration was complete and the full evaluation had not started.
+The subsequent [final scratch acceptance report](plans/2026-10-03-chain-final-acceptance.md)
+records the completed current-code evaluation, audit limitations and #201 handoff.
+The saved-workload statements below describe the October 2 checkpoint, not the
+current artifact state.
 
 ## Verified saved workload
 

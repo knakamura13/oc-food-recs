@@ -1,5 +1,11 @@
 # Chain scorer: publisher proof evaluation
 
+This report preserves the intermediate experiments. The subsequent
+[final scratch acceptance report](2026-10-03-chain-final-acceptance.md) records
+the completed 1,214-row run, separate deterministic audit and the decision to
+keep unproven model signals advisory. Its handoff supersedes the historical
+next gate at the end of this report.
+
 After #217 merged as `0cc665648dd238d98b84c06e7d7cf5b04775a707`, evaluated a
 file-only alternative to the unchanged Jev official-source threshold. The complete-
 quote prompt accepted 32/34 positive publisher references and rejected all 15
@@ -413,10 +419,12 @@ all preparation dependencies.
 | Operator reviewer input | `511742c4e8d5fc4125f015b21ba4a8a13097bec407b78a48b206a05ff00a0211` |
 | Frozen `prompts.json` | `cb2fb606026500fb3afb59b76052bad0b9ff6e6e47f69d1054d9494d31563e23` |
 
-Keep #200 open and #201 gated. Next: bind the selected local quote to its complete
+Historical next gate for this experiment: keep #200 open and #201 gated, and
+bind the selected local quote to its complete
 original-source address/listing context and reproduce the missing-city rejection;
 then validate publisher evidence semantically or preserve abstention when the
 quote is only a title/history/ordering invitation. Replay the known controls and
 fresh holdout before another broader chain evaluation. The full scratch rerun,
 66 excluded controls, F6 disagreements and current five-to-seven-location audit
-remain required by `CHAIN_SCORER_RESUME_PLAN.md`.
+were subsequently completed at the candidate head in the linked final acceptance
+report. Production integration remains separate.
