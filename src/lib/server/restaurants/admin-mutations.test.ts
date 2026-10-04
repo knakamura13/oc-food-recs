@@ -3,12 +3,14 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 const updateMock = vi.fn();
 const insertMock = vi.fn();
 const selectMock = vi.fn();
+const transactionMock = vi.fn();
 
 vi.mock("$lib/server/db", () => ({
   db: {
     update: updateMock,
     insert: insertMock,
     select: selectMock,
+    transaction: transactionMock,
   },
 }));
 
@@ -17,6 +19,7 @@ describe("restaurants admin mutations", () => {
     updateMock.mockReset();
     insertMock.mockReset();
     selectMock.mockReset();
+    transactionMock.mockReset();
   });
 
   it("markRestaurantExcluded updates status and throws when missing", async () => {
@@ -58,6 +61,80 @@ describe("restaurants admin mutations", () => {
     await expect(restoreRestaurantActive(7)).rejects.toThrow(
       "Restaurant not found.",
     );
+  });
+
+  it.each(["restoreRestaurantActive", "dismissDuplicateCandidate"] as const)(
+    "%s restores visibility without asserting worldwide independence",
+    async (action) => {
+      const returning = vi.fn().mockResolvedValue([{ id: 7 }]);
+      const set = vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({ returning }),
+      });
+      updateMock.mockReturnValue({ set });
+
+      const admin = await import("./admin");
+      await admin[action](7);
+      expect(set).toHaveBeenCalledWith(expect.objectContaining({
+        status: "active",
+        exclusionReason: null,
+        chainConfidence: "unknown",
+        reviewedAt: expect.anything(),
+      }));
+    },
+  );
+
+  function identityTransaction(rows: object[]) {
+    const limit = vi.fn().mockResolvedValue(rows);
+    const set = vi.fn().mockReturnValue({
+      where: vi.fn().mockReturnValue({
+        returning: vi.fn().mockResolvedValue([]),
+      }),
+    });
+    const tx = {
+      select: vi.fn().mockReturnValue({
+        from: vi.fn().mockReturnValue({ where: vi.fn().mockReturnValue({ limit }) }),
+      }),
+      update: vi.fn().mockReturnValue({ set }),
+      insert: vi.fn().mockReturnValue({ values: vi.fn().mockResolvedValue(undefined) }),
+      delete: vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue(undefined) }),
+      execute: vi.fn().mockResolvedValue({ rows: [] }),
+    };
+    transactionMock.mockImplementation((callback) => callback(tx));
+    return { set, limit, tx };
+  }
+
+  it("merges identities without turning the winner into verified independent", async () => {
+    const winner = {
+      id: 1, name: "Test", slug: "test", location: "Irvine", street: "1 Main St",
+      cuisine: "Thai", lat: 1, lng: 2, chainConfidence: "unknown",
+    };
+    const loser = { ...winner, id: 2, slug: "test-2", name: "Test Kitchen" };
+    const { set, limit } = identityTransaction([]);
+    limit.mockResolvedValueOnce([winner]).mockResolvedValueOnce([loser]);
+    const { mergeRestaurants } = await import("./admin");
+    await mergeRestaurants(1, 2);
+    expect(set).toHaveBeenCalledWith(expect.objectContaining({
+      name: "Test Kitchen",
+      status: "active",
+      exclusionReason: null,
+      chainConfidence: "unknown",
+      reviewedAt: expect.anything(),
+    }));
+  });
+
+  it("invalidates confidence when a rename changes the evidenced identity", async () => {
+    const { set, tx } = identityTransaction([{
+      id: 1, name: "Test", location: "Irvine", street: "1 Main St",
+      chainConfidence: "independent",
+    }]);
+    const { renameRestaurant } = await import("./admin");
+    await renameRestaurant(1, "Test Kitchen");
+    expect(set).toHaveBeenCalledWith(expect.objectContaining({
+      name: "Test Kitchen",
+      chainConfidence: "unknown",
+      reviewedAt: expect.anything(),
+    }));
+    expect(tx.insert).toHaveBeenCalledTimes(1);
   });
 
   it("addBrandToRegistry rejects empty normalized names", async () => {
