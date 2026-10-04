@@ -8,9 +8,10 @@
 
 	const REASON_LABELS: Record<string, string> = {
 		chain: 'Chain (registry)',
+		verified_chain: 'Verified six or more locations',
 		corporate_group: 'Corporate group (registry)',
 		llm_suspected_chain: 'Legacy LLM hint',
-		many_locations: 'Many global locations',
+		many_locations: 'Legacy location-count hint',
 		multi_city_density: 'Legacy city-density hint',
 		user_reported_chain: 'Reported as a chain',
 		duplicate_candidate: 'Likely duplicate at same location',
