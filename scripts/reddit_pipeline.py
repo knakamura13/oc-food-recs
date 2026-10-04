@@ -2895,8 +2895,15 @@ def write_to_db(
                 for primary in primary_comments:
                     cur.execute(
                         """
-                        INSERT INTO mentions (restaurant_id, thread_id, comment_id, permalink, author, body, score, role, classification, comment_date, names_restaurant)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, 'primary', NULL, %s, %s)
+                        INSERT INTO mentions (restaurant_id, thread_id, comment_id, permalink, author, body, score, role, classification, comment_date, names_restaurant, status)
+                        SELECT incoming.*, CASE WHEN EXISTS (
+                            SELECT 1 FROM mentions removed
+                            WHERE removed.thread_id = incoming.thread_id
+                                AND removed.comment_id = incoming.comment_id
+                                AND removed.status = 'taken_down'
+                        ) THEN 'taken_down' ELSE 'published' END
+                        FROM (VALUES (%s::bigint, %s, %s, %s, %s, %s, %s::integer, 'primary', NULL::text, %s::timestamptz, %s::boolean))
+                            AS incoming (restaurant_id, thread_id, comment_id, permalink, author, body, score, role, classification, comment_date, names_restaurant)
                         ON CONFLICT (thread_id, comment_id, restaurant_id) DO UPDATE SET
                             restaurant_id = EXCLUDED.restaurant_id,
                             permalink = EXCLUDED.permalink,
@@ -2932,8 +2939,15 @@ def write_to_db(
                 for endorsement in restaurant.get("endorsements", []):
                     cur.execute(
                         """
-                        INSERT INTO mentions (restaurant_id, thread_id, comment_id, permalink, author, body, score, role, classification, comment_date, names_restaurant)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, 'endorsement', %s, %s, %s)
+                        INSERT INTO mentions (restaurant_id, thread_id, comment_id, permalink, author, body, score, role, classification, comment_date, names_restaurant, status)
+                        SELECT incoming.*, CASE WHEN EXISTS (
+                            SELECT 1 FROM mentions removed
+                            WHERE removed.thread_id = incoming.thread_id
+                                AND removed.comment_id = incoming.comment_id
+                                AND removed.status = 'taken_down'
+                        ) THEN 'taken_down' ELSE 'published' END
+                        FROM (VALUES (%s::bigint, %s, %s, %s, %s, %s, %s::integer, 'endorsement', %s, %s::timestamptz, %s::boolean))
+                            AS incoming (restaurant_id, thread_id, comment_id, permalink, author, body, score, role, classification, comment_date, names_restaurant)
                         ON CONFLICT (thread_id, comment_id, restaurant_id) DO UPDATE SET
                             restaurant_id = EXCLUDED.restaurant_id,
                             permalink = EXCLUDED.permalink,
@@ -2965,14 +2979,15 @@ def write_to_db(
                         )
                     mentions_inserted += 1
 
+            # Keep removed rows as tombstones: later extraction/mapping must not republish them.
             if inserted_mention_ids:
                 cur.execute(
-                    "DELETE FROM mentions WHERE thread_id = %s AND id != ALL(%s)",
+                    "DELETE FROM mentions WHERE thread_id = %s AND status = 'published' AND id != ALL(%s)",
                     (thread_id, inserted_mention_ids),
                 )
             else:
                 cur.execute(
-                    "DELETE FROM mentions WHERE thread_id = %s",
+                    "DELETE FROM mentions WHERE thread_id = %s AND status = 'published'",
                     (thread_id,),
                 )
 

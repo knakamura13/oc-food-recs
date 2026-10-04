@@ -306,6 +306,8 @@ async function loadPageMeta(
 					JOIN threads t ON t.id = m.thread_id
 					WHERE m.restaurant_id = r.id
 						AND t.included_in_publish = true
+						AND m.status = 'published'
+						AND ${countsTowardScore('m')}
 				)
 			LIMIT 1
 		`);
@@ -328,6 +330,8 @@ async function loadPageMeta(
 				JOIN threads t ON t.id = m.thread_id
 				WHERE t.included_in_publish = true
 					AND r.status <> 'excluded'
+					AND m.status = 'published'
+					AND ${countsTowardScore('m')}
 			`),
 			db.execute(sql`
 				SELECT
