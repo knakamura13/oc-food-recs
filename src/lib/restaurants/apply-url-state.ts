@@ -26,8 +26,12 @@ export function applyUrlStateSnapshot(
     );
   }
   if (parsed.sortKey !== undefined) appState.sortKey = parsed.sortKey;
+  // A pasted distance URL must not request permission or imply a known location.
+  const missingLocation = parsed.sortKey === 'distance' && appState.userLocation === null;
+  if (missingLocation) appState.sortKey = appState.searchQuery.trim() ? 'relevance' : 'score';
   if (parsed.sortDirection !== undefined)
     appState.sortDirection = parsed.sortDirection;
+  if (missingLocation) appState.sortDirection = 'desc';
   if (parsed.showUnmapped !== undefined)
     appState.showUnmapped = parsed.showUnmapped;
 

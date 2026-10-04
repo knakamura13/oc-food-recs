@@ -153,6 +153,25 @@
 			no account and no reason.
 		</p>
 
+		<h3 id="location-privacy">Near me and your location</h3>
+		<p>
+			Near me and the map's location button ask your browser for permission only when you press
+			them. Your coordinates stay in browser memory for this session: they are not saved, sent
+			to our server or analytics, or included in shared links. Reloading the page or choosing
+			“Forget location” clears them. Shared links keep your other filters but omit the radius
+			and distance ordering.
+		</p>
+		<p>
+			Distances are straight-line miles, not driving distances. An active radius excludes places
+			without coordinates. The map loads tiles from OpenStreetMap; viewing a map centered on your
+			location lets that tile provider see the requested map area.
+		</p>
+		<p>
+			“Last mentioned” is the newest dated Reddit comment in the current view. It is not a check
+			that a restaurant is still open. Old recommendations remain visible unless you choose a
+			recency filter; missing dates are labeled “Mention date unknown”.
+		</p>
+
 		<h3>What we count</h3>
 		<p>
 			To learn which features are used, the site counts seven interactions: a search submitted

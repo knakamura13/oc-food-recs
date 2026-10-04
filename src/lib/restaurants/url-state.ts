@@ -21,7 +21,7 @@ export interface UrlStateSnapshot {
   selectedRestaurantSlug: string | null;
 }
 
-const VALID_SORT_KEYS = new Set<SortKey>(["score", "name", "recency", "relevance"]);
+const VALID_SORT_KEYS = new Set<SortKey>(["score", "name", "recency", "relevance", "distance"]);
 
 export function parseSearchParams(
   params: URLSearchParams,
@@ -53,7 +53,7 @@ export function parseSearchParams(
 
   // Relevance is the default order while searching, and meaningless without a query.
   const sort = params.get("sort");
-  if (sort === "name" || sort === "score" || sort === "recency") {
+  if (sort === "name" || sort === "score" || sort === "recency" || sort === "distance") {
     result.sortKey = sort;
   } else if (q) {
     result.sortKey = "relevance";
@@ -88,9 +88,12 @@ export function buildSearchParams(state: UrlStateSnapshot): URLSearchParams {
   if (state.activeSubreddits.length > 0)
     params.set("subreddit", state.activeSubreddits.join(","));
   const defaultSortKey: SortKey = state.searchQuery ? "relevance" : "score";
-  if (state.sortKey !== defaultSortKey) params.set("sort", state.sortKey);
-  if (state.sortDirection !== "desc")
-    params.set("sortdir", state.sortDirection);
+  // Shared URLs cannot reproduce a device's position. Keep portable filters only.
+  const sortKey = state.sortKey === 'distance' ? defaultSortKey : state.sortKey;
+  const sortDirection = state.sortKey === 'distance' ? 'desc' : state.sortDirection;
+  if (sortKey !== defaultSortKey) params.set("sort", sortKey);
+  if (sortDirection !== "desc")
+    params.set("sortdir", sortDirection);
   if (state.selectedRestaurantSlug)
     params.set("restaurant", state.selectedRestaurantSlug);
   if (state.freshnessSource === "visit" && state.freshnessCutoff !== null) {

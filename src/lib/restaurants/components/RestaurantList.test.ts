@@ -98,6 +98,26 @@ function stubListViewport() {
 }
 
 describe("RestaurantList", () => {
+	it('sorts by distance in either direction, sinks unmapped rows, and shows mention dates', async () => {
+		resetAppState(); stubListViewport();
+		appState.userLocation = { lat: 0, lng: 0 };
+		appState.sortKey = 'distance'; appState.sortDirection = 'asc';
+		const { container } = render(RestaurantList, { restaurants: [
+			makeRestaurant({ slug: 'far', name: 'Far Kitchen', lat: 0, lng: 1 }),
+			makeRestaurant({ slug: 'unknown', name: 'Unknown Kitchen', lat: null, lng: null }),
+			makeRestaurant({ slug: 'near', name: 'Near Kitchen', lat: 0, lng: 0, mentions: [{ thread_id: 't', author: 'person', score: 1, credit: 1, role: 'primary', comment_date: '2019-01-01' }] })
+		] });
+		const names = () => [...container.querySelectorAll('.row-name')].map(el => el.textContent);
+		await waitFor(() => expect(names()).toEqual(['Near Kitchen', 'Far Kitchen', 'Unknown Kitchen']));
+		expect(screen.getByText('0.0 mi')).toBeTruthy();
+		expect(screen.getByText('Last mentioned Jan 2019')).toBeTruthy();
+		expect(screen.getAllByText('Mention date unknown')).toHaveLength(2);
+		await userEvent.setup().click(screen.getByRole('button', { name: 'Sorted by Distance, nearest first' }));
+		await waitFor(() => expect(names()).toEqual(['Far Kitchen', 'Near Kitchen', 'Unknown Kitchen']));
+		appState.userLocation = { lat: 0, lng: 1 };
+		await waitFor(() => expect(names()).toEqual(['Near Kitchen', 'Far Kitchen', 'Unknown Kitchen']));
+	});
+
   beforeEach(() => {
     resetAppState();
     consumeSkipToList();

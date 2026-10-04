@@ -1,7 +1,14 @@
 import type { ListMention, Restaurant, SortKey } from "./types";
 import type { FreshnessSource } from "./url-state";
 
+import type { Coordinates } from './distance';
+
 export const appState = $state({
+  // Browser-session only: never persisted, put in URLs, or sent to analytics.
+  userLocation: null as Coordinates | null,
+  radiusMiles: null as number | null,
+  locating: false,
+  locationError: null as string | null,
   searchQuery: "",
   activeCuisines: [] as string[],
   activeCities: [] as string[],
@@ -35,6 +42,7 @@ export function clearExplorerFilters(opts?: { includeSearch?: boolean }) {
   appState.freshnessSource = null;
   appState.showUnmapped = false;
   appState.showSavedOnly = false;
+  appState.radiusMiles = null;
   if (opts?.includeSearch) appState.searchQuery = "";
 }
 
@@ -459,6 +467,7 @@ export function latestMentionMs(restaurant: Restaurant): number | null {
 const MONTH_YEAR_FMT = new Intl.DateTimeFormat("en-US", {
   month: "short",
   year: "numeric",
+  timeZone: "UTC",
 });
 
 /** Format an epoch-ms timestamp as e.g. "Feb 2025". */

@@ -120,6 +120,7 @@
 	let prevCities = $state('');
 	let prevSubreddits = $state('');
 	let prevSavedOnly = $state(false);
+	let prevRadius = $state('');
 
 	let mapExpanded = $state(false);
 	let mapDesktopHovered = $state(false);
@@ -146,7 +147,9 @@
 
 	$effect.pre(() => {
 		if (typeof window === 'undefined') return;
-		applyUrlStateSnapshot(data.urlState ?? {}, data.dataset.restaurants as Restaurant[]);
+		const urlState = data.urlState ?? {};
+		const restaurants = data.dataset.restaurants as Restaurant[];
+		untrack(() => applyUrlStateSnapshot(urlState, restaurants));
 		clientHydrated = true;
 	});
 
@@ -478,8 +481,10 @@
 					}
 				} else {
 					if (appState.sortKey === 'relevance') {
-						appState.sortKey = sortBeforeSearch?.key ?? 'score';
-						appState.sortDirection = sortBeforeSearch?.direction ?? 'desc';
+						const previous = sortBeforeSearch?.key === 'distance' && !appState.userLocation
+							? null : sortBeforeSearch;
+						appState.sortKey = previous?.key ?? 'score';
+						appState.sortDirection = previous?.direction ?? 'desc';
 					}
 					sortBeforeSearch = null;
 				}
@@ -511,6 +516,8 @@
 		activeCities: appState.activeCities,
 		showUnmapped: appState.showUnmapped,
 		freshnessCutoff: appState.freshnessCutoff,
+		userLocation: appState.userLocation,
+		radiusMiles: appState.radiusMiles,
 		searchQuery: debouncedSearchQuery,
 		commentMatches
 	});
@@ -562,14 +569,16 @@
 		const cityKey = appState.activeCities.join(',');
 		const subredditKey = appState.activeSubreddits.join(',');
 		const savedKey = appState.showSavedOnly;
-		const prevKey = `${prevCuisines}|${prevCities}|${prevSubreddits}|${prevSavedOnly}`;
-		const currentKey = `${cuisineKey}|${cityKey}|${subredditKey}|${savedKey}`;
+		const radiusKey = appState.radiusMiles === null ? '' : `${appState.radiusMiles}|${appState.userLocation?.lat}|${appState.userLocation?.lng}`;
+		const prevKey = `${prevCuisines}|${prevCities}|${prevSubreddits}|${prevSavedOnly}|${prevRadius}`;
+		const currentKey = `${cuisineKey}|${cityKey}|${subredditKey}|${savedKey}|${radiusKey}`;
 
 		if (currentKey !== prevKey) {
 			prevCuisines = cuisineKey;
 			prevCities = cityKey;
 			prevSubreddits = subredditKey;
 			prevSavedOnly = savedKey;
+			prevRadius = radiusKey;
 
 			appState.fitBoundsTarget = fitBoundsForPopulation(filteredRestaurants, allRestaurants);
 		}

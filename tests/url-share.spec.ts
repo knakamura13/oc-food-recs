@@ -154,3 +154,8 @@ test.describe("Shareable URL state", () => {
 	expect(head).toMatch(/<meta property="og:image" content="[^"]*\/screenshot\.jpeg/);
   });
 });
+
+// Keep read-only QA interactions out of deployment analytics.
+test.beforeEach(async ({ page }) => {
+	await page.route('**/api/events', route => route.fulfill({ status: 204 }));
+});

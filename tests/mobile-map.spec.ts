@@ -641,7 +641,7 @@ test.describe('Mobile map interaction', () => {
 		await page.evaluate(() =>
 			(window as Window & { __rejectGeolocation?: () => void }).__rejectGeolocation?.()
 		);
-		await expect(page.getByRole('alert')).toHaveText('Location access denied');
+		await expect(page.getByRole('dialog', { name: 'Restaurant map' }).getByRole('alert')).toHaveText('Location access denied. You can still browse by city.');
 		await expect(locateButton).toBeEnabled();
 	});
 
@@ -662,7 +662,7 @@ test.describe('Mobile map interaction', () => {
 		await expect(page.locator('.leaflet-container')).toBeVisible({ timeout: 30_000 });
 
 		await page.getByRole('button', { name: 'Jump to my current location' }).click();
-		const locationError = page.getByRole('alert');
+		const locationError = page.getByRole('dialog', { name: 'Restaurant map' }).getByRole('alert');
 		await expect(locationError).toHaveText('Geolocation is not supported by your browser');
 
 		const bounds = await locationError.evaluate((error) => {
@@ -972,4 +972,9 @@ test.describe('Mobile map interaction', () => {
 		});
 		expect(inViewport).toBe(true);
 	});
+});
+
+// Keep read-only QA interactions out of deployment analytics.
+test.beforeEach(async ({ page }) => {
+	await page.route('**/api/events', route => route.fulfill({ status: 204 }));
 });

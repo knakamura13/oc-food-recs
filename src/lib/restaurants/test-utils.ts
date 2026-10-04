@@ -2,6 +2,10 @@ import type { Restaurant } from "./types";
 import { appState } from "./stores.svelte";
 
 export function resetAppState(): void {
+  appState.userLocation = null;
+  appState.radiusMiles = null;
+  appState.locating = false;
+  appState.locationError = null;
   appState.searchQuery = "";
   appState.activeCuisines = [];
   appState.activeCities = [];

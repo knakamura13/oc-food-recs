@@ -16,6 +16,17 @@ const pageFilterCtx = {
 };
 
 describe("filter-page-restaurants", () => {
+	it('applies radius to results, histogram population and facets without admitting unmapped rows', () => {
+		const rows = [makeRestaurant({ slug: 'near', lat: 0, lng: 0 }), makeRestaurant({ slug: 'far', lat: 0, lng: 1 }), makeRestaurant({ slug: 'unknown', lat: null, lng: null })];
+		const state = { activeSubreddits: [], activeCuisines: [], activeCities: [], showUnmapped: true, freshnessCutoff: null, searchQuery: '', userLocation: { lat: 0, lng: 0 }, radiusMiles: 5 };
+		const result = filterPageRestaurantsWithSearch(rows, state, pageFilterCtx);
+		expect(result.filtered.map(r => r.slug)).toEqual(['near']);
+		expect(result.beforeFreshness.map(r => r.slug)).toEqual(['near']);
+		expect(result.unmappedCount).toBe(0);
+		expect(filterPageFacetPopulations(rows, state, pageFilterCtx).city.map(r => r.slug)).toEqual(['near']);
+		expect(filterPageRestaurantsWithSearch(rows, { ...state, userLocation: null }, pageFilterCtx).filtered).toHaveLength(3);
+	});
+
   const threadSubreddit = { t1: "orangecounty", t2: "irvine" };
 
 	it('unions comment matches below name hits while retaining city and confidence filters', () => {
