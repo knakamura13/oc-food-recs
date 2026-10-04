@@ -83,7 +83,12 @@ def source_identity(row, source, sources):
             and website_domain(anchor.get('url') or '') == domain)
         if not same_page and not official_publisher:
             continue
-        text = identity_text(anchor.get('text'))
+        # Keep listing separators through normalization, while allowing periods
+        # inside common abbreviated street names (e.g. N. Main St.).
+        raw = re.sub(r'\b(st|ave|blvd|rd|dr|ln|ct|pl|hwy|n|s|e|w)\.(?=\s|,)',
+            r'\1', anchor.get('text') or '', flags=re.I)
+        text = ' __listing__ '.join(identity_text(part)
+            for part in re.split(r'[.!?;|]+', raw))
         street_pattern = r'(?<!\w)' + re.escape(street) + r'(?!\w)'
         name_pattern = r'(?<!\w)' + re.escape(name) + r'(?!\w)'
         official_header = (anchor.get('kind') == 'S5'
@@ -91,10 +96,19 @@ def source_identity(row, source, sources):
             and re.search(name_pattern, text[:200]))
         for match in re.finditer(street_pattern, text):
             window = text[max(0, match.start()-300):match.start()] + ' ' + text[match.end():match.end()+300]
-            # Repeated city-named streets or a city-named business are not a
-            # separate locality. Keep the original window for the name check.
-            locality = re.sub(name_pattern, ' ', re.sub(street_pattern, ' ', window))
-            if (re.search(r'(?<!\w)' + re.escape(city) + r'(?!\w)', locality)
+            # Bind the locality to this address, never to a nearby listing.
+            # A business name containing the city is not locality evidence.
+            locality = re.sub(name_pattern, '__business__', text[match.end():])
+            city_suffix = (r'\s+(?:__listing__\s+)?(?:(?:(?:suite|ste|unit)\s+[a-z0-9]+(?:\s+[a-z0-9]+)?'
+                + r'|[a-z](?:\s+\d+)?)\s+)?'
+                + re.escape(city) + r'(?!\w)')
+            city_match = re.match(city_suffix, locality)
+            # In flattened city-first locators, this city may head the next
+            # numbered street rather than finish the saved address.
+            tail = locality[city_match.end():] if city_match else ''
+            next_street = (re.match(r'\s+(?:address\s+)?\d+\b', tail)
+                and not re.match(r'\s+\d{5}(?:\s+__listing__|\s*$)', tail))
+            if (city_match and not next_street
                 and (official_header or re.search(name_pattern, window))):
                 return True
     return False
