@@ -28,6 +28,9 @@ class SourceRetrievalTest(unittest.TestCase):
             'Example Kitchen Locations. Anaheim 100 Main St. Tustin 200 Oak Circle',
             'Example Kitchen Locations. Anaheim 100 Main St. Tustin Address: 200 Oak Parkway',
             'Example Kitchen Locations. Anaheim 100 Main St. Tustin 15101 Addison Rd',
+            'Example Kitchen Locations. Anaheim, CA\n100 Main St\nTustin, CA\n200 Oak St',
+            'Example Kitchen Locations. Anaheim 100 Main St. Tustin CA 92780 200 Oak St',
+            'Example Kitchen Locations. Anaheim 100 Main St. Tustin CA 15101 Addison Rd',
             'Example Kitchen Locations. 100 Main St. Other branch in Tustin',
         ]:
             source = dict(kind='S5', url='https://example.com/locations',
@@ -62,7 +65,7 @@ class SourceRetrievalTest(unittest.TestCase):
                     dict(decision='chain', count=6, complete=False, identity_verified=True,
                         locations=entries))}}}
         for prefix in ['100 Main St, Anaheim. ', 'Anaheim 100 Main St. Tustin ',
-            'Anaheim 100 Main St. Tustin Address: ']:
+            'Anaheim 100 Main St. Tustin Address: ', 'Anaheim CA\n100 Main St\nTustin CA\n']:
             row = dict(id=1, name='Example Kitchen', street='100 Main St',
                 location='Tustin', decision='unknown', evidence=[])
             source = dict(kind='S5', url='https://example.com/locations',

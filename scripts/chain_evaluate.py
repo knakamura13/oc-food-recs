@@ -106,8 +106,19 @@ def source_identity(row, source, sources):
             # In flattened city-first locators, this city may head the next
             # numbered street rather than finish the saved address.
             tail = locality[city_match.end():] if city_match else ''
+            tail = re.sub(r'^\s+(?:ca|california)\b', '', tail)
             next_street = (re.match(r'\s+(?:address\s+)?\d+\b', tail)
                 and not re.match(r'\s+\d{5}(?:\s+__listing__|\s*$)', tail))
+            postal = re.match(r'\s+\d{5}\b', tail)
+            if postal:
+                # A ZIP may precede phone/hours text, but cannot disguise a
+                # five-digit house number or a following numbered address.
+                street_tail = (r'\s+(?:address\s+)?\d+\s+(?:[a-z0-9]+\s+){0,8}'
+                    r'(?:st|street|ave|avenue|blvd|boulevard|rd|road|dr|drive|ln|lane|'
+                    r'ct|court|pl|place|hwy|highway|way|paseo|camino|calle|avenida|via|'
+                    r'pkwy|parkway|ter|terrace|cir|circle|broadway)\b')
+                next_street = (re.match(street_tail, tail)
+                    or re.match(street_tail, tail[postal.end():]))
             if (city_match and not next_street
                 and (official_header or re.search(name_pattern, window))):
                 return True
