@@ -1,0 +1,95 @@
+{
+  "version": 1,
+  "restaurants": [
+    {
+      "slug": "a-s-burgers",
+      "name": "A's Burgers",
+      "scope": "multiple_locations",
+      "locations": [
+        {
+          "city": "Dana Point",
+          "street": "34344 Pacific Coast Hwy"
+        },
+        {
+          "city": "San Juan Capistrano",
+          "street": "28698 Camino Capistrano"
+        }
+      ],
+      "evidence_urls": [
+        "https://asburgersrestaurant.com/locations/"
+      ],
+      "sources": [
+        {
+          "thread_id": "orangecounty-1owc472",
+          "comment_id": "t1_nop5ttu",
+          "role": "primary",
+          "body_sha256": "b7b409eee846532ab99746d38d5cbda06b5dc5828b030e2a043e9aa4bb276ffb",
+          "names_restaurant": true
+        },
+        {
+          "thread_id": "orangecounty-1owc472",
+          "comment_id": "t1_nopcq2s",
+          "role": "endorsement",
+          "body_sha256": "9e926ad7540a61e87958eb26f9fb0cf73110d0225a7c12322ebc9bae1b94863c",
+          "names_restaurant": false
+        },
+        {
+          "thread_id": "orangecounty-1owc472",
+          "comment_id": "t1_notx216",
+          "role": "endorsement",
+          "body_sha256": "07286b824254cc91dc06132c0a18b9b8abd12aa181231df7e9d4f647d27bd1fb",
+          "names_restaurant": false
+        },
+        {
+          "thread_id": "orangecounty-1owc472",
+          "comment_id": "t1_noxkfqc",
+          "role": "endorsement",
+          "body_sha256": "fa77dfb600638e94b3604b4d0370454d01658879c1c37ae1f31691c9e7e72c92",
+          "names_restaurant": false
+        },
+        {
+          "thread_id": "orangecounty-1owc472",
+          "comment_id": "t1_noxk0pi",
+          "role": "endorsement",
+          "body_sha256": "99c3f1202413b7193ff247609bf0f8d33fde018cb13f13401706df79af7e4a4e",
+          "names_restaurant": false
+        },
+        {
+          "thread_id": "orangecounty-1owc472",
+          "comment_id": "t1_noxi1u9",
+          "role": "endorsement",
+          "body_sha256": "203b0bee71288ac2dbd0f16aeecf244d4272e4473006841bb90de4d38115d7d0",
+          "names_restaurant": false
+        },
+        {
+          "thread_id": "orangecounty-1owc472",
+          "comment_id": "t1_nvhlece",
+          "role": "endorsement",
+          "body_sha256": "085b5115d3964b12fa044da3b62c65e03bfcdd7c944bbbb784b02962e3c48515",
+          "names_restaurant": false
+        },
+        {
+          "thread_id": "orangecounty-1owc472",
+          "comment_id": "t1_noxu64q",
+          "role": "endorsement",
+          "body_sha256": "249241affe4154e47dfd93736c01e7f131a92d60994519412958eddbd735eac5",
+          "names_restaurant": false
+        },
+        {
+          "thread_id": "orangecounty-1owc472",
+          "comment_id": "t1_noxy0s4",
+          "role": "endorsement",
+          "body_sha256": "46a6ad1a2cd9419fe302329d5c2275b95bc64f58faf1b80f20e247a99e15b42a",
+          "names_restaurant": false
+        },
+        {
+          "thread_id": "orangecounty-1owc472",
+          "comment_id": "t1_norqmxw",
+          "role": "endorsement",
+          "body_sha256": "9faf6a2a2228a175c5ded2634d820dd1e58b3539e0ba0a68a5dcf6adee1df4be",
+          "names_restaurant": false
+        }
+      ]
+    }
+  ]
+}

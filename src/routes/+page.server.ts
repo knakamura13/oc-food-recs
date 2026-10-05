@@ -1,3 +1,4 @@
+import { applyRestaurantCuration } from '$lib/server/restaurants/restaurant-curation';
 import type { ExplorerPageData } from "$lib/restaurants/explorer-page-data";
 import {
 	buildEagerPageMeta,
@@ -186,7 +187,7 @@ async function loadHomePage(
 	`);
 
   const restaurantRows = restaurantsResult.rows as unknown as RestaurantRow[];
-  const restaurants: Restaurant[] = restaurantRows.map((row) => ({
+  const restaurants: Restaurant[] = restaurantRows.map((row) => applyRestaurantCuration({
     name: row.name,
     slug: row.slug,
     location: row.location,

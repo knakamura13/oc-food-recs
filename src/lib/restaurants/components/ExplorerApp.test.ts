@@ -265,25 +265,25 @@ describe("ExplorerApp page search debounce", () => {
     render(ExplorerApp, { data, routerReady: false });
     flushSync();
     expect(document.querySelector(".result-count")).toHaveTextContent(
-      "2 restaurants",
+      "2 results",
     );
 
     appState.searchQuery = "taco";
     flushSync();
     expect(document.querySelector(".result-count")).toHaveTextContent(
-      "2 restaurants",
+      "2 results",
     );
 
     vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS);
     flushSync();
     expect(document.querySelector(".result-count")).toHaveTextContent(
-      "1 of 2 restaurants",
+      "1 of 2 results",
     );
 
     appState.searchQuery = "";
     flushSync();
     expect(document.querySelector(".result-count")).toHaveTextContent(
-      "2 restaurants",
+      "2 results",
     );
   });
 });

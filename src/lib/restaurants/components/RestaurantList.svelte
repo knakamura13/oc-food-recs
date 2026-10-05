@@ -2,6 +2,7 @@
 	import { Bookmark, ChevronRight, Flag, MapPin } from 'lucide-svelte';
 	import { distanceMiles } from '$lib/restaurants/distance';
 	import { getTrimmedSnippet } from '$lib/restaurants/snippet';
+	import LocationScope from './LocationScope.svelte';
 	import CommentBody from '$lib/restaurants/components/CommentBody.svelte';
 	import { primaryMentions, primaryThreadCount } from '$lib/restaurants/drawer-comments';
 	import { googleMapsUrl } from '$lib/restaurants/maps-url';
@@ -572,10 +573,10 @@
 		<span class="result-count" aria-live="polite">
 			{#if totalCount !== undefined && totalCount !== restaurants.length}
 				{restaurants.length.toLocaleString('en-US')} of {totalCount.toLocaleString('en-US')}
-				<span class="result-count-noun">restaurants</span>
+				<span class="result-count-noun">results</span>
 			{:else}
 				{restaurants.length.toLocaleString('en-US')}
-				<span class="result-count-noun">{restaurants.length === 1 ? 'restaurant' : 'restaurants'}</span>
+				<span class="result-count-noun">{restaurants.length === 1 ? 'result' : 'results'}</span>
 			{/if}
 		</span>
 	</div>
@@ -665,6 +666,7 @@
 													<span class="tag new-tag" aria-label="New mentions since your last visit">New</span>
 												{/if}
 											</div>
+											<LocationScope scope={restaurant.location_scope} locations={restaurant.reviewed_locations} compact />
 											{#if restaurant.street}
 												<div class="row-street">{restaurant.street}</div>
 											{/if}
@@ -684,7 +686,7 @@
 												{#if restaurant.location}
 													<span class="tag location-tag">{restaurant.location}</span>
 												{/if}
-												{#if isUnmappedRestaurant(restaurant)}
+												{#if isUnmappedRestaurant(restaurant) && restaurant.location_scope !== 'multiple_locations'}
 													<span class="tag unmapped-tag">Unmapped</span>
 												{/if}
 											</div>
@@ -976,6 +978,7 @@
 											</p>
 										{/if}
 
+										<LocationScope scope={restaurant.location_scope} locations={restaurant.reviewed_locations} />
 										<div class="drawer-actions" role="group" aria-label="Restaurant actions">
 											{#if restaurant.lat && restaurant.lng}
 												<button type="button" class="map-link" onclick={(e) => showOnMap(restaurant, e)}>
@@ -997,6 +1000,7 @@
 												<Flag size={14} aria-hidden="true" />
 												Report a chain
 											</button>
+											{#if restaurant.location_scope !== 'multiple_locations'}
 											<a
 												class="maps-link"
 												href={googleMapsUrl(restaurant)}
@@ -1008,6 +1012,7 @@
 												<span class="maps-icon" aria-hidden="true"><MapPin size={14} /></span>
 												Google Maps
 											</a>
+											{/if}
 										</div>
 										</div>
 									{/if}

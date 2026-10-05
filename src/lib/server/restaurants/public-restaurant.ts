@@ -1,8 +1,9 @@
+import { applyRestaurantCuration } from './restaurant-curation';
 import { db } from '$lib/server/db';
 import { sql } from 'drizzle-orm';
 import { countsTowardScore } from './counts-toward-score';
 import { excerptBody, publicIndexability, validCoordinates } from '$lib/restaurants/indexability';
-import type { Mention } from '$lib/restaurants/types';
+import type { Mention, LocationScope } from '$lib/restaurants/types';
 
 import { publicRestaurantVisibility } from './public-visibility';
 
@@ -11,7 +12,7 @@ export interface RawPublicMention extends Mention {
 	body_restaurants: number;
 }
 export interface PublicMention extends Mention { is_excerpt: boolean }
-export interface PublicRestaurant {
+export interface PublicRestaurant extends LocationScope {
 	name: string; slug: string; location: string | null; street: string | null;
 	cuisine: string | null; lat: number | null; lng: number | null;
 	mentions: PublicMention[]; mention_count: number; thread_count: number;
@@ -65,7 +66,7 @@ export function presentPublicRestaurant(row: RawRestaurant): PublicRestaurant {
 		authorCounts.set(key, repeat + 1);
 		weighted += m.score / Math.max(1, m.co_mentions) * Math.pow(0.5, repeat);
 	}
-	return {
+	return applyRestaurantCuration({
 		name: row.name, slug: row.slug, location: row.location, street: row.street,
 		cuisine: row.cuisine, lat: mapped ? row.lat : null, lng: mapped ? row.lng : null,
 		...policy, people_count: authorCounts.size,
@@ -73,7 +74,7 @@ export function presentPublicRestaurant(row: RawRestaurant): PublicRestaurant {
 		mentions: row.mentions.map(({ co_mentions: _, body_restaurants: __, ...m }) => ({
 			...m, ...excerptBody(m.body), comment_date: m.comment_date ? new Date(m.comment_date).toISOString() : null
 		}))
-	};
+	});
 }
 export async function getPublicRestaurant(slug: string): Promise<PublicRestaurant | null> {
 	const [row] = await loadRows(slug);

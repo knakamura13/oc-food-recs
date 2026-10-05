@@ -1,3 +1,4 @@
+import { applyRestaurantCuration } from './restaurant-curation';
 import { sourceUrl } from '$lib/restaurants/source-url';
 export { sourceUrl } from '$lib/restaurants/source-url';
 import { env } from '$env/dynamic/private';
@@ -20,7 +21,8 @@ export interface PublicHub {
 }
 export function publicHubs(restaurants: PublicRestaurant[], kind: HubKind): PublicHub[] {
 	const groups = new Map<string, { label: string; labels: Set<string>; members: PublicRestaurant[] }>();
-	for (const restaurant of restaurants) {
+	for (const original of restaurants) {
+		const restaurant = applyRestaurantCuration(original);
 		const label = kind === 'city' ? normalizeCity(restaurant.location) : restaurant.cuisine ? cuisineFacetKey(restaurant.cuisine) : null;
 		if (!label || !categorySlug(label)) continue;
 		const slug = categorySlug(label);
@@ -45,6 +47,7 @@ export function jsonLd(value: unknown): string {
 	return JSON.stringify(value).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026');
 }
 export function restaurantStructuredData(restaurant: PublicRestaurant, origin: string) {
+	restaurant = applyRestaurantCuration(restaurant);
 	const canonical = `${origin}/r/${encodeURIComponent(restaurant.slug)}`;
 	return {
 		'@context': 'https://schema.org', '@graph': [
@@ -70,6 +73,7 @@ export function xmlEscape(value: string): string {
 	return value.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' })[c]!);
 }
 export function sitemapXml(restaurants: PublicRestaurant[], origin: string): string {
+	restaurants = restaurants.map(applyRestaurantCuration);
 	const entries = [{ url: origin, lastmod: null }, { url: `${origin}/about`, lastmod: null },
 		...restaurants.filter(r => r.indexable).map(r => ({ url: `${origin}/r/${encodeURIComponent(r.slug)}`, lastmod: r.lastmod })),
 		...(['city', 'cuisine'] as const).flatMap(kind => publicHubs(restaurants, kind).filter(h => h.indexable)

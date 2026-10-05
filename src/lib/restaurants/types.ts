@@ -1,3 +1,8 @@
+export interface LocationScope {
+	location_scope?: 'multiple_locations';
+	reviewed_locations?: { city: string; street: string }[];
+}
+
 import type { ChainConfidence } from "./mom-and-pop";
 
 export interface Mention {
@@ -32,7 +37,7 @@ export type ListMention = Pick<
   "comment_date" | "thread_id" | "score" | "author" | "role"
 > & { credit: number };
 
-export interface Restaurant {
+export interface Restaurant extends LocationScope {
   name: string;
   slug: string;
   location: string | null;
