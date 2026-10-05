@@ -34,6 +34,7 @@ test('scope survives accidental database geography and leaves branch sources ind
 	const row = page.getByRole('link', { name: /^Synthetic Multi Kitchen/ });
 	if (await row.getAttribute('aria-expanded') !== 'true') await row.click();
 	await expect(page.locator('.drawer').getByText(/Multiple locations/)).toBeVisible();
+	await expect(page.locator('.drawer').getByText(/isn’t pinned on the map yet/)).toHaveCount(0);
 	await expect(page.locator('.drawer').getByRole('link', { name: /Open.*in Google Maps/ })).toHaveCount(0);
 	await expect(page.locator('.drawer').getByRole('button', { name: 'Show on map' })).toHaveCount(0);
 });

@@ -972,7 +972,7 @@
 							</div>
 						{/if}
 
-										{#if isUnmappedRestaurant(restaurant)}
+										{#if restaurant.location_scope !== 'multiple_locations' && isUnmappedRestaurant(restaurant)}
 											<p class="unmapped-drawer-hint">
 												This place isn’t pinned on the map yet. Google Maps can still search for it by name.
 											</p>
