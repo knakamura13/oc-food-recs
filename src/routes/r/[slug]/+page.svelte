@@ -1,4 +1,5 @@
 <script lang="ts">
+	import LocationScope from '$lib/restaurants/components/LocationScope.svelte';
 	import type { PageData } from './$types';
 	import { sourceUrl } from '$lib/restaurants/source-url';
 	import { googleMapsUrl } from '$lib/restaurants/maps-url';
@@ -23,11 +24,12 @@
 		<p class="eyebrow">Community recommendations</p>
 		<h1>{restaurant.name}</h1>
 		<p class="identity">{[restaurant.cuisine, data.city?.label, restaurant.street].filter(Boolean).join(' · ')}</p>
+		<LocationScope scope={restaurant.location_scope} locations={restaurant.reviewed_locations} />
 		<p class="date">{restaurant.lastmod ? `Last mentioned ${formatMonthYear(Date.parse(restaurant.lastmod))}` : 'Mention date unknown'}</p>
-		<p>{restaurant.mention_count} source comments from {restaurant.people_count} contributors across {restaurant.thread_count} threads.
+		<p>{restaurant.mention_count} source comment{restaurant.mention_count === 1 ? '' : 's'} from {restaurant.people_count} contributor{restaurant.people_count === 1 ? '' : 's'} across {restaurant.thread_count} thread{restaurant.thread_count === 1 ? '' : 's'}.
 			Community score {restaurant.aggregate_score}, based on shared upvotes and repeat contributors.</p>
 		<p class="context">Recommendations describe the experience when the comment was posted. Check current details before visiting.</p>
-		<div class="actions"><a href={googleMapsUrl(restaurant)} target="_blank" rel="noopener noreferrer">Find on Google Maps</a>
+		<div class="actions">{#if restaurant.location_scope !== 'multiple_locations'}<a href={googleMapsUrl(restaurant)} target="_blank" rel="noopener noreferrer">Find on Google Maps</a>{/if}
 			<a href={`/?restaurant=${encodeURIComponent(restaurant.slug)}`}>Explore in the list</a></div>
 	</header>
 	<section aria-labelledby="sources-heading">

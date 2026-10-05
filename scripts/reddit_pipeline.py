@@ -48,6 +48,9 @@ if chain_policy is None or Path(chain_policy.__file__).resolve() != _policy_path
     chain_policy = importlib.util.module_from_spec(_policy_spec)
     _policy_spec.loader.exec_module(chain_policy)
     sys.modules['chain_policy'] = chain_policy
+_curation_spec = importlib.util.spec_from_file_location('restaurant_curation', ROOT / 'scripts' / 'restaurant_curation.py')
+restaurant_curation = importlib.util.module_from_spec(_curation_spec)
+_curation_spec.loader.exec_module(restaurant_curation)
 DATA_ROOT = ROOT / "data"
 THREADS_ROOT = DATA_ROOT / "threads"
 UNINGESTED_ROOT = DATA_ROOT / "uningested-threads"
@@ -525,13 +528,14 @@ def slugify(value: str) -> str:
 
 
 def assign_slugs(
-    restaurants: list[dict[str, Any]], existing: list[dict[str, Any]] | None = None
+    restaurants: list[dict[str, Any]], existing: list[dict[str, Any]] | None = None,
+    *, reserved_slugs: set[str] | None = None,
 ) -> list[tuple[dict[str, Any], str]]:
     """Assign each restaurant a URL slug from its name, deduplicating against
     existing entries and suffixing -2/-3/... on true name collisions.
     """
     existing = existing or []
-    used_slugs = {e["slug"] for e in existing}
+    used_slugs = {e["slug"] for e in existing} | (reserved_slugs or set())
     out: list[tuple[dict[str, Any], str]] = []
 
     for r in restaurants:
@@ -2722,12 +2726,22 @@ def write_to_db(
         if not _is_closed_permanently_detail(restaurant.get("geocode_detail"))
     ]
 
+    curated_records = restaurant_curation.load_manifest()
+    ordinary_restaurants, scoped_restaurants = restaurant_curation.partition(
+        thread_id, restaurants_with_geocodes, curated_records
+    )
+    curated_slugs = {record['slug'] for record in curated_records}
+
     restaurants_inserted = 0
     mentions_inserted = 0
     inserted_mention_ids = []
 
     with connection_factory(database_url) as conn:
         with conn.cursor() as cur:
+            scoped_targets, preserved_flags, protected_ids = restaurant_curation.verify_database(
+                cur, thread_id, curated_records
+            )
+            inserted_mention_ids.extend(protected_ids)
             # 1. Threads — upsert from manifest
             cur.execute(
                 """
@@ -2793,7 +2807,7 @@ def write_to_db(
 
             # 2. Restaurants — collapse batch duplicates, assign slugs, upsert
             deduped_restaurants = collapse_duplicate_restaurants(
-                restaurants_with_geocodes
+                ordinary_restaurants
             )
             # Chain / corporate-group exclusion: the registry is authoritative ('excluded')
             # and is applied on INSERT *and* on unreviewed ON CONFLICT rows so a denylist
@@ -2803,82 +2817,95 @@ def write_to_db(
             # Growing the registry retro-applies via scripts/backfill_chain_policy.py.
             registry = _load_excluded_brands(cur)
             city_counts = batch_city_counts(deduped_restaurants)
-            for restaurant, slug in assign_slugs(
-                deduped_restaurants, existing=existing
-            ):
+            ordinary_assignments = assign_slugs(
+                deduped_restaurants,
+                existing=[row for row in existing if row['slug'] not in curated_slugs],
+                reserved_slugs=curated_slugs,
+            )
+            if any(slug in curated_slugs for _, slug in ordinary_assignments):
+                raise restaurant_curation.CurationError('Unreviewed source matched a scoped restaurant')
+            for restaurant, slug in ordinary_assignments + scoped_restaurants:
                 status, exclusion_reason = classify_restaurant_status(
                     restaurant, registry=registry, city_counts=city_counts
                 )
                 confidence = chain_confidence_for(status, exclusion_reason, restaurant=restaurant)
-                cur.execute(
-                    """
-                    INSERT INTO restaurants (name, slug, location, street, cuisine, lat, lng, status, exclusion_reason, chain_confidence)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    ON CONFLICT (slug) DO UPDATE SET
-                        name = CASE WHEN restaurants.reviewed_at IS NOT NULL OR restaurants.exclusion_reason = 'verified_chain' OR restaurants.chain_confidence = 'independent' THEN restaurants.name WHEN length(EXCLUDED.name) > length(restaurants.name) THEN EXCLUDED.name ELSE restaurants.name END,
-                        location = COALESCE(restaurants.location, EXCLUDED.location),
-                        street = COALESCE(restaurants.street, EXCLUDED.street),
-                        cuisine = COALESCE(restaurants.cuisine, EXCLUDED.cuisine),
-                        lat = COALESCE(restaurants.lat, EXCLUDED.lat),
-                        lng = COALESCE(restaurants.lng, EXCLUDED.lng),
-                        status = CASE
-                            WHEN restaurants.reviewed_at IS NOT NULL THEN restaurants.status
-                            WHEN (EXCLUDED.exclusion_reason = 'verified_chain' OR EXCLUDED.chain_confidence = 'independent' OR
-                                  (restaurants.exclusion_reason = 'verified_chain' AND EXCLUDED.status = 'active')) AND (
-                                btrim(regexp_replace(translate(coalesce(restaurants.name, ''), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '[^a-z0-9]+', ' ', 'g')) <> btrim(regexp_replace(translate(coalesce(EXCLUDED.name, ''), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '[^a-z0-9]+', ' ', 'g')) OR
-                                btrim(regexp_replace(translate(coalesce(restaurants.location, ''), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '[^a-z0-9]+', ' ', 'g')) <> btrim(regexp_replace(translate(coalesce(EXCLUDED.location, ''), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '[^a-z0-9]+', ' ', 'g')) OR
-                                btrim(regexp_replace(translate(coalesce(restaurants.street, ''), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '[^a-z0-9]+', ' ', 'g')) <> btrim(regexp_replace(translate(coalesce(EXCLUDED.street, ''), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '[^a-z0-9]+', ' ', 'g'))
-                            ) THEN restaurants.status
-                            WHEN EXCLUDED.status = 'excluded' THEN 'excluded'
-                            WHEN restaurants.status = 'pending_review' AND restaurants.exclusion_reason IN ('llm_suspected_chain', 'many_locations', 'multi_city_density') THEN EXCLUDED.status
-                            WHEN restaurants.exclusion_reason = 'verified_chain' THEN EXCLUDED.status
-                            WHEN restaurants.status IN ('excluded', 'pending_review') THEN restaurants.status
-                            ELSE EXCLUDED.status
-                        END,
-                        exclusion_reason = CASE
-                            WHEN restaurants.reviewed_at IS NOT NULL THEN restaurants.exclusion_reason
-                            WHEN (EXCLUDED.exclusion_reason = 'verified_chain' OR EXCLUDED.chain_confidence = 'independent' OR
-                                  (restaurants.exclusion_reason = 'verified_chain' AND EXCLUDED.status = 'active')) AND (
-                                btrim(regexp_replace(translate(coalesce(restaurants.name, ''), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '[^a-z0-9]+', ' ', 'g')) <> btrim(regexp_replace(translate(coalesce(EXCLUDED.name, ''), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '[^a-z0-9]+', ' ', 'g')) OR
-                                btrim(regexp_replace(translate(coalesce(restaurants.location, ''), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '[^a-z0-9]+', ' ', 'g')) <> btrim(regexp_replace(translate(coalesce(EXCLUDED.location, ''), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '[^a-z0-9]+', ' ', 'g')) OR
-                                btrim(regexp_replace(translate(coalesce(restaurants.street, ''), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '[^a-z0-9]+', ' ', 'g')) <> btrim(regexp_replace(translate(coalesce(EXCLUDED.street, ''), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '[^a-z0-9]+', ' ', 'g'))
-                            ) THEN restaurants.exclusion_reason
-                            WHEN EXCLUDED.status = 'excluded' THEN EXCLUDED.exclusion_reason
-                            WHEN restaurants.status = 'pending_review' AND restaurants.exclusion_reason IN ('llm_suspected_chain', 'many_locations', 'multi_city_density') THEN EXCLUDED.exclusion_reason
-                            WHEN restaurants.exclusion_reason = 'verified_chain' THEN EXCLUDED.exclusion_reason
-                            WHEN restaurants.status IN ('excluded', 'pending_review') THEN restaurants.exclusion_reason
-                            ELSE EXCLUDED.exclusion_reason
-                        END,
-                        chain_confidence = CASE
-                            WHEN restaurants.reviewed_at IS NOT NULL THEN restaurants.chain_confidence
-                            WHEN (EXCLUDED.exclusion_reason = 'verified_chain' OR EXCLUDED.chain_confidence = 'independent' OR
-                                  (restaurants.exclusion_reason = 'verified_chain' AND EXCLUDED.status = 'active')) AND (
-                                btrim(regexp_replace(translate(coalesce(restaurants.name, ''), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '[^a-z0-9]+', ' ', 'g')) <> btrim(regexp_replace(translate(coalesce(EXCLUDED.name, ''), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '[^a-z0-9]+', ' ', 'g')) OR
-                                btrim(regexp_replace(translate(coalesce(restaurants.location, ''), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '[^a-z0-9]+', ' ', 'g')) <> btrim(regexp_replace(translate(coalesce(EXCLUDED.location, ''), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '[^a-z0-9]+', ' ', 'g')) OR
-                                btrim(regexp_replace(translate(coalesce(restaurants.street, ''), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '[^a-z0-9]+', ' ', 'g')) <> btrim(regexp_replace(translate(coalesce(EXCLUDED.street, ''), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '[^a-z0-9]+', ' ', 'g'))
-                            ) THEN restaurants.chain_confidence
-                            WHEN EXCLUDED.status = 'excluded' THEN EXCLUDED.chain_confidence
-                            WHEN restaurants.status = 'pending_review' THEN EXCLUDED.chain_confidence
-                            WHEN restaurants.exclusion_reason = 'verified_chain' THEN EXCLUDED.chain_confidence
-                            WHEN restaurants.status IN ('excluded', 'pending_review') THEN restaurants.chain_confidence
-                            ELSE EXCLUDED.chain_confidence
-                        END,
-                        updated_at = now()
-                    RETURNING id
-                    """,
-                    (
-                        restaurant["name"],
-                        slug,
-                        restaurant.get("location"),
-                        restaurant.get("street"),
-                        restaurant.get("cuisine"),
-                        restaurant.get("lat"),
-                        restaurant.get("lng"),
-                        status,
-                        exclusion_reason,
-                        confidence,
-                    ),
-                )
+                if slug in scoped_targets:
+                    # Reviewed scope has no single branch. Preserve restaurant moderation,
+                    # identity and policy fields while removing inferred geography.
+                    cur.execute(
+                        'UPDATE restaurants SET location = NULL, street = NULL, lat = NULL, lng = NULL WHERE id = %s RETURNING id',
+                        (scoped_targets[slug],),
+                    )
+                else:
+                    cur.execute(
+                        """
+                        INSERT INTO restaurants (name, slug, location, street, cuisine, lat, lng, status, exclusion_reason, chain_confidence)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        ON CONFLICT (slug) DO UPDATE SET
+                            name = CASE WHEN restaurants.reviewed_at IS NOT NULL OR restaurants.exclusion_reason = 'verified_chain' OR restaurants.chain_confidence = 'independent' THEN restaurants.name WHEN length(EXCLUDED.name) > length(restaurants.name) THEN EXCLUDED.name ELSE restaurants.name END,
+                            location = COALESCE(restaurants.location, EXCLUDED.location),
+                            street = COALESCE(restaurants.street, EXCLUDED.street),
+                            cuisine = COALESCE(restaurants.cuisine, EXCLUDED.cuisine),
+                            lat = COALESCE(restaurants.lat, EXCLUDED.lat),
+                            lng = COALESCE(restaurants.lng, EXCLUDED.lng),
+                            status = CASE
+                                WHEN restaurants.reviewed_at IS NOT NULL THEN restaurants.status
+                                WHEN (EXCLUDED.exclusion_reason = 'verified_chain' OR EXCLUDED.chain_confidence = 'independent' OR
+                                      (restaurants.exclusion_reason = 'verified_chain' AND EXCLUDED.status = 'active')) AND (
+                                    btrim(regexp_replace(translate(coalesce(restaurants.name, ''), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '[^a-z0-9]+', ' ', 'g')) <> btrim(regexp_replace(translate(coalesce(EXCLUDED.name, ''), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '[^a-z0-9]+', ' ', 'g')) OR
+                                    btrim(regexp_replace(translate(coalesce(restaurants.location, ''), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '[^a-z0-9]+', ' ', 'g')) <> btrim(regexp_replace(translate(coalesce(EXCLUDED.location, ''), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '[^a-z0-9]+', ' ', 'g')) OR
+                                    btrim(regexp_replace(translate(coalesce(restaurants.street, ''), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '[^a-z0-9]+', ' ', 'g')) <> btrim(regexp_replace(translate(coalesce(EXCLUDED.street, ''), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '[^a-z0-9]+', ' ', 'g'))
+                                ) THEN restaurants.status
+                                WHEN EXCLUDED.status = 'excluded' THEN 'excluded'
+                                WHEN restaurants.status = 'pending_review' AND restaurants.exclusion_reason IN ('llm_suspected_chain', 'many_locations', 'multi_city_density') THEN EXCLUDED.status
+                                WHEN restaurants.exclusion_reason = 'verified_chain' THEN EXCLUDED.status
+                                WHEN restaurants.status IN ('excluded', 'pending_review') THEN restaurants.status
+                                ELSE EXCLUDED.status
+                            END,
+                            exclusion_reason = CASE
+                                WHEN restaurants.reviewed_at IS NOT NULL THEN restaurants.exclusion_reason
+                                WHEN (EXCLUDED.exclusion_reason = 'verified_chain' OR EXCLUDED.chain_confidence = 'independent' OR
+                                      (restaurants.exclusion_reason = 'verified_chain' AND EXCLUDED.status = 'active')) AND (
+                                    btrim(regexp_replace(translate(coalesce(restaurants.name, ''), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '[^a-z0-9]+', ' ', 'g')) <> btrim(regexp_replace(translate(coalesce(EXCLUDED.name, ''), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '[^a-z0-9]+', ' ', 'g')) OR
+                                    btrim(regexp_replace(translate(coalesce(restaurants.location, ''), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '[^a-z0-9]+', ' ', 'g')) <> btrim(regexp_replace(translate(coalesce(EXCLUDED.location, ''), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '[^a-z0-9]+', ' ', 'g')) OR
+                                    btrim(regexp_replace(translate(coalesce(restaurants.street, ''), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '[^a-z0-9]+', ' ', 'g')) <> btrim(regexp_replace(translate(coalesce(EXCLUDED.street, ''), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '[^a-z0-9]+', ' ', 'g'))
+                                ) THEN restaurants.exclusion_reason
+                                WHEN EXCLUDED.status = 'excluded' THEN EXCLUDED.exclusion_reason
+                                WHEN restaurants.status = 'pending_review' AND restaurants.exclusion_reason IN ('llm_suspected_chain', 'many_locations', 'multi_city_density') THEN EXCLUDED.exclusion_reason
+                                WHEN restaurants.exclusion_reason = 'verified_chain' THEN EXCLUDED.exclusion_reason
+                                WHEN restaurants.status IN ('excluded', 'pending_review') THEN restaurants.exclusion_reason
+                                ELSE EXCLUDED.exclusion_reason
+                            END,
+                            chain_confidence = CASE
+                                WHEN restaurants.reviewed_at IS NOT NULL THEN restaurants.chain_confidence
+                                WHEN (EXCLUDED.exclusion_reason = 'verified_chain' OR EXCLUDED.chain_confidence = 'independent' OR
+                                      (restaurants.exclusion_reason = 'verified_chain' AND EXCLUDED.status = 'active')) AND (
+                                    btrim(regexp_replace(translate(coalesce(restaurants.name, ''), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '[^a-z0-9]+', ' ', 'g')) <> btrim(regexp_replace(translate(coalesce(EXCLUDED.name, ''), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '[^a-z0-9]+', ' ', 'g')) OR
+                                    btrim(regexp_replace(translate(coalesce(restaurants.location, ''), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '[^a-z0-9]+', ' ', 'g')) <> btrim(regexp_replace(translate(coalesce(EXCLUDED.location, ''), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '[^a-z0-9]+', ' ', 'g')) OR
+                                    btrim(regexp_replace(translate(coalesce(restaurants.street, ''), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '[^a-z0-9]+', ' ', 'g')) <> btrim(regexp_replace(translate(coalesce(EXCLUDED.street, ''), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '[^a-z0-9]+', ' ', 'g'))
+                                ) THEN restaurants.chain_confidence
+                                WHEN EXCLUDED.status = 'excluded' THEN EXCLUDED.chain_confidence
+                                WHEN restaurants.status = 'pending_review' THEN EXCLUDED.chain_confidence
+                                WHEN restaurants.exclusion_reason = 'verified_chain' THEN EXCLUDED.chain_confidence
+                                WHEN restaurants.status IN ('excluded', 'pending_review') THEN restaurants.chain_confidence
+                                ELSE EXCLUDED.chain_confidence
+                            END,
+                            updated_at = now()
+                        RETURNING id
+                        """,
+                        (
+                            restaurant["name"],
+                            slug,
+                            restaurant.get("location"),
+                            restaurant.get("street"),
+                            restaurant.get("cuisine"),
+                            restaurant.get("lat"),
+                            restaurant.get("lng"),
+                            status,
+                            exclusion_reason,
+                            confidence,
+                        ),
+                    )
                 row = cur.fetchone()
                 if not row:
                     raise RuntimeError(
@@ -2923,7 +2950,7 @@ def write_to_db(
                             primary["body"],
                             primary["score"],
                             parse_comment_date(primary.get("created_utc")),
-                            names_restaurant(primary["body"], restaurant["name"]),
+                            preserved_flags.get((slug, primary["id"]), names_restaurant(primary["body"], restaurant["name"])),
                         ),
                     )
                     row = cur.fetchone()
@@ -2969,7 +2996,7 @@ def write_to_db(
                             endorsement["score"],
                             endorsement.get("type"),
                             parse_comment_date(endorsement.get("created_utc")),
-                            names_restaurant(endorsement["body"], restaurant["name"]),
+                            preserved_flags.get((slug, endorsement["id"]), names_restaurant(endorsement["body"], restaurant["name"])),
                         ),
                     )
                     row = cur.fetchone()

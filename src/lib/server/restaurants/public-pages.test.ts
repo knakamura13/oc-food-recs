@@ -45,3 +45,13 @@ describe('public hub, sitemap and structured-data policies', () => {
 		expect(sourceUrl({ permalink: '/r/test/comments/one/', thread_id: 'bad' })).toBe('https://www.reddit.com/r/test/comments/one/');
 	});
 });
+
+	it('defensively excludes mapped scoped records from city hubs, sitemap and place metadata', () => {
+	const scoped = restaurant(99, { slug: 'a-s-burgers', street: 'Accidental address' });
+	expect(publicHubs([scoped], 'city')).toEqual([]);
+	expect(sitemapXml([scoped], 'https://example.test')).not.toContain('/r/a-s-burgers');
+	const data = restaurantStructuredData(scoped, 'https://example.test')['@graph'][0];
+	expect(data).not.toHaveProperty('geo');
+	expect(data).not.toHaveProperty('address');
+	expect(publicHubs([scoped], 'cuisine')[0].eligible_count).toBe(0);
+	});
