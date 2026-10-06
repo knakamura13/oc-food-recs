@@ -985,8 +985,16 @@ def default_extract_entities(
     return entities, raw
 
 
+def _negative_reply(body: str) -> bool:
+    return bool(re.search(
+        r"\b(?:terrible|awful|sucks?|subpar|overrated|over rated|disappointing|disgusting|gross|inedible|horrible)\b"
+        r"|(?<!not )\bbad\b|\bnot (?:very |really |that )?good\b"
+        r"|(?:do not|don't|would not|wouldn't) recommend", body.lower().replace("’", "'")
+    ))
+
+
 def classify_reply(body_text: str) -> str:
-    body = body_text.lower().strip()
+    body = body_text.lower().strip().replace("’", "'")
 
     if re.match(
         r"^[\U0001f000-\U0001ffff\s\U00002600-\U000027bf\U0000fe00-\U0000feff]+$", body
@@ -998,55 +1006,6 @@ def classify_reply(body_text: str) -> str:
         for word in ["yup", "yep", "same", "lol", "rip"]
     ):
         return "filler"
-
-    filler_words = [
-        "thank",
-        "thanks",
-        "noted",
-        "bookmarked",
-        "adding to my list",
-        "saved",
-    ]
-    if any(word in body for word in filler_words):
-        food_words = [
-            "taco",
-            "burrito",
-            "burger",
-            "fries",
-            "salad",
-            "custard",
-            "pho",
-            "ramen",
-            "noodle",
-            "rice",
-            "chicken",
-            "beef",
-            "pork",
-            "fish",
-            "sandwich",
-            "pizza",
-            "enchilada",
-            "soup",
-            "curry",
-            "sushi",
-            "mole",
-            "tamale",
-            "menudo",
-            "birria",
-            "carne",
-            "torta",
-            "chilaquiles",
-            "boba",
-            "donut",
-            "cookie",
-            "cake",
-            "pie",
-            "tea leaf",
-        ]
-        return "dish_rec" if any(word in body for word in food_words) else "filler"
-
-    if body.rstrip().endswith("?"):
-        return "question"
 
     endorsement_phrases = [
         "the best",
@@ -1067,9 +1026,6 @@ def classify_reply(body_text: str) -> str:
         "worth the drive",
         "my favorite",
     ]
-    if any(phrase in body for phrase in endorsement_phrases):
-        return "endorsement"
-
     story_phrases = [
         "i used to",
         "been going",
@@ -1084,6 +1040,34 @@ def classify_reply(body_text: str) -> str:
         "years ago",
         "nostalgic",
     ]
+
+    # A food word alone does not turn a question, thanks, future plan or
+    # menu resource into a recommendation. Keep actual praise alongside thanks.
+    praise = any(phrase in body for phrase in endorsement_phrases) or bool(re.search(
+        r"\b(?:amazing|fantastic|excellent|great|love|seconded)\b"
+        r"|so good|the best|worth the|not bad|highly recommend", body
+    ))
+    story = any(phrase in body for phrase in story_phrases)
+    if re.match(r"^(?:which|what|where|how|when|does|do you|can you)\b", body):
+        return "question"
+    if _negative_reply(body) and not praise:
+        return "negative"
+    if re.search(r"\b(?:thank(?:s)?|noted|bookmarked|saved)\b|adding to my list", body) and not praise and not story:
+        return "filler"
+    if re.search(r"\b(?:i will|i'll|i'm going to|i am going to|looking forward to|need to check out|want to try)\b", body) and not praise and not story:
+        return "intent"
+    # Bare menu labels/links are resources; prose about a menu can still
+    # recommend a dish (for example, "order the off-menu birria tacos").
+    menu_label = re.sub(r"\[([^]]+)\]\([^)]+\)", r"\1", body).strip()
+    if re.fullmatch(r"(?:[\w '&-]+ )?menus?[.!]?", menu_label) and not praise and not story:
+        return "other"
+
+    if body.rstrip().endswith("?"):
+        return "question"
+
+    if any(phrase in body for phrase in endorsement_phrases):
+        return "endorsement"
+
     if any(phrase in body for phrase in story_phrases):
         return "personal_story"
 
@@ -1427,15 +1411,61 @@ def _endorsement_dedupe_key(endorsement: dict[str, Any]) -> str | tuple[str, str
     )
 
 
+def _reply_subject_indexes(
+    body: str, restaurant_names: list[str], location_words: set[str] | None = None
+) -> set[int] | None:
+    """None means unnamed; an empty set means an ambiguous name reference."""
+    def words(value: str) -> list[str]:
+        return re.findall(r"[a-z0-9]+", _fold_accents(value).lower())
+
+    body_words = words(body)
+    body_tokens = set(body_words)
+    body_phrase = " " + " ".join(body_words) + " "
+    weak = _NR_WEAK_NAME_WORDS | {"all", "that", "ramen", "sushi", "noodle", "noodles", "bbq", "barbecue"}
+    weak |= location_words or set()
+    name_words = [words(name) for name in restaurant_names]
+    distinctive = [{w for w in tokens if len(w) >= 3 and w not in weak} for tokens in name_words]
+    subjects: set[int] = set()
+    ambiguous = False
+    for index, tokens in enumerate(name_words):
+        phrase = " " + " ".join(tokens) + " "
+        if tokens and phrase in body_phrase and (distinctive[index] or len(tokens) > 1):
+            subjects.add(index)
+            continue
+        for token in distinctive[index] & body_tokens:
+            if sum(token in other for other in distinctive) == 1:
+                subjects.add(index)
+            else:
+                ambiguous = True
+    return subjects if subjects or ambiguous else None
+
+
 def collect_endorsements(
     parent_id: str,
     children_map: dict[str, list[dict[str, Any]]],
     reply_classes: dict[str, str],
+    restaurant_names: list[str] | None = None,
+    inherited_subjects: set[int] | None = None,
+    location_words: set[str] | None = None,
 ) -> list[dict[str, Any]]:
     endorsements: list[dict[str, Any]] = []
+    if restaurant_names is not None and inherited_subjects is None:
+        inherited_subjects = set(range(len(restaurant_names)))
     for child in children_map.get(parent_id, []):
         reply_type = reply_classes.get(child["id"], "other")
-        if reply_type in ENDORSEMENT_TYPES:
+        explicit = (_reply_subject_indexes(child["body"], restaurant_names, location_words)
+                    if restaurant_names is not None else None)
+        subjects = explicit if explicit is not None else inherited_subjects
+        # Unnamed descendants inherit only a single established subject. A
+        # question can establish it without itself becoming a recommendation.
+        eligible = subjects if explicit is not None or subjects is not None and len(subjects) == 1 else set()
+        if restaurant_names is not None:
+            eligible = set(eligible or ())
+            for clause in re.split(r"[.!?;\n]+|\bbut\b", child["body"], flags=re.IGNORECASE):
+                if _negative_reply(clause):
+                    named = _reply_subject_indexes(clause, restaurant_names, location_words)
+                    eligible.difference_update(named if named is not None else subjects or ())
+        if reply_type in ENDORSEMENT_TYPES and (restaurant_names is None or eligible):
             endorsements.append(
                 {
                     "id": child["id"],
@@ -1445,10 +1475,11 @@ def collect_endorsements(
                     "body": child["body"],
                     "score": child["score"],
                     "created_utc": child.get("created_utc", ""),
+                    **({"_restaurant_indexes": eligible} if restaurant_names is not None else {}),
                 }
             )
         endorsements.extend(
-            collect_endorsements(child["id"], children_map, reply_classes)
+            collect_endorsements(child["id"], children_map, reply_classes, restaurant_names, subjects, location_words)
         )
     return endorsements
 
@@ -1473,8 +1504,17 @@ def build_thread_dataset(
 
     raw_entries: list[dict[str, Any]] = []
     for root in roots:
-        endorsements = collect_endorsements(root["id"], children_map, reply_classes)
-        for entity in entity_map.get(root["id"], []):
+        entities = entity_map.get(root["id"], [])
+        location_words = {
+            word
+            for entity in entities
+            for word in re.findall(r"[a-z0-9]+", _fold_accents(entity.get("location") or "").lower())
+        }
+        endorsements = collect_endorsements(
+            root["id"], children_map, reply_classes,
+            [entity["name"] for entity in entities], location_words=location_words
+        )
+        for entity_index, entity in enumerate(entities):
             raw_entries.append(
                 {
                     "name": entity["name"],
@@ -1491,7 +1531,11 @@ def build_thread_dataset(
                         "permalink": root["permalink"],
                         "created_utc": root.get("created_utc", ""),
                     },
-                    "endorsements": endorsements,
+                    "endorsements": [
+                        {key: value for key, value in endorsement.items() if key != "_restaurant_indexes"}
+                        for endorsement in endorsements
+                        if entity_index in endorsement["_restaurant_indexes"]
+                    ],
                 }
             )
 
