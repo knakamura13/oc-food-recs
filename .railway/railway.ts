@@ -6,6 +6,12 @@ import { defineRailway, github, postgres, preserve, project, service, volume } f
  *
  * This replaces railway.toml, which Railway stops reading on 2026-12-01.
  *
+ * Railway never reads this file during a deploy. Editing or merging it changes
+ * nothing live until `railway config apply` runs, so run the read-only
+ * `railway config plan` first and apply right after merging any change here.
+ * Settings changed only in the dashboard are not copied into this file and can
+ * be overwritten or deleted by the next apply.
+ *
  * `railway config apply` manages the whole project, so a resource that is
  * missing from this file is planned for deletion. Add new services and
  * databases here instead of in the dashboard. Variable values stay in Railway:

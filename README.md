@@ -170,7 +170,7 @@ To deploy your own instance:
 
 1. Fork this repo
 2. Create a new project on [Railway](https://railway.com?referralCode=QCz9lp) and connect your GitHub repo
-3. Edit `.railway/railway.ts` for your project (name, repository, region), then run `railway config plan` and `railway config apply`; Railway deploys on every push to `main`
+3. Edit `.railway/railway.ts` for your project (name, repository, region), then run `railway config plan` and `railway config apply`; Railway deploys on every push to `main` Railway never reads this file during a deploy, so an edit or merge changes nothing live until `railway config apply` runs. Run `railway config plan` first and apply right after merging any change to it.
 
 ---
 
