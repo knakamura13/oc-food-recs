@@ -1,0 +1,9 @@
+{
+	"name": "railway-iac",
+	"private": true,
+	"description": "Dependencies for .railway/railway.ts. Isolated from the app so its dependency tree is unchanged.",
+	"type": "module",
+	"devDependencies": {
+		"railway": "3.13.1"
+	}
+}
