@@ -154,13 +154,23 @@ Monitor growth via `GET /api/health` (`restaurant_count`, `thread_count`, `menti
 
 ## Deployment
 
-This app is deployed on [Railway](https://railway.com?referralCode=QCz9lp) using the Node.js adapter (`@sveltejs/adapter-node`). The `railway.toml` config at the project root handles build and startup steps.
+This app is deployed on [Railway](https://railway.com?referralCode=QCz9lp) using the Node.js adapter (`@sveltejs/adapter-node`). The build, pre-deploy migration, start, and healthcheck settings live in [`.railway/railway.ts`](.railway/railway.ts) ([Infrastructure as Code](https://docs.railway.com/infrastructure-as-code)). It replaces `railway.toml`, which Railway stops reading on 2026-12-01.
+
+`.railway/railway.ts` describes the whole Railway project: the app service, the Postgres database, and its volume. It is applied with the Railway CLI:
+
+```sh
+cd .railway && pnpm install && cd ..   # installs the railway SDK (Node 22+), kept separate from the app
+railway config plan                    # read-only preview against the linked environment
+railway config apply                   # applies the previewed changes
+```
+
+`apply` manages the whole project, so a resource that is missing from `.railway/railway.ts` is planned for deletion. New services and databases belong in that file, not only in the dashboard. Variable values stay in Railway (`preserve()`), and the generated `*.up.railway.app` domain is not declared in the file.
 
 To deploy your own instance:
 
 1. Fork this repo
 2. Create a new project on [Railway](https://railway.com?referralCode=QCz9lp) and connect your GitHub repo
-3. Railway will auto-detect the `railway.toml` and deploy on every push to `main`
+3. Edit `.railway/railway.ts` for your project (name, repository, region), then run `railway config plan` and `railway config apply`; Railway deploys on every push to `main`
 
 ---
 
