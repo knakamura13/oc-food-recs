@@ -948,7 +948,7 @@ describe("RestaurantList drawer actions", () => {
       screen.getByRole("button", { name: /copy link to la taco spot/i }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /report la taco spot as a chain/i }),
+      screen.getByRole("button", { name: /report a problem with la taco spot/i }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("link", {
@@ -960,47 +960,40 @@ describe("RestaurantList drawer actions", () => {
     ).toHaveAttribute("href", "https://reddit.com/r/x/comments/1");
   });
 
-  it.each([
-    ["queued", "Thanks for reporting"],
-    ["already_queued", "Already reported"],
-  ])("acknowledges a %s chain report and remembers the slug", async (result, message) => {
+  it("opens a problem report for the expanded restaurant", async () => {
     const user = userEvent.setup();
-    const fetchMock = vi.fn(async (url: string) => {
-      if (String(url).includes("report-chain")) {
-        return { ok: true, json: async () => ({ result }) };
-      }
-      return {
-        ok: true,
-        json: async () => [
-          {
-            comment_id: "c1",
-            thread_id: "t1",
-            role: "primary",
-            author: "foodie",
-            body: "Best tacos in town",
-            score: 12,
-            comment_date: "2024-06-01",
-            permalink: "https://reddit.com/r/x/comments/1",
-            classification: null,
-          },
-        ],
-      };
-    });
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (String(url).includes("/reports")) {
+          return { ok: true, json: async () => ({ result: "ok", pending: [], nearby: [], matches: [] }) };
+        }
+        return {
+          ok: true,
+          json: async () => [
+            {
+              comment_id: "c1",
+              thread_id: "t1",
+              role: "primary",
+              author: "foodie",
+              body: "Best tacos in town",
+              score: 12,
+              comment_date: "2024-06-01",
+              permalink: "https://reddit.com/r/x/comments/1",
+              classification: null,
+            },
+          ],
+        };
+      }),
+    );
     render(RestaurantList, { restaurants });
     appState.selectedRestaurantSlug = "la-taco-spot";
-    const report = await screen.findByRole("button", {
-      name: /report la taco spot as a chain/i,
-    });
-    await user.click(report);
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith(
-        "/api/r/la-taco-spot/report-chain",
-        { method: "POST" },
-      );
-    });
-    expect(mocks.toastSuccess).toHaveBeenCalledWith(message);
-    expect(appState.reportedChainSlugs).toEqual(["la-taco-spot"]);
+    await user.click(
+      await screen.findByRole("button", { name: /report a problem with la taco spot/i }),
+    );
+    expect(await screen.findByRole("heading", { name: "Report a problem" })).toBeInTheDocument();
+    expect(screen.getAllByText("La Taco Spot").length).toBeGreaterThan(1);
+    expect(screen.getByRole("radio", { name: "Duplicate" })).toBeInTheDocument();
   });
 
   it("enlarges comment permalink tap targets under the mobile breakpoint", () => {
