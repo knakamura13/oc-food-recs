@@ -13,9 +13,8 @@ export function resetAppState(): void {
   appState.freshnessCutoff = null;
   appState.freshnessSource = null;
   appState.showUnmapped = false;
-  appState.showSavedOnly = false;
-  appState.reportedChainSlugs = [];
-  appState.sortKey = "score";
+	appState.showSavedOnly = false;
+	appState.sortKey = "score";
   appState.sortDirection = "desc";
   appState.selectedRestaurantSlug = null;
   appState.hoveredRestaurantSlug = null;
