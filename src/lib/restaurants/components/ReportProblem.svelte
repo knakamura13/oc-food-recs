@@ -30,8 +30,10 @@
 	const choices: ReportType[] = ['closed', 'moved', 'wrong_detail', 'chain', 'duplicate'];
 
 	let dialogEl = $state<HTMLDialogElement | null>(null);
+	let formOpen = $state(false);
 	const captureDialog: Attachment<HTMLDialogElement> = (node) => {
 		dialogEl = node;
+		showDialog(node);
 		return () => {
 			if (dialogEl === node) dialogEl = null;
 		};
@@ -96,7 +98,7 @@
 
 	async function open() {
 		resetFields();
-		if (dialogEl) showDialog(dialogEl);
+		formOpen = true;
 		try {
 			const res = await fetch(`/api/r/${encodeURIComponent(restaurant.slug)}/reports`);
 			if (!res.ok) return;
@@ -129,6 +131,7 @@
 
 	function close() {
 		if (dialogEl) hideDialog(dialogEl);
+		formOpen = false;
 	}
 
 	function payload(): Record<string, string> {
@@ -191,8 +194,7 @@
 
 <button
 	type="button"
-	class="flag"
-	class:page={placement === 'page'}
+	class={['flag', { page: placement === 'page' }]}
 	aria-label="Report a problem with {restaurant.name}"
 	onclick={open}
 >
@@ -200,7 +202,8 @@
 	Report a problem
 </button>
 
-<dialog {@attach captureDialog} aria-labelledby={'report-problem-' + restaurant.slug} onclick={(event) => { if (event.target === dialogEl) close(); }}>
+{#if formOpen}
+<dialog {@attach captureDialog} aria-labelledby={'report-problem-' + restaurant.slug} onclose={() => { formOpen = false; }} onclick={(event) => { if (event.target === dialogEl) close(); }}>
 	<form onsubmit={submit}>
 		<header>
 			<h2 id={'report-problem-' + restaurant.slug}>Report a problem</h2>
@@ -273,6 +276,7 @@
 		</div>
 	</form>
 </dialog>
+{/if}
 
 <style>
 	.flag {
@@ -288,14 +292,24 @@
 		background: #fffcf8;
 		color: #5d4e37;
 		font-weight: 500;
-		min-height: 44px;
+		min-height: auto;
 		box-sizing: border-box;
 	}
 
 	.flag.page {
+		min-height: 44px;
 		padding: 0.5rem 0.8rem;
 		color: #a52e00;
 		text-decoration: none;
+	}
+
+	@media (max-width: 1023px) {
+		.flag:not(.page) {
+			min-height: 44px;
+			min-width: 44px;
+			padding-top: 0;
+			padding-bottom: 0;
+		}
 	}
 
 	.flag:focus-visible,
@@ -336,7 +350,7 @@
 	.search-row { display: flex; gap: 0.5rem; align-items: end; }
 	.search-row .field { flex: 1; }
 	.dialog-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: flex-end; margin-top: 0.75rem; }
-	button {
+	button:not(.flag) {
 		font: inherit;
 		min-height: 44px;
 		padding: 0.4rem 0.8rem;
