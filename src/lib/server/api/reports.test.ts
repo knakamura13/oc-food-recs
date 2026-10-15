@@ -12,6 +12,7 @@ vi.mock('$lib/server/restaurants/visitor-reports', () => ({
 function event(overrides: Record<string, unknown> = {}) {
 	return {
 		params: { slug: 'habit' },
+		url: new URL('http://localhost/api/r/habit/reports'),
 		getClientAddress: () => '127.0.0.1',
 		request: new Request('http://localhost/api/r/habit/reports', {
 			method: 'POST',
@@ -100,5 +101,6 @@ describe('GET /api/r/[slug]/reports', () => {
 		expect(res.status).toBe(200);
 		expect(await res.json()).toEqual({ result: 'ok', pending: ['closed'], nearby: [], matches: [] });
 		expect(res.headers.get('cache-control')).toBe('private, no-store');
+		expect(pendingMock).toHaveBeenCalledWith('habit', null);
 	});
 });
