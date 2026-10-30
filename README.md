@@ -35,7 +35,7 @@ The result is an interactive map + list explorer where you can:
 | Database      | [PostgreSQL](https://www.postgresql.org/) via [Drizzle ORM](https://orm.drizzle.team/), hosted on Railway                                                                                                |
 | Map           | [Leaflet](https://leafletjs.com/) + [Leaflet.markercluster](https://github.com/Leaflet/Leaflet.markercluster)                                                                                            |
 | Search        | [Fuse.js](https://www.fusejs.io/) (fuzzy search)                                                                                                                                                         |
-| Data pipeline | Python — [BeautifulSoup](https://www.crummy.com/software/BeautifulSoup/) scraping, local [Gemma 3](https://ai.google.dev/gemma) extraction via [Ollama](https://ollama.com/), Google/Nominatim geocoding |
+| Data pipeline | Python — [BeautifulSoup](https://www.crummy.com/software/BeautifulSoup/) scraping, local [Gemma 3](https://ai.google.dev/gemma) extraction via [llama.cpp](https://github.com/ggml-org/llama.cpp), Google/Nominatim geocoding |
 | Build         | Vite 8                                                                                                                                                                                                   |
 | Deployment    | [Railway](https://railway.com?referralCode=QCz9lp) (Node.js adapter)                                                                                                                                     |
 
@@ -59,7 +59,7 @@ Aggregate community score and mention count are **not stored** — they're deriv
 The database is populated by the Python pipeline in [`scripts/`](scripts/) (driven by [`reddit_pipeline.py`](scripts/reddit_pipeline.py)):
 
 1. **Scrape & parse** a saved Reddit thread HTML export into a structured comment tree
-2. **Extract** restaurant mentions (name, location, street, cuisine) from each comment with a local [Gemma 3](https://ai.google.dev/gemma) model via [Ollama](https://ollama.com/)
+2. **Extract** restaurant mentions (name, location, street, cuisine) from each comment with a local [Gemma 3](https://ai.google.dev/gemma) model via [llama.cpp](https://github.com/ggml-org/llama.cpp)
 3. **Geocode** each restaurant (Google Geocoding with a Nominatim fallback), caching results in `geocode_cache`
 4. **Upsert** threads, restaurants, and mentions into Postgres, deduplicating restaurants across threads
 
@@ -121,14 +121,15 @@ For ingest and maintenance scripts:
 ```sh
 pip install -e .
 
-# Pull the default extraction model (or set OC_FOOD_RECS_OLLAMA_MODEL)
-ollama pull gemma4:e4b
+# Serve an extraction model (-c must be at least 8192)
+brew install llama.cpp
+llama-server -hf ggml-org/gemma-3-4b-it-GGUF -c 8192 -ngl 99 --jinja --port 8080
 
 # Run pipeline unit tests
 npm run test:pipeline
 ```
 
-Ollama env vars: `OC_FOOD_RECS_OLLAMA_URL`, `OC_FOOD_RECS_OLLAMA_MODEL`, `OC_FOOD_RECS_OLLAMA_THINK`. See [`.env.example`](.env.example).
+LLM env vars: `OC_FOOD_RECS_LLM_URL`, `OC_FOOD_RECS_LLM_MODEL`, `OC_FOOD_RECS_LLM_THINK`. See [`.env.example`](.env.example).
 
 ### Testing
 

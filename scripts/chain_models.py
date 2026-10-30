@@ -44,11 +44,11 @@ GEMMA_OUTPUT_TOKENS = 2048
 
 
 class Models:
-    def __init__(self, cache: Path, ollama_url='http://127.0.0.1:11434/api/chat'):
+    def __init__(self, cache: Path, llm_url='http://127.0.0.1:8080/v1/chat/completions'):
         self.cache = cache
-        self.ollama_url = ollama_url
-        if urlsplit(ollama_url).hostname not in {'127.0.0.1', 'localhost', '::1'}:
-            raise ValueError('Gemma must use a loopback Ollama server')
+        self.llm_url = llm_url
+        if urlsplit(llm_url).hostname not in {'127.0.0.1', 'localhost', '::1'}:
+            raise ValueError('Gemma must use a loopback LLM server')
         self._key = None
         self._cache_locks = {}
         self._lock_guard = threading.Lock()
@@ -142,9 +142,11 @@ class Models:
     def gemma(self, prompt, probe=False):
         payload = {
             'model': GEMMA_MODEL,
-            'think': False,
-            'format': 'json',
+            'chat_template_kwargs': {'enable_thinking': False},
+            'response_format': {'type': 'json_object'},
             'stream': False,
+            'temperature': 0,
+            'max_tokens': 160 if probe else GEMMA_OUTPUT_TOKENS,
             'messages': [
                 {
                     'role': 'system',
@@ -152,18 +154,18 @@ class Models:
                 },
                 {'role': 'user', 'content': prompt},
             ],
-            'options': {
-                'temperature': 0,
-                'num_ctx': GEMMA_CONTEXT_TOKENS,
-                'num_predict': 160 if probe else GEMMA_OUTPUT_TOKENS,
-            },
-            'keep_alive': '30m',
         }
 
         def call():
-            r = requests.post(self.ollama_url, json=payload, timeout=(15, 300))
+            r = requests.post(self.llm_url, json=payload, timeout=(15, 300))
             r.raise_for_status()
-            body = r.json()
+            choice = (r.json().get('choices') or [{}])[0]
+            # Keep the {'done', 'message'} shape parse_gemma and the evaluators read.
+            body = {
+                'done': choice.get('finish_reason') == 'stop',
+                'done_reason': choice.get('finish_reason'),
+                'message': {'content': (choice.get('message') or {}).get('content') or ''},
+            }
             parse_gemma(body)
             return body
 

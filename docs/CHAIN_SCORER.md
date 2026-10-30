@@ -9,7 +9,7 @@ changes belong to #201.
 Use a dedicated Python environment. Install the pipeline dependencies and the
 optional `chain-scorer` extra from `pyproject.toml`. The scorer uses psycopg,
 DuckDB/httpfs, requests, ijson and tldextract. Tests use synthetic data and need no
-network, Ollama or database:
+network, LLM server or database:
 
 ```sh
 python3 -m pip install -e '.[chain-scorer]'
@@ -54,7 +54,7 @@ versions are not assumed to exist in this older backup.
   platforms and third-party directories/press sites are ineligible. Each numeric
   candidate is checked in its quoted context, independently of whole-page chain
   evidence; postal codes, closed sites and unrelated counts do not qualify.
-- Gemma uses local Ollama `gemma4:31b`, `think: false`, JSON, temperature 0.
+- Gemma uses a local llama-server (llama.cpp) serving `gemma4:31b` with `-c 8192` or more, thinking disabled, JSON, temperature 0.
   It sees supplied evidence with URLs and publisher checks; a quoted numeric count
   must actually occur in a source. Alternatively, six or more distinct operating
   street-address entries can establish a positive lower bound. Each entry must

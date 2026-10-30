@@ -59,21 +59,31 @@ _last_geocode_ts = 0.0
 _nominatim_lock = threading.Lock()
 
 
-def _env(name: str, legacy: str, default: str) -> str:
-    """Read env var, preferring OC_FOOD_RECS_* over legacy unprefixed name."""
-    return os.environ.get(name) or os.environ.get(legacy) or default
+def _env(*names: str, default: str) -> str:
+    """First set env var among `names` (canonical first, then legacy aliases)."""
+    return next((os.environ[n] for n in names if os.environ.get(n)), default)
 
 
-OLLAMA_URL = _env(
-    "OC_FOOD_RECS_OLLAMA_URL", "OLLAMA_URL", "http://127.0.0.1:11434/api/chat"
+# Any OpenAI-style chat server: llama-server (llama.cpp) by default, Ollama also works.
+# The OC_FOOD_RECS_OLLAMA_* / OLLAMA_* names are legacy aliases from the Ollama days.
+LLM_URL = _env(
+    "OC_FOOD_RECS_LLM_URL", "OC_FOOD_RECS_OLLAMA_URL", "OLLAMA_URL",
+    default="http://127.0.0.1:8080/v1/chat/completions",
 )
-OLLAMA_MODEL = _env("OC_FOOD_RECS_OLLAMA_MODEL", "OLLAMA_MODEL", "gemma4:e4b")
-# Reasoning-capable tags (e.g. gemma4:26b) emit a chain-of-thought that consumes the
-# num_predict budget and leaves the JSON answer empty -- silently dropping the record.
-# Sending think=false makes every model answer directly; it is a no-op on non-thinking
-# tags like gemma4:e4b. Override with OC_FOOD_RECS_OLLAMA_THINK=true|false|omit.
-_THINK_ENV = os.environ.get("OC_FOOD_RECS_OLLAMA_THINK", "false").strip().lower()
-OLLAMA_THINK = {"true": True, "false": False, "omit": None, "": None}.get(
+LLM_MODEL = _env(
+    "OC_FOOD_RECS_LLM_MODEL", "OC_FOOD_RECS_OLLAMA_MODEL", "OLLAMA_MODEL",
+    default="gemma4:e4b",
+)
+# Reasoning-capable models (e.g. gemma4:26b) emit a chain-of-thought that consumes the
+# max_tokens budget and leaves the JSON answer empty -- silently dropping the record.
+# think=false sends chat_template_kwargs.enable_thinking=false so every model answers
+# directly; it is a no-op on non-thinking models. llama-server needs --jinja for it.
+# Override with OC_FOOD_RECS_LLM_THINK=true|false|omit.
+_THINK_ENV = (
+    _env("OC_FOOD_RECS_LLM_THINK", "OC_FOOD_RECS_OLLAMA_THINK", default="false")
+    .strip().lower()
+)
+LLM_THINK = {"true": True, "false": False, "omit": None, "": None}.get(
     _THINK_ENV, False
 )
 
@@ -937,39 +947,62 @@ def normalize_extractor_result(result: Any) -> tuple[list[dict[str, Any]], str |
     return cleaned, raw
 
 
+def llm_chat(
+    messages: list[dict[str, str]],
+    *,
+    model: str | None = None,
+    think: bool | None = LLM_THINK,
+    max_tokens: int = 512,
+    json_mode: bool = False,
+    timeout: float = 180,
+) -> tuple[str, str, int]:
+    """One deterministic chat completion against LLM_URL.
+
+    Returns (content, finish_reason, reasoning_chars). finish_reason is "length"
+    when max_tokens cut the answer off."""
+    payload: dict[str, Any] = {
+        "model": model or LLM_MODEL,
+        "messages": messages,
+        "stream": False,
+        "temperature": 0.0,
+        "max_tokens": max_tokens,
+    }
+    if json_mode:
+        payload["response_format"] = {"type": "json_object"}
+    if think is not None:
+        payload["chat_template_kwargs"] = {"enable_thinking": think}
+    request = urllib.request.Request(
+        LLM_URL,
+        data=json.dumps(payload).encode(),
+        headers={"Content-Type": "application/json"},
+    )
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        choice = (json.loads(response.read()).get("choices") or [{}])[0]
+    message = choice.get("message") or {}
+    return (
+        (message.get("content") or "").strip(),
+        choice.get("finish_reason") or "",
+        len(message.get("reasoning_content") or ""),
+    )
+
+
 def default_extract_entities(
     comment_text: str,
     comment: dict[str, Any] | None = None,
     manifest: dict[str, Any] | None = None,
 ) -> tuple[list[dict[str, Any]], str]:
-    payload = json.dumps(
-        {
-            "model": OLLAMA_MODEL,
-            "messages": [
+    try:
+        raw, _, _ = llm_chat(
+            [
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": comment_text},
-            ],
-            "stream": False,
-            "options": {"temperature": 0.0, "num_predict": 512},
-            **({"think": OLLAMA_THINK} if OLLAMA_THINK is not None else {}),
-        }
-    ).encode()
-
-    request = urllib.request.Request(
-        OLLAMA_URL,
-        data=payload,
-        headers={"Content-Type": "application/json"},
-    )
-
-    try:
-        with urllib.request.urlopen(request, timeout=180) as response:
-            body = json.loads(response.read())
+            ]
+        )
     except Exception as exc:
         raise RuntimeError(
-            f"Unable to reach Ollama at {OLLAMA_URL}. Start the server or set OC_FOOD_RECS_OLLAMA_URL/OC_FOOD_RECS_OLLAMA_MODEL. {exc}"
+            f"Unable to reach the LLM server at {LLM_URL}. Start llama-server or set OC_FOOD_RECS_LLM_URL/OC_FOOD_RECS_LLM_MODEL. {exc}"
         ) from exc
 
-    raw = body.get("message", {}).get("content", "").strip()
     cleaned = raw
     if "```" in cleaned:
         match = re.search(r"```(?:json)?\s*(.*?)```", cleaned, re.DOTALL)
@@ -1613,7 +1646,7 @@ def build_thread_dataset(
             "source_post_id": parsed_thread["post"]["id"],
             "total_restaurants": len(restaurants),
             "total_comments_processed": len(comments),
-            "model_used": OLLAMA_MODEL,
+            "model_used": LLM_MODEL,
             "kept_endorsement_types": sorted(ENDORSEMENT_TYPES),
         },
     }

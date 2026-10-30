@@ -5,7 +5,7 @@
 - Node.js 18+
 - Python 3.9+
 - PostgreSQL (`DATABASE_URL` required — no mock/fallback data path)
-- [Ollama](https://ollama.com/) for pipeline extraction (local only)
+- [llama.cpp](https://github.com/ggml-org/llama.cpp) (`llama-server`) for pipeline extraction (local only)
 
 ## Environment setup
 
@@ -20,14 +20,15 @@ cp .env.example .env
 cp ../../../.env .env   # from .claude/worktrees/<name>/
 ```
 
-### Ollama (pipeline only)
+### llama.cpp (pipeline only)
 
 ```sh
-ollama pull gemma4:e4b
-# Or set OC_FOOD_RECS_OLLAMA_MODEL to your preferred tag
+brew install llama.cpp
+llama-server -hf ggml-org/gemma-3-4b-it-GGUF -c 8192 -ngl 99 --jinja --port 8080
+# Or pass any GGUF with -m. -c must be at least 8192 (the chain scorer's prompt budget).
 ```
 
-Env vars: `OC_FOOD_RECS_OLLAMA_URL`, `OC_FOOD_RECS_OLLAMA_MODEL`, `OC_FOOD_RECS_OLLAMA_THINK`. Legacy `OLLAMA_URL` / `OLLAMA_MODEL` also work.
+Env vars: `OC_FOOD_RECS_LLM_URL`, `OC_FOOD_RECS_LLM_MODEL`, `OC_FOOD_RECS_LLM_THINK`. The legacy `OC_FOOD_RECS_OLLAMA_*` and `OLLAMA_URL` / `OLLAMA_MODEL` names also work.
 
 ## Install
 

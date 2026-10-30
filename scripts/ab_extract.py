@@ -5,7 +5,7 @@ Subcommands
 -----------
   dump-comments  Parse raw/thread.json -> ab-test/comments.jsonl (+ body-only
                  shards for the blind oracle). No network, no model.
-  run-gemma      Call the REAL gemma4 (Ollama) on each comment body via the
+  run-gemma      Call the REAL gemma4 (llama-server) on each comment body via the
                  pipeline's own default_extract_entities() -> ab-test/gemma4.jsonl.
 
 This reuses reddit_pipeline's parsing + extraction verbatim and writes ONLY
@@ -19,7 +19,6 @@ import json
 import re
 import sys
 import tqdm
-import urllib.request
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -76,32 +75,22 @@ def cmd_dump(args) -> None:
 
 
 def _extract_with(body: str, model: str, think):
-    """Call Ollama with an optional model override and `think` flag.
+    """Call the LLM server with an optional model override and `think` flag.
 
     Mirrors reddit_pipeline.default_extract_entities (same prompt/params/parsing)
     but lets us A/B alternate models. `think=False` is required for reasoning
     tags like gemma4:26b, whose chain-of-thought otherwise consumes num_predict
     and leaves `content` empty. Returns (entities, raw, thinking_len).
     """
-    payload = {
-        "model": model,
-        "messages": [
+    raw, _, thinking_len = rp.llm_chat(
+        [
             {"role": "system", "content": rp.SYSTEM_PROMPT},
             {"role": "user", "content": body},
         ],
-        "stream": False,
-        "options": {"temperature": 0.0, "num_predict": 512},
-    }
-    if think is not None:
-        payload["think"] = think
-    req = urllib.request.Request(
-        rp.OLLAMA_URL, data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"}
+        model=model,
+        think=think,
+        timeout=300,
     )
-    with urllib.request.urlopen(req, timeout=300) as response:
-        body_json = json.loads(response.read())
-    msg = body_json.get("message", {})
-    raw = (msg.get("content", "") or "").strip()
-    thinking_len = len(msg.get("thinking") or "")
     cleaned = raw
     if "```" in cleaned:
         match = re.search(r"```(?:json)?\s*(.*?)```", cleaned, re.DOTALL)
@@ -121,7 +110,7 @@ def cmd_gemma(args) -> None:
     if args.limit:
         rows = rows[: args.limit]
     out = AB / args.out
-    model = args.model or rp.OLLAMA_MODEL
+    model = args.model or rp.LLM_MODEL
     think = {"omit": None, "true": True, "false": False}[args.think]
     done = ok = empty_content = 0
     pbar = tqdm.tqdm(rows, desc="Extracting", unit="comment")
@@ -139,7 +128,7 @@ def cmd_gemma(args) -> None:
             fh.flush()
             done += 1
     pbar.close()
-    print(f"model = {model}  think = {args.think}  url = {rp.OLLAMA_URL}")
+    print(f"model = {model}  think = {args.think}  url = {rp.LLM_URL}")
     print(f"wrote {done} rows ({ok} ok, {empty_content} empty-content) -> {out}")
 
 
@@ -154,9 +143,9 @@ def main() -> None:
     g = sub.add_parser("run-gemma", help="run real gemma4 over the comments")
     g.add_argument("--out", default="gemma4.jsonl")
     g.add_argument("--limit", type=int, default=0, help="0 = all")
-    g.add_argument("--model", default=None, help="model tag (default: OC_FOOD_RECS_OLLAMA_MODEL)")
+    g.add_argument("--model", default=None, help="model tag (default: OC_FOOD_RECS_LLM_MODEL)")
     g.add_argument("--think", default="omit", choices=["omit", "true", "false"],
-                   help="set the Ollama `think` flag; use false for gemma4:26b")
+                   help="set the `think` flag; use false for gemma4:26b")
     g.set_defaults(func=cmd_gemma)
 
     args = ap.parse_args()

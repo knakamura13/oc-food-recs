@@ -37,7 +37,7 @@ sudo pg_ctlcluster 16 main start   # idempotent; safe if already running
 
 ### Not available in this environment
 
-The Python **ingest** pipeline (`scripts/reddit_pipeline.py`) needs a local **Ollama** LLM and
+The Python **ingest** pipeline (`scripts/reddit_pipeline.py`) needs a local **llama-server** (llama.cpp) LLM and
 optionally `GOOGLE_MAPS_API_KEY` for geocoding — neither is provisioned. The pipeline **unit tests**
 (`npm run test:pipeline`) do not require them and pass standalone. Full ingestion is out of scope
 for cloud dev unless those are added.

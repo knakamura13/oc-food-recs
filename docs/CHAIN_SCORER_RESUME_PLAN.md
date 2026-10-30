@@ -24,7 +24,7 @@ draft PR #206. Evaluation artifacts live in the main checkout's ignored
 
 ## Model and timing
 
-Use local Ollama `gemma4:31b`, `think: false`, JSON output, temperature 0,
+Use a local llama-server serving `gemma4:31b`, thinking disabled, JSON output, temperature 0,
 `num_ctx: 8192`, `num_predict: 2048`, sequential requests and the existing model
 cache. The comparison probe mode uses `num_predict: 160`. Jev remains pinned to
 `typesafe/jev-1.13`; matching successful requests should reuse its cache.
