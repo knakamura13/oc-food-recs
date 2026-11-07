@@ -34,7 +34,10 @@ async function interceptLeafletJavaScript(
 	};
 
 	await page.route(javaScriptPattern, handleJavaScript);
-	return () => page.unroute(javaScriptPattern, handleJavaScript);
+	// unroute() leaves a script request already inside handleJavaScript running, and when the
+	// test ends the context closes under it ("Response has been disposed"). Only unrouteAll
+	// can ignore those. It also drops the analytics stub, but only once the test body is done.
+	return () => page.unrouteAll({ behavior: 'ignoreErrors' });
 }
 
 const mobileViewports = [
