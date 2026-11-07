@@ -2,6 +2,7 @@ import {
 	bigint,
 	bigserial,
 	boolean,
+	check,
 	customType,
 	index,
 	integer,
@@ -221,6 +222,59 @@ export const events = pgTable(
 	})
 );
 
+/**
+ * One visitor problem report for an existing restaurant. Hidden from public pages until an
+ * admin accepts or dismisses it. Acceptance has a fixed consequence per type.
+ */
+export const visitorReports = pgTable(
+	'visitor_reports',
+	{
+		id: bigserial('id', { mode: 'number' }).primaryKey(),
+		restaurantId: bigint('restaurant_id', { mode: 'number' })
+			.notNull()
+			.references(() => restaurants.id, { onDelete: 'cascade' }),
+		type: text('type').notNull(),
+		status: text('status').default('pending').notNull(),
+		note: text('note'),
+		proposedName: text('proposed_name'),
+		proposedLocation: text('proposed_location'),
+		proposedStreet: text('proposed_street'),
+		proposedCuisine: text('proposed_cuisine'),
+		proposedLat: real('proposed_lat'),
+		proposedLng: real('proposed_lng'),
+		proposedMapsUrl: text('proposed_maps_url'),
+		duplicateRestaurantId: bigint('duplicate_restaurant_id', { mode: 'number' }).references(
+			() => restaurants.id,
+			{ onDelete: 'set null' }
+		),
+		duplicateName: text('duplicate_name'),
+		duplicateSlug: text('duplicate_slug'),
+		subjectName: text('subject_name'),
+		subjectSlug: text('subject_slug'),
+		fieldDecisions: jsonb('field_decisions')
+			.$type<Record<string, string>>()
+			.default({})
+			.notNull(),
+		createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+		resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+	},
+	(table) => [
+		index('visitor_reports_restaurant_idx').on(table.restaurantId),
+		index('visitor_reports_status_created_idx').on(table.status, table.createdAt),
+		uniqueIndex('visitor_reports_one_pending')
+			.on(table.restaurantId, table.type)
+			.where(sql`${table.status} = 'pending'`),
+		check(
+			'visitor_reports_type_check',
+			sql`${table.type} IN ('closed', 'moved', 'wrong_detail', 'chain', 'duplicate')`
+		),
+		check(
+			'visitor_reports_status_check',
+			sql`${table.status} IN ('pending', 'accepted', 'dismissed')`
+		),
+	]
+);
+
 export type RestaurantAlias = typeof restaurantAliases.$inferSelect;
 export type MergeLogEntry = typeof mergeLog.$inferSelect;
 
@@ -234,3 +288,5 @@ export type GeocodeCache = typeof geocodeCache.$inferSelect;
 export type NewGeocodeCache = typeof geocodeCache.$inferInsert;
 export type ExcludedBrand = typeof excludedBrands.$inferSelect;
 export type NewExcludedBrand = typeof excludedBrands.$inferInsert;
+export type VisitorReport = typeof visitorReports.$inferSelect;
+export type NewVisitorReport = typeof visitorReports.$inferInsert;

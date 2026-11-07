@@ -6,6 +6,7 @@ import {
   mergeLog,
   restaurantAliases,
   restaurants,
+  visitorReports,
 } from "$lib/server/db/schema";
 import { and, eq, ne, sql } from "drizzle-orm";
 
@@ -70,7 +71,21 @@ export async function mergeRestaurants(
   if (winnerId === loserId)
     throw new Error("Cannot merge a restaurant with itself.");
 
-  await db.transaction(async (tx) => {
+  await db.transaction((tx) => applyRestaurantMerge(tx, winnerId, loserId));
+}
+
+type MergeTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/** Move comments, aliases, and visitor reports onto the winner, then delete the loser row. */
+export async function applyRestaurantMerge(
+  tx: MergeTx,
+  winnerId: number,
+  loserId: number,
+): Promise<void> {
+  if (winnerId === loserId)
+    throw new Error("Cannot merge a restaurant with itself.");
+
+  {
     const [winner] = await tx
       .select()
       .from(restaurants)
@@ -163,8 +178,26 @@ export async function mergeRestaurants(
       })),
     );
 
+    await tx
+      .update(visitorReports)
+      .set({ status: "dismissed", resolvedAt: sql`now()` })
+      .where(
+        and(
+          eq(visitorReports.status, "pending"),
+          sql`(${visitorReports.restaurantId} = ${loserId} OR ${visitorReports.duplicateRestaurantId} = ${loserId})`,
+        ),
+      );
+    await tx
+      .update(visitorReports)
+      .set({ restaurantId: winnerId })
+      .where(eq(visitorReports.restaurantId, loserId));
+    await tx
+      .update(visitorReports)
+      .set({ duplicateRestaurantId: null })
+      .where(eq(visitorReports.duplicateRestaurantId, loserId));
+
     await tx.delete(restaurants).where(eq(restaurants.id, loserId));
-  });
+  }
 }
 
 /**

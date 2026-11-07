@@ -7,7 +7,8 @@
 		{ href: '/admin/geocode', label: 'Geocode Health' },
 		{ href: '/admin/exclusions', label: 'Exclusions' },
 		{ href: '/admin/duplicates', label: 'Duplicates' },
-		{ href: '/admin/mentions', label: 'Takedowns' }
+		{ href: '/admin/mentions', label: 'Takedowns' },
+		{ href: '/admin/reports', label: 'Reports' }
 	];
 
 	function isActive(href: string): boolean {

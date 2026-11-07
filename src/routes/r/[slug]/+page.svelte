@@ -1,5 +1,6 @@
 <script lang="ts">
 	import LocationScope from '$lib/restaurants/components/LocationScope.svelte';
+	import ReportProblem from '$lib/restaurants/components/ReportProblem.svelte';
 	import type { PageData } from './$types';
 	import { sourceUrl } from '$lib/restaurants/source-url';
 	import { googleMapsUrl } from '$lib/restaurants/maps-url';
@@ -30,7 +31,8 @@
 			Community score {restaurant.aggregate_score}, based on shared upvotes and repeat contributors.</p>
 		<p class="context">Recommendations describe the experience when the comment was posted. Check current details before visiting.</p>
 		<div class="actions">{#if restaurant.location_scope !== 'multiple_locations'}<a href={googleMapsUrl(restaurant)} target="_blank" rel="noopener noreferrer">Find on Google Maps</a>{/if}
-			<a href={`/?restaurant=${encodeURIComponent(restaurant.slug)}`}>Explore in the list</a></div>
+			<a href={`/?restaurant=${encodeURIComponent(restaurant.slug)}`}>Explore in the list</a>
+			<ReportProblem placement="page" restaurant={{ slug: restaurant.slug, name: restaurant.name, location: restaurant.location, street: restaurant.street, cuisine: restaurant.cuisine }} /></div>
 	</header>
 	<section aria-labelledby="sources-heading">
 		<h2 id="sources-heading">What the community says</h2>

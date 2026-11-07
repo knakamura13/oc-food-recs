@@ -39,8 +39,9 @@
 			Keep chains and corporate restaurant groups off the public Mom & pop set. The curated
 			registry and reviewed, identity-matched location evidence auto-exclude verified chains.
 			LLM, location-count and city-density hints do not create review requests.
-			Unverified restaurants remain visible. Public “Report a chain” flags
-			also queue review without hiding the spot. Rows already marked as likely chains
+			Unverified restaurants remain visible. New visitor reports are reviewed on the Reports
+			tab. A restaurant stays public until you accept a closure or chain report. Older one-click chain flags still queue here
+			without hiding the spot. Rows already marked as likely chains
 			remain hidden until their confidence is refreshed or you keep them active.
 			Confirming or restoring a restaurant locks
 			that decision so re-ingests and the registry sweep won't undo it.

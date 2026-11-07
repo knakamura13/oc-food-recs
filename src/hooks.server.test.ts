@@ -12,7 +12,7 @@ function run(method: string, path: string, headers: Record<string, string> = {})
 
 describe('handle cache-control', () => {
 	it('never lets shared caches keep non-GET responses', async () => {
-		const res = await run('POST', '/api/r/some-slug/report-chain');
+		const res = await run('POST', '/api/r/some-slug/reports');
 		expect(res.headers.get('cache-control')).toBe('private, no-store');
 	});
 

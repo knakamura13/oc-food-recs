@@ -132,8 +132,8 @@
 			</li>
 			<li>
 				<strong>Extraction is automatic.</strong> A model can misread a name or merge two
-				restaurants. Use “Report a chain” on a card, or write to the address below, to flag a
-				mistake.
+				restaurants. Use “Report a problem” on a restaurant to flag a closure, a move, a wrong
+				detail, a chain, or a duplicate.
 			</li>
 		</ul>
 	</section>
@@ -182,8 +182,10 @@
 		</p>
 		<p>
 			Nothing identifies a visitor. There are no cookies, no accounts and no third-party scripts.
-			We do not store IP addresses, browser details or any visitor ID, and never what you typed or
-			which restaurant you looked at. Your saved list stays in your own browser.
+			We do not store IP addresses, browser details or any visitor ID. Analytics never include
+			what you typed or which restaurant you looked at. A problem report is separate: it stores
+			the restaurant you flagged and the details you chose to send, and nothing that identifies
+			you. Your saved list stays in your own browser.
 		</p>
 	</section>
 

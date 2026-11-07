@@ -21,10 +21,8 @@ export const appState = $state({
   showUnmapped: false,
   // Device-local "Saved" filter (see saved-restaurants.svelte.ts). Session-only:
   // deliberately excluded from URL sync since saved lists don't travel with links.
-  showSavedOnly: false,
-  // Slugs reported this session; disable repeat reports without hiding the restaurant.
-  reportedChainSlugs: [] as string[],
-  sortKey: "score" as SortKey,
+	showSavedOnly: false,
+	sortKey: "score" as SortKey,
   sortDirection: "desc" as "asc" | "desc",
   selectedRestaurantSlug: null as string | null,
   hoveredRestaurantSlug: null as string | null,
