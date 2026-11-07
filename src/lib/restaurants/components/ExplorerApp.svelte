@@ -115,6 +115,17 @@
 	let sheetDragPx = $state<number | null>(null);
 	/** What the open map shows right now; the list follows it instead of a Search this area button. */
 	let mapBounds = $state<MapViewBounds | null>(null);
+	/**
+	 * Bumped when the list re-scopes because the map moved for a selection (pin tap, row tap,
+	 * Show on map). Only then does the list bring the open row back into view; a visitor who
+	 * scrolled away from it and pans keeps their scroll position.
+	 */
+	let revealOpenRowRequest = $state(0);
+
+	function handleMapBoundsChange(bounds: MapViewBounds, { selectionMoved }: { selectionMoved: boolean }) {
+		mapBounds = bounds;
+		if (selectionMoved) revealOpenRowRequest += 1;
+	}
 	let viewportHeight = $state(0);
 	let controlsHeight = $state(0);
 	let mapDesktopHovered = $state(false);
@@ -835,7 +846,7 @@
 					<Map
 						restaurants={filteredRestaurants}
 						{mapExpanded}
-						onBoundsChange={(bounds) => (mapBounds = bounds)}
+						onBoundsChange={handleMapBoundsChange}
 						insets={mapExpanded ? { top: controlsHeight, bottom: sheetHeightPx } : undefined}
 					/>
 				</div>
@@ -883,7 +894,7 @@
 				<RestaurantList
 					restaurants={listRestaurants}
 					emptyForMapArea={areaScoped && filteredRestaurants.length > 0}
-					keepOpenRowInView={areaScoped}
+					revealOpenRow={revealOpenRowRequest}
 					totalCount={allRestaurants.length}
 					onShowOnMap={openMobileMap}
 					threadsById={threadsById}

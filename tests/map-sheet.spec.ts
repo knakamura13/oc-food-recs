@@ -227,6 +227,52 @@ for (const entry of ['row', 'Show on map'] as const) {
 	});
 }
 
+test('panning after scrolling away from an open row leaves the list where the visitor put it', async ({ page }) => {
+	await openMap(page, { width: 320, height: 568 });
+	await expect(page.locator('.leaflet-marker-icon').first()).toBeVisible({ timeout: 30_000 });
+	await page.locator('.sheet-grabber').click();
+	await page.locator('.list-pane.sheet .row-toggle').first().click();
+	await expect(page.locator('.rec-marker.is-active')).toBeVisible({ timeout: 30_000 });
+	await expect.poll(() => uncovered(page, '.rec-tooltip'), { timeout: 10_000 }).toBe(true);
+	// Let the focus move and the list's re-scope to the new area settle.
+	await page.waitForTimeout(1000);
+
+	// Scroll the open row's header out of view.
+	const scroller = page.locator('.list-pane.sheet .list-scroll');
+	const away = await scroller.evaluate((el) => {
+		el.scrollTop = el.scrollHeight;
+		return el.scrollTop;
+	});
+	expect(away, 'the open row is tall enough to scroll its header away').toBeGreaterThan(80);
+
+	// Drag the map a little by its tiles, clear of pins, labels and controls.
+	const start = await page.evaluate(() => {
+		const top = document.querySelector('.controls-bar')!.getBoundingClientRect().bottom + 8;
+		const bottom = document.querySelector('.list-pane.sheet')!.getBoundingClientRect().top - 30;
+		for (let y = top; y < bottom; y += 12) {
+			for (let x = 70; x < window.innerWidth - 120; x += 12) {
+				const hit = document.elementFromPoint(x, y);
+				if (hit?.matches('.leaflet-container') || hit?.closest('.leaflet-tile-pane')) return { x, y };
+			}
+		}
+		return null;
+	});
+	expect(start, 'a bare patch of map to drag').not.toBeNull();
+	const pinX = () => page.locator('.rec-marker.is-active').evaluate((el) => el.getBoundingClientRect().left);
+	const pinBefore = await pinX();
+	await page.mouse.move(start!.x, start!.y);
+	await page.mouse.down();
+	await page.mouse.move(start!.x + 40, start!.y, { steps: 5 });
+	await page.mouse.up();
+	await expect.poll(pinX, { message: 'the drag panned the map' }).toBeGreaterThan(pinBefore + 20);
+
+	// The list re-scopes ~150ms after the map settles; a scroll back would land well within this.
+	await page.waitForTimeout(1200);
+	const after = await scroller.evaluate((el) => el.scrollTop);
+	expect(Math.abs(after - away)).toBeLessThanOrEqual(2);
+	await expect(page.locator('.rec-marker.is-active')).toBeVisible();
+});
+
 test('Escape closes the map from the sheet and restores the Map button', async ({ page }, testInfo) => {
 	test.skip(testInfo.project.name === 'iPhone WebKit', 'WebKit does not focus buttons by default');
 	await openMap(page);

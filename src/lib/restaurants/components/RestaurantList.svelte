@@ -51,8 +51,11 @@
 		commentQuotes?: Record<string, string>;
 		/** True when the list is empty only because the map's visible area holds nothing. */
 		emptyForMapArea?: boolean;
-		/** The rows follow the map, so keep an open row's header in view when they change. */
-		keepOpenRowInView?: boolean;
+		/**
+		 * Bumped each time the rows re-scoped because the map moved for a selection; the open
+		 * row is then brought back into view if the change pushed it out.
+		 */
+		revealOpenRow?: number;
 	}
 
 	let {
@@ -62,7 +65,7 @@
 		threadsById = {},
 		commentQuotes = {},
 		emptyForMapArea = false,
-		keepOpenRowInView = false
+		revealOpenRow = 0
 	}: Props = $props();
 
 	let priorVisitMs = $state<number | null>(null);
@@ -280,10 +283,14 @@
 
 	// Opening a row under the phone map moves the map to it, and the list then re-scopes to the
 	// new area. The scroll offset survives while the rows above the open one change, which left
-	// it scrolled out of view. Bring its header back only when it is not already showing.
+	// it scrolled out of view. Bring its header back only when it is not already showing, and
+	// only for that selection move: after the visitor's own pans their scroll position stands.
+	let revealHandled = untrack(() => revealOpenRow);
 	$effect(() => {
-		const rows = sortedRows;
-		if (!keepOpenRowInView || !virtualizer) return;
+		const request = revealOpenRow;
+		if (request === revealHandled || !virtualizer) return;
+		revealHandled = request;
+		const rows = untrack(() => sortedRows);
 		const slug = untrack(() => appState.selectedRestaurantSlug);
 		const index = slug ? rows.findIndex((r) => r.slug === slug) : -1;
 		if (index < 0) return;

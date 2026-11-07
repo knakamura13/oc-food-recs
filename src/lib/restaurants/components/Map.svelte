@@ -12,8 +12,12 @@
 	interface Props {
 		restaurants: Restaurant[];
 		mapExpanded: boolean;
-		/** Called (debounced) with the visible area each time the map settles, while expanded. */
-		onBoundsChange?: (bounds: MapViewBounds) => void;
+		/**
+		 * Called (debounced) with the visible area each time the map settles, while expanded.
+		 * `selectionMoved` is true when the map itself moved for a selection (focusing it, or
+		 * panning its label into view) rather than the visitor panning or a filter refitting.
+		 */
+		onBoundsChange?: (bounds: MapViewBounds, detail: { selectionMoved: boolean }) => void;
 		/** Space covered by floating chrome; fits keep pins out from under it. */
 		insets?: { top: number; bottom: number };
 	}
@@ -22,20 +26,40 @@
 
 	const BOUNDS_EMIT_DELAY_MS = 150;
 	let boundsEmitTimer: ReturnType<typeof setTimeout> | null = null;
+	/** Set just before a move made for a selection; its moveend hands it to the next emit. */
+	let selectionMoveInFlight = false;
+	let boundsAfterSelectionMove = false;
+
+	function handleMoveEnd() {
+		if (selectionMoveInFlight) {
+			selectionMoveInFlight = false;
+			boundsAfterSelectionMove = true;
+		}
+		scheduleBoundsEmit();
+	}
+
 	function scheduleBoundsEmit() {
 		// Only the phone sheet follows the map; desktop pans need no timer.
-		if (!onBoundsChange || !mapExpanded) return;
+		if (!onBoundsChange || !mapExpanded) {
+			boundsAfterSelectionMove = false;
+			return;
+		}
 		if (boundsEmitTimer) clearTimeout(boundsEmitTimer);
 		boundsEmitTimer = setTimeout(() => {
 			boundsEmitTimer = null;
+			const selectionMoved = boundsAfterSelectionMove;
+			boundsAfterSelectionMove = false;
 			if (destroyed || !leafletMap || !mapExpanded) return;
 			const view = leafletMap.getBounds();
-			onBoundsChange?.({
-				south: view.getSouth(),
-				west: view.getWest(),
-				north: view.getNorth(),
-				east: view.getEast()
-			});
+			onBoundsChange?.(
+				{
+					south: view.getSouth(),
+					west: view.getWest(),
+					north: view.getNorth(),
+					east: view.getEast()
+				},
+				{ selectionMoved }
+			);
 		}, BOUNDS_EMIT_DELAY_MS);
 	}
 
@@ -111,6 +135,7 @@
 		const token = ++focusToken;
 		const marker = markers.get(slug);
 		const view = focusView(lat, lng);
+		selectionMoveInFlight = true;
 		if (!marker || !clusterGroupRef) {
 			leafletMap.setView(view.center, view.zoom, { animate: !reduceMotion() });
 			return;
@@ -173,6 +198,8 @@
 		pendingFocus = null;
 		if (boundsEmitTimer) clearTimeout(boundsEmitTimer);
 		boundsEmitTimer = null;
+		selectionMoveInFlight = false;
+		boundsAfterSelectionMove = false;
 		if (locationMarker && leafletMap) leafletMap.removeLayer(locationMarker);
 		locationMarker = null;
 		// markercluster does not cancel its internal chunk timer on removal.
@@ -234,7 +261,7 @@
 			leafletMap.on('click', () => {
 				appState.selectedRestaurantSlug = null;
 			});
-			leafletMap.on('moveend', scheduleBoundsEmit);
+			leafletMap.on('moveend', handleMoveEnd);
 
 			updateMarkers();
 			mapInitialized = true;
@@ -488,7 +515,9 @@
 	});
 
 	// Leaflet Tooltip has no Popup autoPan option: measure its actual overflow.
-	function panTooltipIntoView(tooltip: any) {
+	// `forSelection`: the label belongs to the selected restaurant, so a pan counts as a move
+	// made for the selection (the list then keeps that restaurant's open row in view).
+	function panTooltipIntoView(tooltip: any, forSelection = false) {
 		if (tooltipPanFrame !== null) cancelAnimationFrame(tooltipPanFrame);
 		tooltipPanFrame = requestAnimationFrame(() => {
 			tooltipPanFrame = null;
@@ -508,7 +537,9 @@
 			const tipBottom = Math.max(tip.bottom, pin?.bottom ?? tip.bottom);
 			const dx = Math.max(0, tip.right - viewport.right + gutter) + Math.min(0, tip.left - viewport.left - gutter);
 			const dy = Math.max(0, tipBottom - bottom + gutter) + Math.min(0, tipTop - top - gutter);
-			if (dx || dy) leafletMap.panBy([dx, dy], { animate: !reduceMotion() });
+			if (!dx && !dy) return;
+			if (forSelection) selectionMoveInFlight = true;
+			leafletMap.panBy([dx, dy], { animate: !reduceMotion() });
 		});
 	}
 
@@ -651,7 +682,7 @@
 				opacity: 1
 			})
 			.openTooltip();
-		panTooltipIntoView(next.getTooltip());
+		panTooltipIntoView(next.getTooltip(), active === appState.selectedRestaurantSlug);
 		appliedSlug = active;
 	}
 </script>
