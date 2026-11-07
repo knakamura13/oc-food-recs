@@ -119,6 +119,30 @@ test('dragging the grabber follows the pointer and snaps', async ({ page }) => {
 	await expect.poll(() => sheetHeight(page)).toBe(peek);
 });
 
+test('a fast drag that comes to rest before release snaps to the nearest stop, not a fling', async ({ page }) => {
+	await openMap(page);
+	const peek = await sheetHeight(page);
+	await page.locator('.sheet-grabber').click();
+	const half = await settledSheetHeight(page);
+	await page.locator('.sheet-grabber').click();
+	const full = await settledSheetHeight(page);
+	await page.locator('.sheet-grabber').click();
+	await expect.poll(() => sheetHeight(page)).toBe(peek);
+
+	const box = (await page.locator('.sheet-grabber').boundingBox())!;
+	const x = box.x + box.width / 2;
+	const y = box.y + box.height / 2;
+	await page.mouse.move(x, y);
+	await page.mouse.down();
+	// Quick moves to just past half, then hold still before letting go.
+	await page.mouse.move(x, y - (half - peek) - 10, { steps: 4 });
+	await page.waitForTimeout(300);
+	await page.mouse.up();
+	await expect(page.locator('.list-pane.sheet')).not.toHaveClass(/sheet-dragging/);
+	expect(await settledSheetHeight(page)).toBe(half);
+	expect(half).toBeLessThan(full);
+});
+
 test('peek does not scroll the list, half and full do', async ({ page }) => {
 	await openMap(page);
 	const scroller = page.locator('.list-pane.sheet .list-scroll');

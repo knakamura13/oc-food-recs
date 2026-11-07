@@ -308,15 +308,28 @@
 		setSheetState(SHEET_ORDER[Math.min(Math.max(index, 0), SHEET_ORDER.length - 1)]);
 	}
 
-	let sheetDrag: { startY: number; startHeight: number; moved: boolean; lastY: number; lastT: number; velocity: number } | null = null;
+	let sheetDrag: {
+		startY: number;
+		startHeight: number;
+		/** Snap stops measured once per drag, so moves do not re-read layout. */
+		heights: Record<SheetState, number>;
+		moved: boolean;
+		lastY: number;
+		lastT: number;
+		velocity: number;
+	} | null = null;
 	let sheetSuppressClick = false;
+	/** A fling only counts if the finger was still moving this recently before release. */
+	const SHEET_FLING_MAX_IDLE_MS = 100;
 
 	function handleSheetPointerDown(event: PointerEvent) {
 		if (event.button > 0) return;
+		sheetSuppressClick = false;
 		if (event.currentTarget instanceof HTMLElement) event.currentTarget.setPointerCapture(event.pointerId);
 		sheetDrag = {
 			startY: event.clientY,
 			startHeight: sheetHeightPx,
+			heights: sheetHeights(),
 			moved: false,
 			lastY: event.clientY,
 			lastT: event.timeStamp,
@@ -333,24 +346,26 @@
 		if (dt > 0) sheetDrag.velocity = (sheetDrag.lastY - event.clientY) / dt;
 		sheetDrag.lastY = event.clientY;
 		sheetDrag.lastT = event.timeStamp;
-		const heights = sheetHeights();
-		sheetDragPx = Math.min(Math.max(sheetDrag.startHeight + delta, heights.peek), heights.full);
+		const { peek, full } = sheetDrag.heights;
+		sheetDragPx = Math.min(Math.max(sheetDrag.startHeight + delta, peek), full);
 	}
 
 	function handleSheetPointerEnd(event: PointerEvent) {
 		const drag = sheetDrag;
 		sheetDrag = null;
 		if (!drag || !drag.moved) return;
-		// A drag ends in a click on the grabber; swallow it so release does not also cycle.
+		// A drag can still end in a click on the grabber (on touch, sometimes a task later);
+		// swallow that one click so release does not also cycle. The next press clears it.
 		sheetSuppressClick = true;
-		setTimeout(() => (sheetSuppressClick = false), 0);
 		if (event.type === 'pointercancel') {
 			setSheetState(sheetState);
 			return;
 		}
-		const heights = sheetHeights();
-		// Project forward a little so a flick lands on the next stop.
-		const projected = (sheetDragPx ?? drag.startHeight) + drag.velocity * 180;
+		const heights = drag.heights;
+		// Project forward a little so a flick lands on the next stop; a press that came to
+		// rest before release is not a flick.
+		const velocity = event.timeStamp - drag.lastT > SHEET_FLING_MAX_IDLE_MS ? 0 : drag.velocity;
+		const projected = (sheetDragPx ?? drag.startHeight) + velocity * 180;
 		let best: SheetState = 'peek';
 		for (const state of SHEET_ORDER) {
 			if (Math.abs(heights[state] - projected) < Math.abs(heights[best] - projected)) best = state;
@@ -358,8 +373,11 @@
 		setSheetState(best);
 	}
 
-	function handleSheetClick() {
-		if (sheetSuppressClick) return;
+	function handleSheetClick(event: MouseEvent) {
+		// Keyboard activation (detail 0) never follows a drag.
+		const suppress = sheetSuppressClick && event.detail !== 0;
+		sheetSuppressClick = false;
+		if (suppress) return;
 		if (sheetState === 'full') setSheetState('peek');
 		else stepSheet(1);
 	}
