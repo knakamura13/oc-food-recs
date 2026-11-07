@@ -107,5 +107,8 @@ export const TEASER_MAX_CHARS = 150;
  */
 export function trimmedTeaser(name: string, body: string | null): string | null {
   if (!body) return null;
-  return getTrimmedSnippet(body, name, TEASER_MAX_CHARS).text || null;
+  const text = getTrimmedSnippet(body, name, TEASER_MAX_CHARS).text;
+  if (!text) return null;
+  // getTrimmedSnippet keeps an oversized matched fragment whole; cap it here.
+  return text.length > TEASER_MAX_CHARS ? `${text.slice(0, TEASER_MAX_CHARS - 1).trimEnd()}…` : text;
 }

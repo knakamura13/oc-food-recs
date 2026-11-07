@@ -728,7 +728,7 @@
 	</div>
 
 	<p id="location-disclosure" class="location-disclosure"
-		hidden={!(appState.userLocation || appState.locating || appState.locationError)}>
+		class:quiet={!(appState.userLocation || appState.locating || appState.locationError)}>
 		Near me uses your location for this session. <a href="/about#location-privacy">Location privacy</a>
 		{#if appState.userLocation || appState.locating}
 			<button type="button" onclick={forgetUserLocation}>Forget location</button>
@@ -838,7 +838,9 @@
 
 <style>
 	.location-disclosure { margin: 0.35rem 0 0; font-size: 0.75rem; color: #64594e; display: flex; flex-wrap: wrap; align-items: center; gap: 0 0.5rem; }
-	.location-disclosure[hidden] { display: none; }
+	/* Before Near me is used the note stays in the accessibility tree (the button
+	   describes itself with it) but takes no space on phones. */
+	.location-disclosure.quiet { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 	.location-disclosure a { color: inherit; }
 	.location-disclosure button { padding: 0; border: 0; background: transparent; color: inherit; font: inherit; text-decoration: underline; cursor: pointer; }
 	.location-error { font-size: 0.85rem; color: #8a3025; margin: 0.35rem 0 0; }
