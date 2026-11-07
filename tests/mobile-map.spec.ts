@@ -8,7 +8,10 @@ import {
 } from '@playwright/test';
 
 const leafletSourceMarker = 'A JavaScript library for interactive maps';
-const javaScriptPattern = '**/*.js*';
+// Scripts only. A '**/*.js*' glob also caught SvelteKit's `__data.json` hover preloads (the
+// sheet's rows sit under the pointer once the Map button hides), and one still in flight at
+// teardown failed the test with "route.fetch: Target page ... has been closed".
+const javaScriptPattern = (url: URL) => url.pathname.endsWith('.js');
 
 type LeafletJavaScriptHandler = (
 	route: Route,
