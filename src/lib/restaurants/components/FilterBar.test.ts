@@ -225,32 +225,6 @@ describe("FilterBar", () => {
     expect(screen.queryByRole("button", { name: /more cuisines/i })).toBeNull();
   });
 
-  it("closes the cuisine menu after a selection on compact viewports", async () => {
-    const user = userEvent.setup();
-    Object.defineProperty(window, "innerWidth", {
-      configurable: true,
-      writable: true,
-      value: 390,
-    });
-    render(FilterBar, {
-      restaurants: broadRoster,
-      threadSubreddit,
-      restaurantsForHistogram: broadRoster,
-      dateExtent,
-    });
-    const trigger = screen.getByRole("button", { name: /^cuisine$/i });
-    await user.click(trigger);
-    await user.click(screen.getByRole("option", { name: /mexican/i }));
-    expect(appState.activeCuisines).toEqual(["Mexican"]);
-    expect(
-      screen.queryByRole("listbox", { name: /filter by cuisine/i }),
-    ).not.toBeInTheDocument();
-    expect(trigger).toHaveFocus();
-    expect(
-      screen.getByRole("button", { name: /remove mexican filter/i }),
-    ).toBeInTheDocument();
-  });
-
   it("clears all active filters", async () => {
     const user = userEvent.setup();
     appState.activeCuisines = ["Mexican"];

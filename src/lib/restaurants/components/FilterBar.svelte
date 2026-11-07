@@ -280,7 +280,6 @@
 			trackFilterApplied('cuisine');
 			appState.activeCuisines = [...appState.activeCuisines, cuisine];
 		}
-		if (isCompactFilterViewport()) dismissOpenFilter();
 	}
 
 	function toggleCity(city: string) {
@@ -291,7 +290,6 @@
 			trackFilterApplied('city');
 			appState.activeCities = [...appState.activeCities, city];
 		}
-		if (isCompactFilterViewport()) dismissOpenFilter();
 	}
 
 	function toggleSubreddit(subreddit: string) {
@@ -302,7 +300,6 @@
 			trackFilterApplied('subreddit');
 			appState.activeSubreddits = [...appState.activeSubreddits, subreddit];
 		}
-		if (isCompactFilterViewport()) dismissOpenFilter();
 	}
 
 	function clearAllFilters() {
