@@ -819,6 +819,7 @@
 				class:portal-expanded={mapExpanded}
 				class:desktop-expanded={mapDesktopHovered}
 				class:no-map-transition={suppressMapTransition}
+				class:sheet-dragging={sheetDragPx !== null}
 				id="restaurant-map-panel"
 				bind:this={mapPaneEl}
 				style:--controls-h={mapExpanded ? `${controlsHeight}px` : undefined}
@@ -1189,6 +1190,17 @@
 			height: auto;
 		}
 
+		/* The sheet header already counts the places in view; a second "N of 2,725 results"
+		   beside the sort buttons repeated it and announced every pan twice. The bottom
+		   padding that clears the floating Map button is moot while that button is hidden. */
+		.list-pane.sheet :global(.result-count) {
+			display: none;
+		}
+
+		.list-pane.sheet :global(.list-scroll) {
+			padding-bottom: 16px;
+		}
+
 		/* A collapsed sheet shows rows but does not scroll, so a swipe on it never fights the map.
 		   Sorting waits for half height so the first result fits. */
 		.list-pane.sheet-peek :global(.list-scroll) {
@@ -1214,8 +1226,23 @@
 			top: calc(var(--controls-h, 0px) + 62px);
 		}
 
+		/* The map layer is already inset by the bottom safe area, which the sheet's height
+		   includes; without subtracting it the attribution floated that far above the sheet.
+		   It follows the sheet's snap animation instead of jumping ahead of it. */
 		.map-pane.portal-expanded :global(.leaflet-bottom) {
-			bottom: var(--sheet-h, 0px);
+			bottom: calc(var(--sheet-h, 0px) - env(safe-area-inset-bottom, 0px));
+			transition: bottom 0.25s ease;
+		}
+
+		.map-pane.portal-expanded.sheet-dragging :global(.leaflet-bottom) {
+			transition: none;
+		}
+
+		@media (prefers-reduced-motion: reduce) {
+			.list-pane.sheet,
+			.map-pane.portal-expanded :global(.leaflet-bottom) {
+				transition: none;
+			}
 		}
 
 		.sheet-grabber {
