@@ -864,6 +864,7 @@
 				<RestaurantList
 					restaurants={listRestaurants}
 					emptyForMapArea={areaScoped && filteredRestaurants.length > 0}
+					keepOpenRowInView={areaScoped}
 					totalCount={allRestaurants.length}
 					onShowOnMap={openMobileMap}
 					threadsById={threadsById}

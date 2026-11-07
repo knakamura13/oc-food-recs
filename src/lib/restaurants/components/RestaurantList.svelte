@@ -51,9 +51,19 @@
 		commentQuotes?: Record<string, string>;
 		/** True when the list is empty only because the map's visible area holds nothing. */
 		emptyForMapArea?: boolean;
+		/** The rows follow the map, so keep an open row's header in view when they change. */
+		keepOpenRowInView?: boolean;
 	}
 
-	let { restaurants, totalCount, onShowOnMap, threadsById = {}, commentQuotes = {}, emptyForMapArea = false }: Props = $props();
+	let {
+		restaurants,
+		totalCount,
+		onShowOnMap,
+		threadsById = {},
+		commentQuotes = {},
+		emptyForMapArea = false,
+		keepOpenRowInView = false
+	}: Props = $props();
 
 	let priorVisitMs = $state<number | null>(null);
 
@@ -268,6 +278,27 @@
 		});
 	});
 
+	// Opening a row under the phone map moves the map to it, and the list then re-scopes to the
+	// new area. The scroll offset survives while the rows above the open one change, which left
+	// it scrolled out of view. Bring its header back only when it is not already showing.
+	$effect(() => {
+		const rows = sortedRows;
+		if (!keepOpenRowInView || !virtualizer) return;
+		const slug = untrack(() => appState.selectedRestaurantSlug);
+		const index = slug ? rows.findIndex((r) => r.slug === slug) : -1;
+		if (index < 0) return;
+		void tick().then(() => {
+			const instance = virtualizer;
+			const item = instance?.measurementsCache[index];
+			if (!instance || item?.key !== slug || appState.selectedRestaurantSlug !== slug) return;
+			const top = instance.scrollOffset ?? 0;
+			const bottom = top + (instance.scrollRect?.height ?? 0);
+			const headerPx = 56;
+			if (item.start >= top && item.start + headerPx <= bottom) return;
+			instance.scrollToIndex(index, { align: 'start' });
+		});
+	});
+
 	function rowToggleLabel(restaurant: Restaurant): string {
 		const parts = [restaurant.name];
 		if (restaurant.cuisine) parts.push(normalizeCuisine(restaurant.cuisine));
@@ -359,7 +390,10 @@
 		openStatTipSlug = openStatTipSlug === slug ? null : slug;
 	}
 
-	function clearHovered(restaurant: Restaurant) {
+	function clearHovered(restaurant: Restaurant | undefined) {
+		// A focused row that unmounts while the list shrinks (filters, or the phone list following
+		// the map) blurs after its index already points past the new rows, so `restaurant` is gone.
+		if (!restaurant) return;
 		// Only clear if we still own the highlight — prevents a trailing
 		// mouseleave/blur from one row wiping the highlight a sibling just set.
 		if (appState.hoveredRestaurantSlug === restaurant.slug) {
