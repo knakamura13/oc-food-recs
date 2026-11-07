@@ -48,7 +48,7 @@ async function readFollowingRowGap(row: Locator) {
 test('390px results prioritize restaurant content and keep full-size controls', async ({
 	page
 }, testInfo) => {
-	test.skip(testInfo.project.name !== 'Mobile Chrome', 'Mobile viewport only');
+	test.skip(!/Mobile Chrome|iPhone WebKit/.test(testInfo.project.name), 'Mobile viewport only');
 	await page.setViewportSize({ width: 390, height: 844 });
 	await page.goto('/');
 
@@ -66,7 +66,7 @@ test('390px results prioritize restaurant content and keep full-size controls', 
 test('390px card hairline is continuous across the bookmark/chevron gutter', async ({
 	page
 }, testInfo) => {
-	test.skip(testInfo.project.name !== 'Mobile Chrome', 'Mobile viewport only');
+	test.skip(!/Mobile Chrome|iPhone WebKit/.test(testInfo.project.name), 'Mobile viewport only');
 	await page.setViewportSize({ width: 390, height: 844 });
 	await page.goto('/');
 
@@ -106,7 +106,7 @@ test('390px card hairline is continuous across the bookmark/chevron gutter', asy
 test('600px results retain compact horizontal density with full-size controls', async ({
 	page
 }, testInfo) => {
-	test.skip(testInfo.project.name !== 'Mobile Chrome', 'Mobile viewport only');
+	test.skip(!/Mobile Chrome|iPhone WebKit/.test(testInfo.project.name), 'Mobile viewport only');
 	await page.setViewportSize({ width: 600, height: 900 });
 	await page.goto('/');
 
@@ -130,7 +130,7 @@ test('desktop results keep the existing horizontal alignment', async ({ page }, 
 });
 
 test('mobile expansion keeps measured virtual rows from overlapping', async ({ page }, testInfo) => {
-	test.skip(testInfo.project.name !== 'Mobile Chrome', 'Mobile viewport only');
+	test.skip(!/Mobile Chrome|iPhone WebKit/.test(testInfo.project.name), 'Mobile viewport only');
 	await page.setViewportSize({ width: 390, height: 844 });
 	await page.goto('/');
 

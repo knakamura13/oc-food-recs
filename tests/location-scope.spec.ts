@@ -30,7 +30,7 @@ test('scope survives accidental database geography and leaves branch sources ind
 	const branch = await (await request.get('/api/r/a-s-burgers-2.json')).json(); expect(branch).toHaveLength(1); expect(branch[0].comment_id).not.toBe(sources[0].comment_id);
 	expect(await (await request.get('/sitemap.xml')).text()).not.toContain('/r/a-s-burgers<');
 	await page.goto('/?restaurant=a-s-burgers');
-	await page.getByRole('button', { name: /Include.*unmapped restaurant/ }).click();
+	await page.getByRole('button', { name: /Unmapped \d+, include in the list/ }).click();
 	const row = page.getByRole('link', { name: /^Synthetic Multi Kitchen/ });
 	if (await row.getAttribute('aria-expanded') !== 'true') await row.click();
 	await expect(page.locator('.drawer').getByText(/Multiple locations/)).toBeVisible();

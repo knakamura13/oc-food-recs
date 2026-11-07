@@ -6,26 +6,40 @@ test.beforeEach(async ({ page }) => {
 });
 
 for (const width of [320, 390]) {
-	test(`${width}px fixed actions and active filters have reachable touch targets`, async ({ page }, info) => {
-		test.skip(info.project.name !== 'Mobile Chrome');
+	test(`${width}px toolbar keeps Saved in reach and every control a 44px touch target`, async ({ page }, info) => {
+		test.skip(!/Mobile Chrome|iPhone WebKit/.test(info.project.name));
 		await page.setViewportSize({ width, height: 844 });
 		await page.goto('/');
 		await expect(page.locator('.row-toggle').first()).toBeVisible({ timeout: 30_000 });
 		await page.locator('.row-save-btn').first().click();
-		const saved = page.locator('.filter-actions .saved-toggle');
-		const unmapped = page.locator('.filter-actions .unmapped-toggle');
+		const saved = page.locator('.filter-row .saved-toggle');
 		await expect(saved).toBeVisible();
-		// The fixture corpus may have no unmapped rows, so its optional action is tested in Vitest.
-		for (const button of [saved, ...(await unmapped.count() ? [unmapped] : []),
-			page.getByRole('button', { name: 'Open map', exact: true }),
-			page.getByRole('button', { name: 'Share view', exact: true })]) {
-			const box = await button.boundingBox();
-			expect(box).not.toBeNull();
-			expect(box!.x).toBeGreaterThanOrEqual(0);
-			expect(box!.x + box!.width).toBeLessThanOrEqual(width);
-			expect(box!.height).toBeGreaterThanOrEqual(44);
+		// Saved leads the row: it is on screen with no scrolling (issue #165, problem 1).
+		const savedBox = (await saved.boundingBox())!;
+		expect(savedBox.x).toBeGreaterThanOrEqual(0);
+		expect(savedBox.x + savedBox.width).toBeLessThanOrEqual(width);
+		expect(savedBox.height).toBeGreaterThanOrEqual(44);
+
+		// Every other control is reachable by scrolling the row and is a full-size target.
+		const controls = page.locator('.filter-row button:visible');
+		const count = await controls.count();
+		for (let i = 0; i < count; i++) {
+			const button = controls.nth(i);
+			await button.scrollIntoViewIfNeeded();
+			const box = (await button.boundingBox())!;
+			expect(box.x, `control ${i} left edge`).toBeGreaterThanOrEqual(0);
+			expect(box.x + box.width, `control ${i} right edge`).toBeLessThanOrEqual(width + 1);
+			expect(box.height, `control ${i} height`).toBeGreaterThanOrEqual(44);
 		}
-		const rail = page.locator('.filter-controls');
+
+		// The labeled Map button floats on screen at a full-size target.
+		const mapBox = (await page.getByRole('button', { name: 'Open map', exact: true }).boundingBox())!;
+		expect(mapBox.x).toBeGreaterThanOrEqual(0);
+		expect(mapBox.x + mapBox.width).toBeLessThanOrEqual(width);
+		expect(mapBox.height).toBeGreaterThanOrEqual(44);
+
+		const rail = page.locator('.filter-row');
+		await rail.evaluate((el) => { el.scrollLeft = 0; });
 		if (await rail.evaluate((el) => el.scrollWidth > el.clientWidth + 4)) {
 			await expect(rail).toHaveClass(/overflow-end/);
 			expect(await rail.evaluate((el) => getComputedStyle(el).maskImage)).toContain('linear-gradient');
@@ -41,7 +55,7 @@ for (const width of [320, 390]) {
 }
 
 test('mobile map occupies the viewport and retains modal focus and Escape', async ({ page }, info) => {
-	test.skip(info.project.name !== 'Mobile Chrome');
+	test.skip(!/Mobile Chrome|iPhone WebKit/.test(info.project.name));
 	await page.setViewportSize({ width: 390, height: 844 });
 	await page.goto('/?city=Santa%20Ana');
 	await expect(page.locator('.row-toggle').first()).toBeVisible({ timeout: 30_000 });
@@ -60,7 +74,7 @@ test('mobile map occupies the viewport and retains modal focus and Escape', asyn
 });
 
 test('expanded mobile row keeps its collapse header available while reading', async ({ page }, info) => {
-	test.skip(info.project.name !== 'Mobile Chrome');
+	test.skip(!/Mobile Chrome|iPhone WebKit/.test(info.project.name));
 	await page.setViewportSize({ width: 390, height: 844 });
 	// Supply a long primary comment so this tests reading, even with CI's small corpus.
 	await page.route('**/api/r/*.json', (route) => route.fulfill({ json: [{
@@ -76,9 +90,9 @@ test('expanded mobile row keeps its collapse header available while reading', as
 	expect(await row.locator('.row-header').evaluate((el) => getComputedStyle(el).position)).toBe('sticky');
 	await expect(row.locator('.primary-comment')).toBeVisible();
 	const list = page.locator('.list-scroll');
-	const listBox = await list.boundingBox();
-	await page.mouse.move(listBox!.x + listBox!.width / 2, listBox!.y + listBox!.height - 20);
-	await page.mouse.wheel(0, 200);
+	// Scroll the list directly: mouse.wheel is unavailable in mobile WebKit and this test is
+	// about the sticky header, not the wheel.
+	await list.evaluate((el) => el.scrollBy(0, 200));
 	await expect.poll(() => list.evaluate(el => el.scrollTop)).toBeGreaterThan(100);
 	await expect.poll(() => row.locator('.row-header').evaluate(el => {
 		const viewport = el.closest('.list-scroll')!.getBoundingClientRect();
@@ -90,7 +104,7 @@ test('expanded mobile row keeps its collapse header available while reading', as
 
 
 test('cold filtered map fits a single restaurant and refits after reopening', async ({ page }, info) => {
-	test.skip(info.project.name !== 'Mobile Chrome');
+	test.skip(!/Mobile Chrome|iPhone WebKit/.test(info.project.name));
 	await page.goto('/?city=Santa%20Ana');
 	await page.locator('.row-save-btn').first().click();
 	await page.locator('.saved-toggle').click();

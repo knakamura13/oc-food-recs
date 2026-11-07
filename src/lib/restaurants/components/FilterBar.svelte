@@ -443,19 +443,19 @@
 {/snippet}
 
 <nav class="filter-bar" aria-label="Restaurant filters">
-	<div class="filter-row">
 	<div
-		class="filter-controls"
+		class="filter-row"
 		class:overflow-start={overflowStart}
 		class:overflow-end={overflowEnd}
 		{@attach trackFilterOverflow}
 		onfocusin={(event) => {
 			const target = event.target;
-			if (target instanceof HTMLElement) {
+			if (target instanceof HTMLElement && isCompactFilterViewport()) {
 				target.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 			}
 		}}
 	>
+	<div class="filter-controls">
 		<!-- Cuisine dropdown -->
 		<div class="dropdown-wrapper" onfocusout={handleDropdownFocusOut}>
 			<button
@@ -663,13 +663,14 @@
 				class="dropdown-trigger mapped-only-toggle saved-toggle"
 				class:has-active={appState.showSavedOnly}
 				aria-pressed={appState.showSavedOnly}
+				aria-label={savedCount > 0 ? `Saved, ${savedCount}` : 'Saved'}
 				onclick={() => {
 					if (!appState.showSavedOnly) trackFilterApplied('saved');
 					appState.showSavedOnly = !appState.showSavedOnly;
 				}}
 			>
 				<Bookmark size={13} aria-hidden="true" />
-				Saved
+				<span class="saved-label">Saved</span>
 				{#if savedCount > 0}
 					<span class="badge">{savedCount}</span>
 				{/if}
@@ -682,8 +683,8 @@
 				class:has-active={appState.showUnmapped}
 				aria-pressed={appState.showUnmapped}
 				aria-label={appState.showUnmapped
-					? `Including ${unmappedCount} unmapped ${unmappedCount === 1 ? 'restaurant' : 'restaurants'} in the list`
-					: `Include ${unmappedCount} unmapped ${unmappedCount === 1 ? 'restaurant' : 'restaurants'} in the list`}
+					? `Unmapped ${unmappedCount}, stop including in the list`
+					: `Unmapped ${unmappedCount}, include in the list`}
 				onclick={() => {
 					if (!appState.showUnmapped) trackFilterApplied('unmapped');
 					appState.showUnmapped = !appState.showUnmapped;
@@ -726,7 +727,8 @@
 	</div>
 	</div>
 
-	<p id="location-disclosure" class="location-disclosure">
+	<p id="location-disclosure" class="location-disclosure"
+		hidden={!(appState.userLocation || appState.locating || appState.locationError)}>
 		Near me uses your location for this session. <a href="/about#location-privacy">Location privacy</a>
 		{#if appState.userLocation || appState.locating}
 			<button type="button" onclick={forgetUserLocation}>Forget location</button>
@@ -835,12 +837,22 @@
 />
 
 <style>
-	.location-disclosure { margin: 0.35rem 0 0; font-size: 0.75rem; color: #64594e; }
+	.location-disclosure { margin: 0.35rem 0 0; font-size: 0.75rem; color: #64594e; display: flex; flex-wrap: wrap; align-items: center; gap: 0 0.5rem; }
+	.location-disclosure[hidden] { display: none; }
 	.location-disclosure a { color: inherit; }
-	.location-disclosure button { margin-left: 0.5rem; min-height: 44px; border: 0; background: transparent; color: inherit; text-decoration: underline; cursor: pointer; }
+	.location-disclosure button { padding: 0; border: 0; background: transparent; color: inherit; font: inherit; text-decoration: underline; cursor: pointer; }
 	.location-error { font-size: 0.85rem; color: #8a3025; margin: 0.35rem 0 0; }
-	.radius-control { max-width: 150px; }
-	.near-me, .radius-control { min-height: 44px; }
+	.radius-control {
+		max-width: 150px;
+		appearance: none;
+		-webkit-appearance: none;
+		box-sizing: border-box;
+		height: 32px;
+		padding: 0 28px 0 12px;
+		background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%235d4e37' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+		background-repeat: no-repeat;
+		background-position: right 10px center;
+	}
 
 	.filter-bar {
 		padding: 0.5rem 1rem;
@@ -945,9 +957,7 @@
 		max-height: 320px;
 		overflow-y: auto;
 		overscroll-behavior: contain;
-		background: rgba(255, 252, 248, 0.95);
-		backdrop-filter: blur(12px);
-		-webkit-backdrop-filter: blur(12px);
+		background: #fffcf8;
 		border: 1px solid #e0d6cc;
 		border-radius: 8px;
 		box-shadow: 0 8px 24px rgba(62, 44, 35, 0.12);
@@ -1131,50 +1141,70 @@
 		}
 	}
 
+	/* Phones and tablets: every control lives in ONE horizontally scrolling row.
+	   The wrappers dissolve (display: contents) so filters, Near me, Saved and
+	   Unmapped are siblings in the same rail instead of wrapping onto extra rows. */
 	@media (max-width: 1023px) {
-		.mobile-map-trigger {
-			display: inline-flex;
+		.filter-bar {
+			padding: 0.4rem 0.75rem;
 		}
 
-		.filter-controls {
-			flex: 1;
+		.filter-row {
 			flex-wrap: nowrap;
 			overflow-x: auto;
 			overscroll-behavior-x: contain;
 			-webkit-overflow-scrolling: touch;
 			scrollbar-width: none;
-			min-width: 0;
+			scroll-padding-inline: 12px;
 		}
 
-		.filter-controls::-webkit-scrollbar {
+		.filter-row::-webkit-scrollbar {
 			display: none;
 		}
 
-		.filter-controls.overflow-end {
-			mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 24px), transparent);
+		.filter-controls,
+		.filter-actions {
+			display: contents;
 		}
 
-		.filter-controls.overflow-start {
-			mask-image: linear-gradient(to right, transparent, #000 24px);
+		.filter-row > *,
+		.filter-controls > *,
+		.filter-actions > * {
+			flex-shrink: 0;
 		}
 
-		.filter-controls.overflow-start.overflow-end {
-			mask-image: linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent);
+		/* Near me and Saved lead the rail so neither can be scrolled out of reach. */
+		.near-me,
+		.radius-control {
+			order: -2;
+		}
+
+		.saved-toggle {
+			order: -1;
+		}
+
+		.filter-row.overflow-end {
+			mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 28px), transparent);
+		}
+
+		.filter-row.overflow-start {
+			mask-image: linear-gradient(to right, transparent, #000 28px);
+		}
+
+		.filter-row.overflow-start.overflow-end {
+			mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent);
 		}
 
 		/* A mask creates a stacking context and clips fixed descendants. */
-		.filter-controls:has(.dropdown-trigger[aria-expanded='true']) {
+		.filter-row:has(.dropdown-trigger[aria-expanded='true']) {
 			mask-image: none;
 			position: relative;
 			z-index: 2;
 		}
 
-		.filter-row {
-			flex-wrap: wrap;
-		}
-
-		.filter-controls {
-			flex-basis: 100%;
+		/* The floating Map button in ExplorerApp replaces the in-rail one. */
+		.mobile-map-trigger {
+			display: none;
 		}
 
 		.pill,
@@ -1185,18 +1215,13 @@
 			box-sizing: border-box;
 		}
 
-		.filter-actions {
-			width: 100%;
-			flex-shrink: 0;
-			flex-wrap: wrap;
-			min-width: 0;
-			position: relative;
-			z-index: 1;
-			background: #faf7f2;
-			box-shadow: -12px 0 10px -6px #faf7f2;
+		.radius-control {
+			height: 44px;
 		}
 
-		.dropdown-trigger {
+		.dropdown-trigger,
+		.near-me,
+		.radius-control {
 			min-height: 44px;
 			padding-top: 0;
 			padding-bottom: 0;
@@ -1221,7 +1246,7 @@
 			font-size: 0.8rem;
 		}
 
-		.saved-toggle :global(svg) {
+		.saved-label {
 			display: none;
 		}
 

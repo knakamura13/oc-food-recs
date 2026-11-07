@@ -1,5 +1,5 @@
 import { applyRestaurantCuration } from '$lib/server/restaurants/restaurant-curation';
-import type { ExplorerPageData } from "$lib/restaurants/explorer-page-data";
+import type { WireExplorerPageData } from "$lib/restaurants/explorer-page-data";
 import {
 	buildEagerPageMeta,
 	hasPageMetaFilters,
@@ -14,8 +14,10 @@ import type {
   ThreadSummary,
 } from "$lib/restaurants/types";
 import { parseSearchParams } from "$lib/restaurants/url-state";
+import { encodeRestaurants } from "$lib/restaurants/wire";
 import {
   pickTopCommentSnippet,
+  trimmedTeaser,
   type SnippetCandidate,
 } from "$lib/restaurants/top-comment-snippet";
 import { sql } from "drizzle-orm";
@@ -57,7 +59,7 @@ interface StatsRow {
 async function loadHomePage(
   urlState: ReturnType<typeof parseSearchParams>,
   pageOrigin: string,
-): Promise<ExplorerPageData> {
+): Promise<WireExplorerPageData> {
   // Restaurants joined with their mentions; aggregated to one row per restaurant.
   // Only restaurants whose mentions belong to published threads are returned.
   const restaurantsResult = await db.execute(sql`
@@ -204,9 +206,9 @@ async function loadHomePage(
     aggregate_score: row.aggregate_score,
     mention_count: row.mention_count,
     dish_rec_count: row.dish_rec_count ?? 0,
-    top_comment_snippet: pickTopCommentSnippet(
+    top_comment_snippet: trimmedTeaser(
       row.name,
-      row.snippet_candidates ?? [],
+      pickTopCommentSnippet(row.name, row.snippet_candidates ?? []),
     ),
     source_threads: row.source_threads ?? [],
     mentions: (row.mentions ?? []).map((m) => ({
@@ -281,7 +283,7 @@ async function loadHomePage(
 
   return {
     dataset: {
-      restaurants,
+      restaurants: encodeRestaurants(restaurants),
       meta,
     },
     urlState,

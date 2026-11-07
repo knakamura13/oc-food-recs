@@ -18,7 +18,7 @@
 		measureElement as measureVirtualElement,
 		type VirtualItem
 	} from '@tanstack/virtual-core';
-	import { TableHandler } from '@vincjo/datatables';
+	import { sortRestaurants } from '$lib/restaurants/sort-restaurants';
 	import type { Mention, Restaurant, SortKey, ThreadSummary } from '$lib/restaurants/types';
 	import {
 		nextSortState,
@@ -132,27 +132,12 @@
 		scheduleRemeasure();
 	});
 
-	const table = new TableHandler<Restaurant>([], { rowsPerPage: null as unknown as number });
-	const scoreSort = table.createSort('aggregate_score');
-	// Restaurants with no dated mentions sort last in either direction (null comparator rule).
-	const recencySort = table.createSort((r: Restaurant) => latestMentionMs(r));
-	const nameSort = table.createSort('name');
-	const distanceSort = table.createSort((r: Restaurant) => distanceMiles(appState.userLocation, r));
-	// `restaurants` arrives in search-relevance order while a query is active (see
-	// filterPageRestaurantsWithSearch); re-sorting by position keeps that order. Higher value =
-	// better match, so the default `desc` direction reads best-first like the other sorts.
-	let relevanceRank = new Map<string, number>();
-	const relevanceSort = table.createSort((r: Restaurant) => {
-		const rank = relevanceRank.get(r.slug);
-		return rank === undefined ? null : -rank;
-	});
-
 	const sortOptions = [
-		{ key: 'score' as const, label: 'Score', sort: scoreSort },
-		{ key: 'recency' as const, label: 'Recent', sort: recencySort },
-		{ key: 'name' as const, label: 'Name', sort: nameSort },
-		{ key: 'distance' as const, label: 'Distance', sort: distanceSort },
-		{ key: 'relevance' as const, label: 'Relevance', sort: relevanceSort }
+		{ key: 'score' as const, label: 'Score' },
+		{ key: 'recency' as const, label: 'Recent' },
+		{ key: 'name' as const, label: 'Name' },
+		{ key: 'distance' as const, label: 'Distance' },
+		{ key: 'relevance' as const, label: 'Relevance' }
 	] as const;
 
 	// Relevance only means something while searching.
@@ -161,37 +146,19 @@
 			(o.key !== 'distance' || appState.userLocation !== null))
 	);
 
-	function optionFor(key: SortKey) {
-		return sortOptions.find((o) => o.key === key);
-	}
-
-	function applySortFromAppState() {
-		const opt = optionFor(appState.sortKey);
-		if (!opt) return;
-		appState.sortDirection === 'desc' ? opt.sort.desc() : opt.sort.asc();
-	}
-
-	$effect(() => {
-		const rows = restaurants;
-		const key = appState.sortKey;
-		const direction = appState.sortDirection;
-		// Position changes must re-sort even when the key and direction stay the same.
-		void appState.userLocation?.lat;
-		void appState.userLocation?.lng;
-		// The table mutates its own reactive sort state. Only inputs belong in this effect.
-		untrack(() => {
-			relevanceRank = new Map(rows.map((r, i) => [r.slug, i]));
-			table.setRows(rows);
-			const opt = optionFor(key);
-			if (opt) direction === 'desc' ? opt.sort.desc() : opt.sort.asc();
-		});
+	// One plain sort over the filtered rows, keyed off app state (the single source of truth).
+	// Distance reads the coordinates once here rather than per comparison.
+	const sortedRows = $derived.by(() => {
+		const origin = appState.userLocation
+			? { lat: appState.userLocation.lat, lng: appState.userLocation.lng }
+			: null;
+		return sortRestaurants(restaurants, appState.sortKey, appState.sortDirection, origin);
 	});
 
 	function cycleSort(key: SortKey) {
 		const next = nextSortState(appState.sortKey, appState.sortDirection, key);
 		appState.sortKey = next.sortKey;
 		appState.sortDirection = next.sortDirection;
-		applySortFromAppState();
 	}
 
 	let listScrollEl = $state<HTMLDivElement | undefined>();
@@ -204,7 +171,7 @@
 		totalSize = instance.getTotalSize();
 	}
 
-	// Create the virtualizer exactly once per scroll element. `table.rows` is read
+	// Create the virtualizer exactly once per scroll element. `sortedRows` is read
 	// untracked here: if this effect depended on it, every sort/filter change would
 	// destroy and recreate the virtualizer, wiping its measured-size cache — mounted
 	// rows never re-measure (their attach only re-fires on index change), so rows
@@ -215,7 +182,7 @@
 
 		const cleanup = untrack(() => {
 			const instance = new Virtualizer<HTMLDivElement, HTMLDivElement>({
-				count: table.rows.length,
+				count: sortedRows.length,
 				getScrollElement: () => listScrollEl ?? null,
 				estimateSize: () => 72,
 				overscan: 8,
@@ -224,7 +191,7 @@
 				observeElementOffset,
 				measureElement: measureVirtualElement,
 				useAnimationFrameWithResizeObserver: true,
-				getItemKey: (index) => table.rows[index]?.slug ?? index,
+				getItemKey: (index) => sortedRows[index]?.slug ?? index,
 				onChange: (inst) => {
 					syncVirtualState(inst);
 				}
@@ -246,7 +213,7 @@
 	});
 
 	$effect(() => {
-		const rows = table.rows;
+		const rows = sortedRows;
 		if (!virtualizer) return;
 		// setOptions REPLACES the options object (merging only with library defaults),
 		// so spread the existing options or estimateSize/observers/onChange are lost
@@ -289,7 +256,7 @@
 		if (!slug || !virtualizer) return;
 		appState.selectedRestaurantSlug = slug;
 		appState.listScrollTarget = null;
-		const index = table.rows.findIndex((r) => r.slug === slug);
+		const index = sortedRows.findIndex((r) => r.slug === slug);
 		if (index < 0) return;
 		tick().then(() => {
 			virtualizer?.scrollToIndex(index, {
@@ -450,7 +417,7 @@
 		);
 	}
 
-	const openableSlugs = $derived(new Set(table.rows.map((r) => r.slug)));
+	const openableSlugs = $derived(new Set(sortedRows.map((r) => r.slug)));
 
 	function openPlace(slug: string) {
 		appState.listScrollTarget = slug;
@@ -494,19 +461,19 @@
 			<button
 				type="button"
 				class="sort-btn"
-				class:active={opt.sort.isActive}
+				class:active={(appState.sortKey === opt.key)}
 				onclick={() => cycleSort(opt.key)}
-				aria-pressed={opt.sort.isActive}
+				aria-pressed={(appState.sortKey === opt.key)}
 				aria-label={sortButtonAccessibleName(
 					opt.key,
 					opt.label,
-					opt.sort.isActive,
-					opt.sort.direction
+					(appState.sortKey === opt.key),
+					appState.sortDirection
 				)}
 			>
 				{opt.label}
-				{#if opt.sort.isActive}
-					<span class="sort-dir" aria-hidden="true">{sortDirectionShort(opt.key, opt.sort.direction)}</span>
+				{#if (appState.sortKey === opt.key)}
+					<span class="sort-dir" aria-hidden="true">{sortDirectionShort(opt.key, appState.sortDirection)}</span>
 				{/if}
 			</button>
 		{/each}
@@ -529,7 +496,7 @@
 		role="region"
 		aria-label="Restaurant results"
 	>
-		{#if table.rows.length === 0}
+		{#if sortedRows.length === 0}
 			<div class="empty-state">
 				{#if appState.showSavedOnly}
 					<span class="empty-icon" aria-hidden="true"><Bookmark size={36} /></span>
@@ -560,7 +527,7 @@
 		{:else}
 			<div class="virtual-spacer" style:height="{totalSize}px">
 				{#each virtualItems as virtualRow (virtualRow.key)}
-					{@const restaurant = table.rows[virtualRow.index]}
+					{@const restaurant = sortedRows[virtualRow.index]}
 					{@const miles = distanceMiles(appState.userLocation, restaurant)}
 					{@const latest = latestMentionMs(restaurant)}
 					{#if restaurant}
@@ -985,9 +952,7 @@
 		gap: 0.5rem;
 		padding: 0.5rem 0.75rem;
 		border-bottom: 1px solid rgba(232, 224, 214, 0.7);
-		background: rgba(250, 247, 242, 0.85);
-		backdrop-filter: blur(8px);
-		-webkit-backdrop-filter: blur(8px);
+		background: #faf7f2;
 		flex-shrink: 0;
 		z-index: 10;
 		position: sticky;
@@ -1046,16 +1011,11 @@
 	}
 
 	@media (max-width: 1023px) {
+		/* The count must always be visible, so the bar wraps instead of scrolling. */
 		.sort-bar {
-			flex-wrap: nowrap;
-			overflow-x: auto;
-			overscroll-behavior-x: contain;
-			-webkit-overflow-scrolling: touch;
-			scrollbar-width: none;
-		}
-
-		.sort-bar::-webkit-scrollbar {
-			display: none;
+			flex-wrap: wrap;
+			gap: 0.25rem 0.4rem;
+			padding: 0.25rem 0.75rem;
 		}
 
 		.sort-label {
@@ -1064,8 +1024,7 @@
 
 		.sort-btn {
 			min-height: 44px;
-			padding-top: 0;
-			padding-bottom: 0;
+			padding: 0 0.6rem;
 			flex-shrink: 0;
 		}
 

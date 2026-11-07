@@ -162,7 +162,7 @@ test.describe('Mobile map interaction', () => {
 	test('disclosure opens an accessible sheet and Escape restores the opener', async ({
 		page
 	}, testInfo) => {
-		test.skip(testInfo.project.name !== 'Mobile Chrome', 'Mobile viewport only');
+		test.skip(!/Mobile Chrome|iPhone WebKit/.test(testInfo.project.name), 'Mobile viewport only');
 		await page.setViewportSize({ width: 390, height: 844 });
 		await page.goto('/');
 		await firstRenderedRow(page);
@@ -221,8 +221,10 @@ test.describe('Mobile map interaction', () => {
 		await expect(listPane).toHaveAttribute('inert', '');
 		await expect(page.locator('html')).toHaveClass(/mobile-map-expanded-lock/);
 
-		// Focus trap: Tab / Shift+Tab stay inside the dialog
-		for (let i = 0; i < 12; i += 1) {
+		// Focus trap: Tab / Shift+Tab stay inside the dialog. WebKit's default keyboard model does
+		// not Tab to buttons (that needs Full Keyboard Access), so this only runs elsewhere.
+		const tabsToButtons = testInfo.project.name !== 'iPhone WebKit';
+		for (let i = 0; tabsToButtons && i < 12; i += 1) {
 			await page.keyboard.press('Tab');
 			expect(
 				await page.evaluate(() => {
@@ -233,15 +235,17 @@ test.describe('Mobile map interaction', () => {
 			).toBe(true);
 		}
 		await closeButton.focus();
-		await page.keyboard.press('Shift+Tab');
-		expect(
-			await page.evaluate(() => {
-				const pane = document.getElementById('restaurant-map-panel');
-				const active = document.activeElement;
-				return Boolean(pane && active && pane.contains(active) && active !== pane.querySelector('.map-close-btn'));
-			})
-		).toBe(true);
-		await closeButton.focus();
+		if (tabsToButtons) {
+			await page.keyboard.press('Shift+Tab');
+			expect(
+				await page.evaluate(() => {
+					const pane = document.getElementById('restaurant-map-panel');
+					const active = document.activeElement;
+					return Boolean(pane && active && pane.contains(active) && active !== pane.querySelector('.map-close-btn'));
+				})
+			).toBe(true);
+			await closeButton.focus();
+		}
 
 		const searchInput = page.getByRole('combobox', { name: /search restaurants/i });
 		await expect(searchInput).toBeVisible();
@@ -261,7 +265,8 @@ test.describe('Mobile map interaction', () => {
 	test('first open explains deferred map loading until Leaflet is ready', async ({
 		page
 	}, testInfo) => {
-		test.skip(testInfo.project.name !== 'Mobile Chrome', 'Mobile viewport only');
+		test.skip(!/Mobile Chrome|iPhone WebKit/.test(testInfo.project.name), 'Mobile viewport only');
+		test.skip(testInfo.project.name === 'iPhone WebKit', 'Playwright cannot dispatch mouse.wheel in mobile WebKit');
 		await page.setViewportSize({ width: 390, height: 844 });
 
 		let releaseLeaflet: () => void = () => {};
@@ -332,7 +337,7 @@ test.describe('Mobile map interaction', () => {
 	test('failed deferred map loading clears busy state and recovers after reload', async ({
 		page
 	}, testInfo) => {
-		test.skip(testInfo.project.name !== 'Mobile Chrome', 'Mobile viewport only');
+		test.skip(!/Mobile Chrome|iPhone WebKit/.test(testInfo.project.name), 'Mobile viewport only');
 		await page.setViewportSize({ width: 390, height: 844 });
 
 		let leafletAttempts = 0;
@@ -374,7 +379,7 @@ test.describe('Mobile map interaction', () => {
 	test('Show on map returns focus to the drawer action after the sheet closes', async ({
 		page
 	}, testInfo) => {
-		test.skip(testInfo.project.name !== 'Mobile Chrome', 'Mobile viewport only');
+		test.skip(!/Mobile Chrome|iPhone WebKit/.test(testInfo.project.name), 'Mobile viewport only');
 		await page.setViewportSize({ width: 390, height: 844 });
 		await page.goto('/');
 
@@ -402,7 +407,7 @@ test.describe('Mobile map interaction', () => {
 	test('closed map never obstructs result actions across mobile widths', async ({
 		page
 	}, testInfo) => {
-		test.skip(testInfo.project.name !== 'Mobile Chrome', 'Mobile viewport only');
+		test.skip(!/Mobile Chrome|iPhone WebKit/.test(testInfo.project.name), 'Mobile viewport only');
 		test.setTimeout(90_000);
 
 		for (const viewport of mobileViewports) {
@@ -449,7 +454,7 @@ test.describe('Mobile map interaction', () => {
 	test('open sheet stays within the viewport across mobile widths', async ({
 		page
 	}, testInfo) => {
-		test.skip(testInfo.project.name !== 'Mobile Chrome', 'Mobile viewport only');
+		test.skip(!/Mobile Chrome|iPhone WebKit/.test(testInfo.project.name), 'Mobile viewport only');
 		test.setTimeout(90_000);
 
 		for (const viewport of mobileViewports) {
@@ -474,7 +479,7 @@ test.describe('Mobile map interaction', () => {
 	test('open sheet removes Back to top until the deep-scrolled list is usable again', async ({
 		page
 	}, testInfo) => {
-		test.skip(testInfo.project.name !== 'Mobile Chrome', 'Mobile viewport only');
+		test.skip(!/Mobile Chrome|iPhone WebKit/.test(testInfo.project.name), 'Mobile viewport only');
 		await page.setViewportSize({ width: 390, height: 844 });
 		await page.goto('/');
 		await firstRenderedRow(page);
@@ -524,7 +529,8 @@ test.describe('Mobile map interaction', () => {
 	test('mobile-initialized map enables wheel zoom after crossing to desktop', async ({
 		page
 	}, testInfo) => {
-		test.skip(testInfo.project.name !== 'Mobile Chrome', 'Mobile initialization only');
+		test.skip(!/Mobile Chrome|iPhone WebKit/.test(testInfo.project.name), 'Mobile initialization only');
+		test.skip(testInfo.project.name === 'iPhone WebKit', 'Playwright cannot dispatch mouse.wheel in mobile WebKit');
 		await page.setViewportSize({ width: 390, height: 844 });
 		await page.goto('/');
 		await firstRenderedRow(page);
@@ -559,7 +565,7 @@ test.describe('Mobile map interaction', () => {
 	test('reduced-motion map open and close completes without runtime errors', async ({
 		page
 	}, testInfo) => {
-		test.skip(testInfo.project.name !== 'Mobile Chrome', 'Mobile viewport only');
+		test.skip(!/Mobile Chrome|iPhone WebKit/.test(testInfo.project.name), 'Mobile viewport only');
 		const runtimeErrors: string[] = [];
 		page.on('console', (message) => {
 			if (message.type() === 'error') runtimeErrors.push(`console: ${message.text()}`);
@@ -589,7 +595,7 @@ test.describe('Mobile map interaction', () => {
 	test('geolocation reports its controlled permission error after loading', async ({
 		page
 	}, testInfo) => {
-		test.skip(testInfo.project.name !== 'Mobile Chrome', 'Mobile viewport only');
+		test.skip(!/Mobile Chrome|iPhone WebKit/.test(testInfo.project.name), 'Mobile viewport only');
 		await page.addInitScript(() => {
 			let rejectPermission: (() => void) | undefined;
 			Object.defineProperty(navigator, 'geolocation', {
@@ -648,7 +654,7 @@ test.describe('Mobile map interaction', () => {
 	test('unsupported geolocation message stays inside the 320px map sheet', async ({
 		page
 	}, testInfo) => {
-		test.skip(testInfo.project.name !== 'Mobile Chrome', 'Mobile viewport only');
+		test.skip(!/Mobile Chrome|iPhone WebKit/.test(testInfo.project.name), 'Mobile viewport only');
 		await page.addInitScript(() => {
 			Object.defineProperty(navigator, 'geolocation', {
 				configurable: true,
@@ -700,7 +706,7 @@ test.describe('Mobile map interaction', () => {
 	test('desktop breakpoint closes the mobile disclosure and focuses the inline map', async ({
 		page
 	}, testInfo) => {
-		test.skip(testInfo.project.name !== 'Mobile Chrome', 'Mobile viewport only');
+		test.skip(!/Mobile Chrome|iPhone WebKit/.test(testInfo.project.name), 'Mobile viewport only');
 		await page.setViewportSize({ width: 390, height: 844 });
 		await page.goto('/');
 		await firstRenderedRow(page);
@@ -733,7 +739,7 @@ test.describe('Mobile map interaction', () => {
 	});
 
 	test('desktop breakpoint restores a visible Show on map opener', async ({ page }, testInfo) => {
-		test.skip(testInfo.project.name !== 'Mobile Chrome', 'Mobile viewport only');
+		test.skip(!/Mobile Chrome|iPhone WebKit/.test(testInfo.project.name), 'Mobile viewport only');
 		await page.setViewportSize({ width: 390, height: 844 });
 		await page.goto('/');
 
@@ -957,7 +963,7 @@ test.describe('Mobile map interaction', () => {
 	test('short zoomed phone viewport keeps restaurant rows reachable', async ({
 		page
 	}, testInfo) => {
-		test.skip(testInfo.project.name !== 'Mobile Chrome', 'Mobile viewport only');
+		test.skip(!/Mobile Chrome|iPhone WebKit/.test(testInfo.project.name), 'Mobile viewport only');
 		test.setTimeout(60_000);
 		await page.setViewportSize({ width: 195, height: 422 });
 		await page.goto('/');
