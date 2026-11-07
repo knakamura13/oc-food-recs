@@ -873,11 +873,13 @@
 				style:height={mapExpanded ? `${sheetHeightPx}px` : undefined}
 			>
 				{#if mapExpanded}
+					<!-- The name says what a tap does (peek and half expand, full collapses). No
+					     aria-expanded: three stops do not fit its yes/no, and at half it read
+					     "Expand list, expanded". -->
 					<button
 						type="button"
 						class="sheet-grabber"
 						aria-label={sheetState === 'full' ? 'Collapse list' : 'Expand list'}
-						aria-expanded={sheetState !== 'peek'}
 						onpointerdown={handleSheetPointerDown}
 						onpointermove={handleSheetPointerMove}
 						onpointerup={handleSheetPointerEnd}

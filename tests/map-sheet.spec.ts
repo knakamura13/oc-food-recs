@@ -45,12 +45,16 @@ test('grabber cycles peek, half and full, then back to peek', async ({ page }) =
 	await openMap(page);
 	const grabber = page.locator('.sheet-grabber');
 	await expect(grabber).toHaveAccessibleName('Expand list');
+	// The name says what a tap does; a yes/no expanded state cannot describe three stops.
+	await expect(grabber).not.toHaveAttribute('aria-expanded');
 	const peek = await sheetHeight(page);
 
 	await grabber.click();
 	await expect.poll(() => sheetHeight(page)).toBeGreaterThan(peek + 100);
 	const half = await sheetHeight(page);
-	await expect(grabber).toHaveAttribute('aria-expanded', 'true');
+	// Half still expands on the next tap, and must not also announce "expanded".
+	await expect(grabber).toHaveAccessibleName('Expand list');
+	await expect(grabber).not.toHaveAttribute('aria-expanded');
 
 	await grabber.click();
 	await expect.poll(() => sheetHeight(page)).toBeGreaterThan(half + 100);
@@ -101,7 +105,8 @@ test('dragging the grabber follows the pointer and snaps', async ({ page }) => {
 	expect(mid).toBeGreaterThan(peek + 100);
 	await page.mouse.up();
 	await expect(page.locator('.list-pane.sheet')).not.toHaveClass(/sheet-dragging/);
-	await expect(page.locator('.sheet-grabber')).toHaveAttribute('aria-expanded', 'true');
+	// Landed on half, not full: the next tap still expands.
+	await expect(page.locator('.sheet-grabber')).toHaveAccessibleName('Expand list');
 	const half = await sheetHeight(page);
 	expect(half).toBeGreaterThan(peek + 100);
 

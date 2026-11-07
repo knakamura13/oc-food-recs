@@ -229,7 +229,9 @@ test.describe('Mobile map interaction', () => {
 
 		// The list is a sheet over the map, with a grabber that resizes it.
 		await expect(listPane).toHaveClass(/sheet/);
-		await expect(page.getByRole('button', { name: 'Expand list' })).toHaveAttribute('aria-expanded', 'false');
+		const grabber = page.getByRole('button', { name: 'Expand list', exact: true });
+		await expect(grabber).toBeVisible();
+		await expect(grabber).not.toHaveAttribute('aria-expanded');
 
 		const searchInput = page.getByRole('combobox', { name: /search restaurants/i });
 		await expect(searchInput).toBeVisible();
