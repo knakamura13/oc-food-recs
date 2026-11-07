@@ -2,7 +2,7 @@
 	import { requestUserLocation } from '$lib/restaurants/location';
 	import { onMount, untrack } from 'svelte';
 	import { SEARCH_DEBOUNCE_MS, scheduleDebounced } from '$lib/debounce';
-	import { coordsForFitBounds, fitCorners } from '$lib/restaurants/explorer-bounds';
+	import { coordsForFitBounds, fitCorners, type MapViewBounds } from '$lib/restaurants/explorer-bounds';
 	import type { Restaurant } from '$lib/restaurants/types';
 	import { appState, isUnmappedRestaurant } from '$lib/restaurants/stores.svelte';
 
@@ -12,9 +12,38 @@
 	interface Props {
 		restaurants: Restaurant[];
 		mapExpanded: boolean;
+		/** Called (debounced) with the visible area each time the map settles, while expanded. */
+		onBoundsChange?: (bounds: MapViewBounds) => void;
+		/** Space covered by floating chrome; fits keep pins out from under it. */
+		insets?: { top: number; bottom: number };
 	}
 
-	let { restaurants, mapExpanded = false }: Props = $props();
+	let { restaurants, mapExpanded = false, onBoundsChange, insets }: Props = $props();
+
+	const BOUNDS_EMIT_DELAY_MS = 150;
+	let boundsEmitTimer: ReturnType<typeof setTimeout> | null = null;
+	function scheduleBoundsEmit() {
+		if (!onBoundsChange) return;
+		if (boundsEmitTimer) clearTimeout(boundsEmitTimer);
+		boundsEmitTimer = setTimeout(() => {
+			boundsEmitTimer = null;
+			if (destroyed || !leafletMap || !mapExpanded) return;
+			const view = leafletMap.getBounds();
+			onBoundsChange?.({
+				south: view.getSouth(),
+				west: view.getWest(),
+				north: view.getNorth(),
+				east: view.getEast()
+			});
+		}, BOUNDS_EMIT_DELAY_MS);
+	}
+
+	/** fitBounds padding: the usual margin, or margins that clear the chips and list sheet. */
+	function fitPadding() {
+		return insets
+			? { paddingTopLeft: [30, 30 + insets.top], paddingBottomRight: [30, 30 + insets.bottom] }
+			: { padding: [30, 30] };
+	}
 
 	let mapContainer: HTMLDivElement | undefined = $state();
 	let leafletMap: any = $state();
@@ -124,6 +153,8 @@
 
 	function disposeMap() {
 		pendingFocus = null;
+		if (boundsEmitTimer) clearTimeout(boundsEmitTimer);
+		boundsEmitTimer = null;
 		if (locationMarker && leafletMap) leafletMap.removeLayer(locationMarker);
 		locationMarker = null;
 		// markercluster does not cancel its internal chunk timer on removal.
@@ -185,6 +216,7 @@
 			leafletMap.on('click', () => {
 				appState.selectedRestaurantSlug = null;
 			});
+			leafletMap.on('moveend', scheduleBoundsEmit);
 
 			updateMarkers();
 			mapInitialized = true;
@@ -425,8 +457,9 @@
 					} else if (mappedRestaurants.length && (expanded || !mobileViewportQuery?.matches)) {
 						const corners = fitCorners(coordsForFitBounds(mappedRestaurants));
 						if (corners) leafletMap.fitBounds(L.latLngBounds(corners),
-							{ padding: [30, 30], maxZoom: 14, animate: false });
+							{ ...fitPadding(), maxZoom: 14, animate: false });
 					}
+					if (expanded) scheduleBoundsEmit();
 				});
 			});
 		});
@@ -470,7 +503,7 @@
 			const mapped = targets.filter((r) => r.lat !== null && r.lng !== null);
 			const corners = fitCorners(mapped.map((r) => ({ lat: r.lat as number, lng: r.lng as number })));
 			if (corners) {
-				leafletMap.fitBounds(L.latLngBounds(corners), { padding: [30, 30], maxZoom: 14, animate: !reduceMotion() });
+				leafletMap.fitBounds(L.latLngBounds(corners), { ...fitPadding(), maxZoom: 14, animate: !reduceMotion() });
 			}
 			appState.fitBoundsTarget = null;
 		}

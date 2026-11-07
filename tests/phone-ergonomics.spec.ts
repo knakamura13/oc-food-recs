@@ -54,7 +54,7 @@ for (const width of [320, 390]) {
 	});
 }
 
-test('mobile map occupies the viewport and retains modal focus and Escape', async ({ page }, info) => {
+test('mobile map fills the viewport behind the sheet, keeps attribution visible and closes on Escape', async ({ page }, info) => {
 	test.skip(!/Mobile Chrome|iPhone WebKit/.test(info.project.name));
 	await page.setViewportSize({ width: 390, height: 844 });
 	await page.goto('/?city=Santa%20Ana');
@@ -65,8 +65,15 @@ test('mobile map occupies the viewport and retains modal focus and Escape', asyn
 	const box = await map.boundingBox();
 	expect(box).toEqual({ x: 0, y: 0, width: 390, height: 844 });
 	await expect(map.getByRole('button', { name: 'Close map', exact: true })).toBeFocused();
-	expect(await map.evaluate((el) => getComputedStyle(el, '::backdrop').backgroundColor)).not.toBe('rgba(0, 0, 0, 0)');
-	await expect(map.getByRole('link', { name: 'OpenStreetMap contributors' })).toHaveAttribute('href', 'https://www.openstreetmap.org/copyright');
+	const attribution = map.getByRole('link', { name: 'OpenStreetMap contributors' });
+	await expect(attribution).toHaveAttribute('href', 'https://www.openstreetmap.org/copyright');
+	// The sheet must not cover the attribution OpenStreetMap requires.
+	await expect(attribution).toBeVisible();
+	expect(await attribution.evaluate((el) => {
+		const r = el.getBoundingClientRect();
+		const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+		return hit === el || el.contains(hit);
+	})).toBe(true);
 	await page.screenshot({ scale: 'css', path: info.outputPath('phone-map.png') });
 	await page.keyboard.press('Escape');
 	await expect(map).toBeHidden();

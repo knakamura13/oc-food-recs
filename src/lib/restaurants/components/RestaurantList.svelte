@@ -49,9 +49,11 @@
 		/** Thread metadata by id, for the "r/sub · title" attribution on each comment. */
 		threadsById?: Record<string, ThreadSummary>;
 		commentQuotes?: Record<string, string>;
+		/** True when the list is empty only because the map's visible area holds nothing. */
+		emptyForMapArea?: boolean;
 	}
 
-	let { restaurants, totalCount, onShowOnMap, threadsById = {}, commentQuotes = {} }: Props = $props();
+	let { restaurants, totalCount, onShowOnMap, threadsById = {}, commentQuotes = {}, emptyForMapArea = false }: Props = $props();
 
 	let priorVisitMs = $state<number | null>(null);
 
@@ -511,6 +513,10 @@
 					>
 						Show all restaurants
 					</button>
+				{:else if emptyForMapArea}
+					<span class="empty-icon" aria-hidden="true">&#x1F5FA;</span>
+					<p class="empty-title">Nothing in this map area</p>
+					<p class="empty-hint">Zoom out or move the map to see more places.</p>
 				{:else}
 					<span class="empty-icon" aria-hidden="true">&#x1F50D;</span>
 					<p class="empty-title">No restaurants found</p>

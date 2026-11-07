@@ -159,7 +159,7 @@ async function wheelMapAndReadZoom(page: Page): Promise<{ before: number; after:
 }
 
 test.describe('Mobile map interaction', () => {
-	test('disclosure opens an accessible sheet and Escape restores the opener', async ({
+	test('map opens non-modal behind a list sheet and Escape restores the opener', async ({
 		page
 	}, testInfo) => {
 		test.skip(!/Mobile Chrome|iPhone WebKit/.test(testInfo.project.name), 'Mobile viewport only');
@@ -189,17 +189,19 @@ test.describe('Mobile map interaction', () => {
 		await mapTrigger.focus();
 		await page.keyboard.press('Enter');
 
-		await expect(mapTrigger).toHaveAccessibleName('Close map');
+		// The floating Map button gives way to the Close map button while the map is open.
+		await expect(mapTrigger).toBeHidden();
 		await expect(mapTrigger).toHaveAttribute('aria-expanded', 'true');
 		await expect(mapPane).toBeVisible();
 		await expect(mapPane).toHaveClass(/portal-expanded/);
 		expect(await mapPane.evaluate((element) => element.tagName)).toBe('DIALOG');
 		await expect(mapPane).toHaveJSProperty('open', true);
+		// Non-modal: the list sheet and filter chips stay usable over the map.
 		expect(
 			await mapPane.evaluate((element) => element instanceof HTMLDialogElement && element.matches(':modal'))
-		).toBe(true);
+		).toBe(false);
 		await expect(page.getByRole('dialog', { name: 'Restaurant map' })).toBeVisible();
-		await expect(mapPane).toHaveAttribute('aria-modal', 'true');
+		await expect(mapPane).not.toHaveAttribute('aria-modal', 'true');
 		await expect(mapPane).toHaveAccessibleName('Restaurant map');
 		await expect(page.locator('.leaflet-container')).toBeVisible({ timeout: 30_000 });
 		await expect(page.getByRole('application')).toBeVisible();
@@ -218,34 +220,13 @@ test.describe('Mobile map interaction', () => {
 
 		const closeButton = page.locator('.map-close-btn');
 		await expect(closeButton).toBeFocused();
-		await expect(listPane).toHaveAttribute('inert', '');
+		await expect(closeButton).toHaveAccessibleName('Close map');
+		await expect(listPane).not.toHaveAttribute('inert', '');
 		await expect(page.locator('html')).toHaveClass(/mobile-map-expanded-lock/);
 
-		// Focus trap: Tab / Shift+Tab stay inside the dialog. WebKit's default keyboard model does
-		// not Tab to buttons (that needs Full Keyboard Access), so this only runs elsewhere.
-		const tabsToButtons = testInfo.project.name !== 'iPhone WebKit';
-		for (let i = 0; tabsToButtons && i < 12; i += 1) {
-			await page.keyboard.press('Tab');
-			expect(
-				await page.evaluate(() => {
-					const pane = document.getElementById('restaurant-map-panel');
-					const active = document.activeElement;
-					return Boolean(pane && active && pane.contains(active));
-				})
-			).toBe(true);
-		}
-		await closeButton.focus();
-		if (tabsToButtons) {
-			await page.keyboard.press('Shift+Tab');
-			expect(
-				await page.evaluate(() => {
-					const pane = document.getElementById('restaurant-map-panel');
-					const active = document.activeElement;
-					return Boolean(pane && active && pane.contains(active) && active !== pane.querySelector('.map-close-btn'));
-				})
-			).toBe(true);
-			await closeButton.focus();
-		}
+		// The list is a sheet over the map, with a grabber that resizes it.
+		await expect(listPane).toHaveClass(/sheet/);
+		await expect(page.getByRole('button', { name: 'Expand list' })).toHaveAttribute('aria-expanded', 'false');
 
 		const searchInput = page.getByRole('combobox', { name: /search restaurants/i });
 		await expect(searchInput).toBeVisible();
@@ -254,10 +235,12 @@ test.describe('Mobile map interaction', () => {
 
 		await expect(mapPane).toBeHidden();
 		await expect(mapPane).toHaveJSProperty('open', false);
+		await expect(mapTrigger).toBeVisible();
 		await expect(mapTrigger).toHaveAccessibleName('Open map');
 		await expect(mapTrigger).toHaveAttribute('aria-expanded', 'false');
 		await expect(mapTrigger).toBeFocused();
 		await expect(listPane).not.toHaveAttribute('inert', '');
+		await expect(listPane).not.toHaveClass(/sheet/);
 		await expect(page.locator('html')).not.toHaveClass(/mobile-map-expanded-lock/);
 		await expect(page.getByRole('application')).toHaveCount(0);
 	});
@@ -579,6 +562,8 @@ test.describe('Mobile map interaction', () => {
 		const mapTrigger = page.locator('.mobile-map-trigger');
 		await mapTrigger.click();
 		await expect(page.locator('.leaflet-container')).toBeVisible({ timeout: 30_000 });
+		// Opening moves focus to Close map; wait for that before closing so the two do not race.
+		await expect(page.locator('.map-close-btn')).toBeFocused();
 		await page.locator('.map-close-btn').click();
 
 		await expect(page.locator('#restaurant-map-panel')).toBeHidden();

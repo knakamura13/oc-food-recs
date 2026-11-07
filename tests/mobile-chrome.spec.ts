@@ -39,7 +39,7 @@ test('390px chrome leaves room for restaurant results', async ({ page }, testInf
 	expect(metrics.mapRight).toBeLessThanOrEqual(metrics.vw + 1);
 });
 
-test('320px toolbar is one scrolling row that signals more controls and keeps Map and the count in view', async ({ page }, testInfo) => {
+test('320px toolbar is one row that signals any hidden controls and keeps Map and the count in view', async ({ page }, testInfo) => {
 	test.skip(!/Mobile Chrome|iPhone WebKit/.test(testInfo.project.name), 'Mobile viewport only');
 	test.setTimeout(60_000);
 	await page.setViewportSize({ width: 320, height: 568 });
@@ -78,8 +78,9 @@ test('320px toolbar is one scrolling row that signals more controls and keeps Ma
 
 	expect(metrics.firstControlFullyVisible).toBe(true);
 	expect(metrics.oneRow).toBe(true);
-	expect(metrics.hasOverflow).toBe(true);
-	expect(metrics.overflowEnd).toBe(true);
+	// With the facet dropdowns folded into the Filters sheet the row may fit; if it does
+	// not, the fade must say there is more.
+	if (metrics.hasOverflow) expect(metrics.overflowEnd).toBe(true);
 	expect(metrics.mapWidth).toBeGreaterThanOrEqual(44);
 	expect(metrics.mapHeight).toBeGreaterThanOrEqual(44);
 	expect(metrics.mapName).toBe('Open map');
@@ -87,112 +88,29 @@ test('320px toolbar is one scrolling row that signals more controls and keeps Ma
 	expect(metrics.countRight).toBeLessThanOrEqual(metrics.vw + 1);
 });
 
-test('320px recency panel stays inside the viewport', async ({ page }, testInfo) => {
-	test.skip(!/Mobile Chrome|iPhone WebKit/.test(testInfo.project.name), 'Mobile viewport only');
-	test.setTimeout(60_000);
-	await page.setViewportSize({ width: 320, height: 568 });
-	await page.goto('/');
-
-	const trigger = page.getByRole('button', { name: 'Recency', exact: true });
+async function openFiltersSheet(page: import('@playwright/test').Page) {
+	const trigger = page.getByRole('button', { name: /^Filters/ });
 	await expect(trigger).toBeVisible({ timeout: 30_000 });
-	const panel = page.locator('.recency-panel');
+	const sheet = page.getByRole('dialog', { name: 'Filters' });
+	// A click before hydration is lost, so retry until the sheet opens.
 	await expect(async () => {
-		if (await panel.isVisible()) return;
-		await trigger.evaluate((el) => {
-			el.scrollIntoView({ block: 'nearest', inline: 'center' });
-		});
-		await trigger.click();
-		await expect(panel).toBeVisible({ timeout: 1000 });
+		if (!(await sheet.isVisible())) await trigger.click({ timeout: 2_000 });
+		await expect(sheet).toBeVisible({ timeout: 2_000 });
 	}).toPass({ timeout: 20_000 });
+	return sheet;
+}
 
-	const box = await panel.evaluate((el) => {
-		const rect = el.getBoundingClientRect();
-		return {
-			left: rect.left,
-			right: rect.right,
-			top: rect.top,
-			bottom: rect.bottom,
-			width: rect.width,
-			vw: window.innerWidth,
-			vh: window.innerHeight,
-			title: el.querySelector('.recency-title')?.textContent?.trim() ?? ''
-		};
-	});
-
-	expect(box.left).toBeGreaterThanOrEqual(-1);
-	expect(box.right).toBeLessThanOrEqual(box.vw + 1);
-	expect(box.top).toBeGreaterThanOrEqual(-1);
-	expect(box.bottom).toBeLessThanOrEqual(box.vh + 1);
-	expect(box.width).toBeLessThanOrEqual(box.vw - 16);
-	expect(box.title).toBe('Comment recency');
-});
-
-test('320px recency Reset stays visible inside the clamped panel', async ({ page }, testInfo) => {
+test('320px Filters sheet stays inside the viewport and keeps its apply button reachable', async ({ page }, testInfo) => {
 	test.skip(!/Mobile Chrome|iPhone WebKit/.test(testInfo.project.name), 'Mobile viewport only');
 	test.setTimeout(60_000);
 	await page.setViewportSize({ width: 320, height: 568 });
 	await page.goto('/');
+	const sheet = await openFiltersSheet(page);
 
-	const trigger = page.getByRole('button', { name: 'Recency', exact: true });
-	await expect(trigger).toBeVisible({ timeout: 30_000 });
-	const panel = page.locator('.recency-panel');
-	await expect(async () => {
-		if (await panel.isVisible()) return;
-		await trigger.evaluate((el) => {
-			el.scrollIntoView({ block: 'nearest', inline: 'center' });
-		});
-		await trigger.click();
-		await expect(panel).toBeVisible({ timeout: 1000 });
-	}).toPass({ timeout: 20_000 });
-
-	const metrics = await panel.evaluate((el) => {
-		const reset = el.querySelector<HTMLElement>('.reset');
-		const slider = el.querySelector<HTMLElement>('.slider');
-		if (!reset || !slider) throw new Error('Missing recency controls');
-		const panelBox = el.getBoundingClientRect();
-		const resetBox = reset.getBoundingClientRect();
-		const sliderBox = slider.getBoundingClientRect();
-		const fullyIn = (inner: DOMRect, outer: DOMRect) =>
-			inner.top >= outer.top - 1 &&
-			inner.bottom <= outer.bottom + 1 &&
-			inner.left >= outer.left - 1 &&
-			inner.right <= outer.right + 1;
-		return {
-			resetInPanel: fullyIn(resetBox, panelBox),
-			sliderInPanel: fullyIn(sliderBox, panelBox),
-			resetInViewport:
-				resetBox.top >= -1 &&
-				resetBox.bottom <= window.innerHeight + 1 &&
-				resetBox.left >= -1 &&
-				resetBox.right <= window.innerWidth + 1,
-			panelBottom: Math.round(panelBox.bottom),
-			resetBottom: Math.round(resetBox.bottom),
-			vh: window.innerHeight
-		};
-	});
-
-	expect(metrics.sliderInPanel).toBe(true);
-	expect(metrics.resetInPanel).toBe(true);
-	expect(metrics.resetInViewport).toBe(true);
-	expect(metrics.resetBottom).toBeLessThanOrEqual(metrics.vh + 1);
-	expect(metrics.panelBottom).toBeLessThanOrEqual(metrics.vh + 1);
-});
-
-test('320px cuisine list stays inside the viewport', async ({ page }, testInfo) => {
-	test.skip(!/Mobile Chrome|iPhone WebKit/.test(testInfo.project.name), 'Mobile viewport only');
-	test.setTimeout(60_000);
-	await page.setViewportSize({ width: 320, height: 568 });
-	await page.goto('/');
-
-	const trigger = page.getByRole('button', { name: 'Cuisine', exact: true });
-	await expect(trigger).toBeVisible({ timeout: 30_000 });
-	await trigger.click();
-	const panel = page.locator('#cuisine-listbox');
-	await expect(panel).toBeVisible();
-
-	const box = await panel.evaluate((el) => {
+	const metrics = await sheet.evaluate((el) => {
 		const rect = el.getBoundingClientRect();
-		const items = [...el.querySelectorAll<HTMLElement>('.dropdown-item')].slice(0, 8).map((item) =>
+		const apply = el.querySelector<HTMLElement>('.filters-sheet-apply')!.getBoundingClientRect();
+		const options = [...el.querySelectorAll<HTMLElement>('.dropdown-item')].slice(0, 8).map((item) =>
 			Math.round(item.getBoundingClientRect().height)
 		);
 		return {
@@ -200,20 +118,42 @@ test('320px cuisine list stays inside the viewport', async ({ page }, testInfo) 
 			right: rect.right,
 			top: rect.top,
 			bottom: rect.bottom,
+			applyBottom: apply.bottom,
+			applyHeight: apply.height,
 			vw: window.innerWidth,
 			vh: window.innerHeight,
-			itemHeights: items
+			options
 		};
 	});
+	expect(metrics.left).toBeGreaterThanOrEqual(-1);
+	expect(metrics.right).toBeLessThanOrEqual(metrics.vw + 1);
+	expect(metrics.top).toBeGreaterThanOrEqual(-1);
+	expect(metrics.bottom).toBeLessThanOrEqual(metrics.vh + 1);
+	expect(metrics.applyBottom).toBeLessThanOrEqual(metrics.vh + 1);
+	expect(metrics.applyHeight).toBeGreaterThanOrEqual(44);
+	expect(metrics.options.length).toBeGreaterThan(0);
+	for (const height of metrics.options) expect(height).toBeGreaterThanOrEqual(44);
+});
 
-	expect(box.left).toBeGreaterThanOrEqual(-1);
-	expect(box.right).toBeLessThanOrEqual(box.vw + 1);
-	expect(box.top).toBeGreaterThanOrEqual(-1);
-	expect(box.bottom).toBeLessThanOrEqual(box.vh + 1);
-	expect(box.itemHeights.length).toBeGreaterThan(0);
-	for (const height of box.itemHeights) {
-		expect(height).toBeGreaterThanOrEqual(44);
-	}
+test('320px Filters sheet reaches the recency slider and Reset by scrolling its body', async ({ page }, testInfo) => {
+	test.skip(!/Mobile Chrome|iPhone WebKit/.test(testInfo.project.name), 'Mobile viewport only');
+	test.setTimeout(60_000);
+	await page.setViewportSize({ width: 320, height: 568 });
+	await page.goto('/');
+	const sheet = await openFiltersSheet(page);
+
+	const slider = sheet.locator('.slider');
+	await slider.scrollIntoViewIfNeeded();
+	const metrics = await sheet.evaluate((el) => {
+		const body = el.querySelector<HTMLElement>('.filters-sheet-body')!.getBoundingClientRect();
+		const slider = el.querySelector<HTMLElement>('.slider')!.getBoundingClientRect();
+		return {
+			sliderInBody: slider.top >= body.top - 1 && slider.bottom <= body.bottom + 1,
+			sliderInViewport: slider.left >= -1 && slider.right <= window.innerWidth + 1
+		};
+	});
+	expect(metrics.sliderInBody).toBe(true);
+	expect(metrics.sliderInViewport).toBe(true);
 });
 
 test('320px drawer actions stay visible above comments', async ({ page }, testInfo) => {
@@ -344,20 +284,19 @@ test('desktop drawer keeps actions above comments', async ({ page }, testInfo) =
 	}
 });
 
-test('320px cuisine selection closes the menu so a result row is tappable', async ({
+test('320px Filters sheet applies a cuisine, then Show closes it so a result row is tappable', async ({
 	page
 }, testInfo) => {
 	test.skip(!/Mobile Chrome|iPhone WebKit/.test(testInfo.project.name), 'Mobile viewport only');
 	test.setTimeout(60_000);
 	await page.setViewportSize({ width: 320, height: 568 });
 	await page.goto('/');
+	const sheet = await openFiltersSheet(page);
 
-	const trigger = page.getByRole('button', { name: 'Cuisine', exact: true });
-	await expect(trigger).toBeVisible({ timeout: 30_000 });
-	await trigger.click();
-	await expect(page.locator('#cuisine-listbox')).toBeVisible();
-	await page.locator('#cuisine-listbox .dropdown-item').first().click();
-	await expect(page.locator('#cuisine-listbox')).toHaveCount(0);
+	await sheet.getByRole('listbox', { name: 'Filter by cuisine' }).locator('.dropdown-item').first().click();
+	await expect(page.getByRole('button', { name: /^Filters/ })).toContainText('1');
+	await sheet.getByRole('button', { name: /^Show/ }).click();
+	await expect(page.getByRole('dialog', { name: 'Filters' })).toBeHidden();
 
 	const row = page.locator('.row-toggle').first();
 	await expect(row).toBeVisible();

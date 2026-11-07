@@ -39,3 +39,24 @@ export function fitCorners(
   const [west, east] = range(coords.map((c) => c.lng));
   return [[south, west], [north, east]];
 }
+
+/** The part of the map the visitor is looking at, in degrees. */
+export type MapViewBounds = { south: number; west: number; north: number; east: number };
+
+/**
+ * Restaurants inside the visible map area. Restaurants with no coordinates are never
+ * "in" an area, so they only stay when the visitor asked to include unmapped places.
+ */
+export function restaurantsInBounds<T extends { lat?: number | null; lng?: number | null }>(
+  restaurants: T[],
+  bounds: MapViewBounds,
+  { keepUnmapped = false }: { keepUnmapped?: boolean } = {},
+): T[] {
+  return restaurants.filter((r) => {
+    if (r.lat == null || r.lng == null) return keepUnmapped;
+    return (
+      r.lat >= bounds.south && r.lat <= bounds.north &&
+      r.lng >= bounds.west && r.lng <= bounds.east
+    );
+  });
+}

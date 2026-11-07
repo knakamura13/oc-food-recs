@@ -24,8 +24,17 @@ test('comment matches appear as labelled escaped quotes and obey the city filter
 	await expect(page.locator('#restaurant-la-taco-spot')).toHaveCount(0);
 	await search.fill('');
 	await expect(page.locator('#restaurant-la-taco-spot')).toBeVisible();
-	await page.getByRole('button', { name: /^City/ }).click();
-	await page.getByRole('option', { name: /^Santa Ana/ }).click();
+	const cityTrigger = page.getByRole('button', { name: /^City/ });
+	if (await cityTrigger.isVisible()) {
+		await cityTrigger.click();
+		await page.getByRole('option', { name: /^Santa Ana/ }).click();
+	} else {
+		// Phones: the Cuisine/City/Recency/Subreddit dropdowns live in the Filters sheet.
+		await page.getByRole('button', { name: /^Filters/ }).click();
+		const sheet = page.getByRole('dialog', { name: 'Filters' });
+		await sheet.getByRole('option', { name: /^Santa Ana/ }).click();
+		await sheet.getByRole('button', { name: /^Show/ }).click();
+	}
 	await search.click();
 	await search.fill('tonkotsu');
 	await expect(page.locator('.row')).toHaveCount(0);
