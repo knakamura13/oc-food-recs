@@ -1109,7 +1109,7 @@ class BuildThreadDatasetTest(unittest.TestCase):
         dataset = self.pipeline.build_thread_dataset(parsed, entity_records)
         self.assertEqual(len(dataset["restaurants"][0]["endorsements"]), 2)
 
-    def test_thread_dataset_from_page_save_shares_nested_endorsements(self):
+    def test_thread_dataset_from_page_save_scopes_nested_endorsements(self):
         parsed = self.pipeline.parse_saved_reddit_html(PAGE_FIXTURE)
         entity_records = [
             {
@@ -1147,33 +1147,17 @@ class BuildThreadDatasetTest(unittest.TestCase):
                 "Okonomi Corner",
             ],
         )
-        # Both restaurants from the multi-restaurant root collect its endorsement-type
-        # replies at every depth (the depth-4 question is dropped), and each of those
-        # replies names at most one of the two.
-        for name, naming_reply in (
-            ("Tía Rosalba’s Kitchen", "t1_pg04"),
-            ("Lantern Alley Pho", "t1_pg02"),
-        ):
+        # Explicit topics and their descendants stay with that business. The
+        # root-level unnamed "seconded" is ambiguous across the two businesses.
+        expected = {
+            "Tía Rosalba’s Kitchen": [("t1_pg04", "dish_rec"), ("t1_pg05", "personal_story")],
+            "Lantern Alley Pho": [("t1_pg02", "endorsement")],
+        }
+        for name, replies in expected.items():
             with self.subTest(restaurant=name):
                 restaurant = restaurants[name]
                 self.assertEqual(restaurant["primary_comment"]["id"], "t1_pg01")
-                self.assertEqual(
-                    [(e["id"], e["type"]) for e in restaurant["endorsements"]],
-                    [
-                        ("t1_pg03", "endorsement"),
-                        ("t1_pg04", "dish_rec"),
-                        ("t1_pg02", "endorsement"),
-                        ("t1_pg05", "personal_story"),
-                    ],
-                )
-                self.assertEqual(
-                    [
-                        e["id"]
-                        for e in restaurant["endorsements"]
-                        if names_restaurant(e["body"], name)
-                    ],
-                    [naming_reply],
-                )
+                self.assertEqual([(e["id"], e["type"]) for e in restaurant["endorsements"]], replies)
         # Neither the negative-score reply nor the removed one is an endorsement.
         self.assertEqual(restaurants["Saffron Courtyard"]["endorsements"], [])
 
