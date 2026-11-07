@@ -45,6 +45,22 @@
 			: { padding: [30, 30] };
 	}
 
+	/**
+	 * Under the phone list sheet, focusing a restaurant zooms to street level rather than the
+	 * maximum: the list follows the visible area, and at max zoom it shrank to one or two rows.
+	 */
+	const SHEET_FOCUS_ZOOM = 15;
+
+	/** Center and zoom that put a restaurant in view; under the sheet, between chips and sheet. */
+	function focusView(lat: number, lng: number): { center: any; zoom: number } {
+		const maxZoom = leafletMap.getMaxZoom();
+		if (!insets) return { center: [lat, lng], zoom: maxZoom };
+		const zoom = Math.min(Math.max(leafletMap.getZoom(), SHEET_FOCUS_ZOOM), maxZoom);
+		// Shift the map center south so the pin lands mid-way down the uncovered band.
+		const point = leafletMap.project([lat, lng], zoom).add([0, (insets.bottom - insets.top) / 2]);
+		return { center: leafletMap.unproject(point, zoom), zoom };
+	}
+
 	let mapContainer: HTMLDivElement | undefined = $state();
 	let leafletMap: any = $state();
 	let markers = new Map<string, any>();
@@ -93,8 +109,9 @@
 		pendingFocus = null;
 		const token = ++focusToken;
 		const marker = markers.get(slug);
+		const view = focusView(lat, lng);
 		if (!marker || !clusterGroupRef) {
-			leafletMap.setView([lat, lng], leafletMap.getMaxZoom(), { animate: !reduceMotion() });
+			leafletMap.setView(view.center, view.zoom, { animate: !reduceMotion() });
 			return;
 		}
 
@@ -117,7 +134,7 @@
 		// Register before setView: a large zoom jump fires 'moveend' synchronously inside
 		// setView, so a listener attached afterward would miss it.
 		leafletMap.once('moveend', () => setTimeout(reveal, 0));
-		leafletMap.setView([lat, lng], leafletMap.getMaxZoom(), { animate: !reduceMotion() });
+		leafletMap.setView(view.center, view.zoom, { animate: !reduceMotion() });
 	}
 
 	// Highlight the hovered (preferred) or selected restaurant's pin. This is the
@@ -477,11 +494,19 @@
 			const element = tooltip?.getElement();
 			if (destroyed || !leafletMap || !mapContainer || !element?.isConnected) return;
 			const viewport = mapContainer.getBoundingClientRect();
+			// Under the phone list sheet only the band between the chips and the sheet is visible.
+			const top = viewport.top + (insets?.top ?? 0);
+			const bottom = viewport.bottom - (insets?.bottom ?? 0);
 			const gutter = 12;
 			element.style.maxWidth = `${Math.max(0, viewport.width - gutter * 2)}px`;
 			const tip = element.getBoundingClientRect();
+			// Keep the pin in view with its label: a pin tapped low on the map ends up under the
+			// sheet once the sheet lifts to show its row.
+			const pin = tooltip?._source?.getElement?.()?.getBoundingClientRect();
+			const tipTop = Math.min(tip.top, pin?.top ?? tip.top);
+			const tipBottom = Math.max(tip.bottom, pin?.bottom ?? tip.bottom);
 			const dx = Math.max(0, tip.right - viewport.right + gutter) + Math.min(0, tip.left - viewport.left - gutter);
-			const dy = Math.max(0, tip.bottom - viewport.bottom + gutter) + Math.min(0, tip.top - viewport.top - gutter);
+			const dy = Math.max(0, tipBottom - bottom + gutter) + Math.min(0, tipTop - top - gutter);
 			if (dx || dy) leafletMap.panBy([dx, dy], { animate: !reduceMotion() });
 		});
 	}

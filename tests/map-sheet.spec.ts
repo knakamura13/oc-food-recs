@@ -165,6 +165,44 @@ test('tapping a pin lifts a collapsed sheet to half', async ({ page }) => {
 	await expect.poll(() => sheetHeight(page)).toBeGreaterThan(peek + 100);
 });
 
+/** True when the element's center is not under the list sheet or the floating chips. */
+async function uncovered(page: Page, selector: string) {
+	return page.locator(selector).first().evaluate((el) => {
+		const r = el.getBoundingClientRect();
+		const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+		return r.height > 0 && Boolean(hit) && !hit!.closest('.list-pane, .controls-bar');
+	});
+}
+
+for (const entry of ['row', 'Show on map'] as const) {
+	test(`focusing a restaurant from the ${entry} keeps its pin above the sheet, short of max zoom`, async ({ page }) => {
+		if (entry === 'row') {
+			await openMap(page);
+			await expect(page.locator('.leaflet-marker-icon').first()).toBeVisible({ timeout: 30_000 });
+			await page.locator('.sheet-grabber').click();
+			await page.locator('.list-pane.sheet .row-toggle').first().click();
+		} else {
+			await page.setViewportSize({ width: 390, height: 844 });
+			await page.goto('/');
+			const row = page.locator('.row-toggle').first();
+			await expect(row).toBeVisible({ timeout: 30_000 });
+			// A click before hydration is lost, so retry until the row opens.
+			const showOnMap = page.getByRole('button', { name: 'Show on map' }).first();
+			await expect(async () => {
+				if (!(await showOnMap.isVisible())) await row.click({ timeout: 2_000 });
+				await expect(showOnMap).toBeVisible({ timeout: 2_000 });
+			}).toPass({ timeout: 30_000 });
+			await showOnMap.click();
+		}
+		await expect(page.locator('.rec-marker.is-active')).toBeVisible({ timeout: 30_000 });
+		await expect.poll(() => uncovered(page, '.rec-marker.is-active'), { timeout: 10_000 }).toBe(true);
+		await expect.poll(() => uncovered(page, '.rec-tooltip'), { timeout: 10_000 }).toBe(true);
+		// At max zoom the list (which follows the map) shrank to the one place; Leaflet
+		// disables zoom-in only there.
+		await expect(page.locator('.leaflet-control-zoom-in')).not.toHaveClass(/leaflet-disabled/);
+	});
+}
+
 test('Escape closes the map from the sheet and restores the Map button', async ({ page }, testInfo) => {
 	test.skip(testInfo.project.name === 'iPhone WebKit', 'WebKit does not focus buttons by default');
 	await openMap(page);
