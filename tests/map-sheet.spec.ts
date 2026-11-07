@@ -236,6 +236,21 @@ test('Escape closes the map from the sheet and restores the Map button', async (
 	await expect(page.getByRole('button', { name: 'Open map', exact: true })).toBeFocused();
 });
 
+test('Tab out of the open sheet never lands on page content hidden behind the map', async ({ page }, testInfo) => {
+	test.skip(testInfo.project.name === 'iPhone WebKit', 'WebKit does not Tab to buttons by default');
+	await openMap(page);
+	await page.evaluate(() => {
+		const focusable = [...document.querySelectorAll<HTMLElement>('.list-pane a[href], .list-pane button')]
+			.filter((el) => el.getClientRects().length > 0);
+		focusable[focusable.length - 1].focus();
+	});
+	for (let i = 0; i < 3; i += 1) {
+		await page.keyboard.press('Tab');
+		const behindMap = await page.evaluate(() => Boolean(document.activeElement?.closest('.site-footer, .hero-section')));
+		expect(behindMap).toBe(false);
+	}
+});
+
 test('filter chips stay usable above the open map', async ({ page }) => {
 	await openMap(page);
 	const box = (await page.locator('.controls-bar').boundingBox())!;

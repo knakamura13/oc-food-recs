@@ -1133,6 +1133,13 @@
 			height: 100%;
 		}
 
+		/* The map is non-modal, so nothing else is inert: Tab out of the sheet reached the site
+		   footer's links behind the map, and screen readers could read the hidden hero. */
+		:global(html.mobile-map-expanded-lock .site-footer),
+		:global(html.mobile-map-expanded-lock) .hero-section {
+			visibility: hidden;
+		}
+
 		.map-pane {
 			display: none;
 		}
