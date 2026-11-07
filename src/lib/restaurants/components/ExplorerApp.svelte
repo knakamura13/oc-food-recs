@@ -650,6 +650,14 @@
 			? restaurantsInBounds(filteredRestaurants, mapBounds, { keepUnmapped: appState.showUnmapped })
 			: filteredRestaurants
 	);
+	// The list counts what shows above the sheet at its lowest stop. Using the live sheet height
+	// instead would make the list shrink whenever the visitor pulls the sheet up to read it.
+	const mapVisibleBand = $derived.by(() => {
+		void controlsHeight;
+		void viewportHeight;
+		const chipsBottom = controlsBarEl?.getBoundingClientRect().bottom ?? controlsHeight;
+		return { top: chipsBottom, bottom: (viewportHeight || window.innerHeight) - sheetHeights().peek };
+	});
 	const areaScoped = $derived(mapExpanded && mapBounds !== null);
 	// Only body-only matches get the second-tier label; existing Fuse matches retain precedence.
 	const visibleCommentMatches = $derived.by(() => {
@@ -848,6 +856,7 @@
 						{mapExpanded}
 						onBoundsChange={handleMapBoundsChange}
 						insets={mapExpanded ? { top: controlsHeight, bottom: sheetHeightPx } : undefined}
+						visibleBand={mapExpanded ? mapVisibleBand : undefined}
 					/>
 				</div>
 				{#if mapExpanded}

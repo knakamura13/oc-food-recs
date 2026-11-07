@@ -20,9 +20,15 @@
 		onBoundsChange?: (bounds: MapViewBounds, detail: { selectionMoved: boolean }) => void;
 		/** Space covered by floating chrome; fits keep pins out from under it. */
 		insets?: { top: number; bottom: number };
+		/**
+		 * The strip of the viewport (y coordinates, in px) that is never covered by chrome. The
+		 * emitted bounds are limited to it so places hidden under the chips or the list sheet
+		 * are not counted as "in this area".
+		 */
+		visibleBand?: { top: number; bottom: number };
 	}
 
-	let { restaurants, mapExpanded = false, onBoundsChange, insets }: Props = $props();
+	let { restaurants, mapExpanded = false, onBoundsChange, insets, visibleBand }: Props = $props();
 
 	const BOUNDS_EMIT_DELAY_MS = 150;
 	let boundsEmitTimer: ReturnType<typeof setTimeout> | null = null;
@@ -51,13 +57,20 @@
 			boundsAfterSelectionMove = false;
 			if (destroyed || !leafletMap || !mapExpanded) return;
 			const view = leafletMap.getBounds();
+			let north = view.getNorth();
+			let south = view.getSouth();
+			if (visibleBand && mapContainer) {
+				// Latitude is not linear in pixels (Web Mercator), so convert the band's edges.
+				const rect = mapContainer.getBoundingClientRect();
+				const top = Math.min(Math.max(visibleBand.top - rect.top, 0), rect.height);
+				const bottom = Math.min(Math.max(visibleBand.bottom - rect.top, 0), rect.height);
+				if (bottom > top) {
+					north = leafletMap.containerPointToLatLng([0, top]).lat;
+					south = leafletMap.containerPointToLatLng([rect.width, bottom]).lat;
+				}
+			}
 			onBoundsChange?.(
-				{
-					south: view.getSouth(),
-					west: view.getWest(),
-					north: view.getNorth(),
-					east: view.getEast()
-				},
+				{ south, west: view.getWest(), north, east: view.getEast() },
 				{ selectionMoved }
 			);
 		}, BOUNDS_EMIT_DELAY_MS);

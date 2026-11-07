@@ -23,7 +23,10 @@ vi.mock('leaflet', () => {
 		scrollWheelZoom: { enable: vi.fn(), disable: vi.fn() },
 		on: vi.fn(), once: vi.fn((_event, callback) => callback()),
 		addLayer: vi.fn(), removeLayer: vi.fn(), remove: vi.fn(),
-		invalidateSize: vi.fn(), fitBounds: vi.fn()
+		invalidateSize: vi.fn(), fitBounds: vi.fn(),
+		getBounds: () => ({ getSouth: () => 33.0, getNorth: () => 34.0, getWest: () => -118.2, getEast: () => -117.4 }),
+		// Fake projection: every 10 px down the container is 0.01 degrees south of 34.0.
+		containerPointToLatLng: ([, y]: [number, number]) => ({ lat: 34.0 - y / 1000, lng: -118 })
 	};
 	return { default: {
 		map: () => { harness.map = map; return map; },
@@ -132,4 +135,28 @@ it('lets a pending chunk finish before disposing its Leaflet map', async () => {
 	expect(harness.map.remove).not.toHaveBeenCalled();
 	finishBatch();
 	await waitFor(() => expect(harness.map.remove).toHaveBeenCalledOnce());
+});
+
+
+it('emits bounds limited to the band the chips and list sheet leave uncovered', async () => {
+	const onBoundsChange = vi.fn();
+	const rect = { top: 0, left: 0, width: 400, height: 800, right: 400, bottom: 800, x: 0, y: 0, toJSON() {} };
+	vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue(rect as DOMRect);
+	render(MapView, {
+		restaurants: [makeRestaurant()],
+		mapExpanded: true,
+		onBoundsChange,
+		visibleBand: { top: 100, bottom: 500 }
+	});
+	await waitFor(() => expect(harness.map.on).toHaveBeenCalledWith('moveend', expect.any(Function)));
+	const moveEnd = harness.map.on.mock.calls.find(([event]: [string]) => event === 'moveend')[1];
+	moveEnd();
+	await waitFor(() => expect(onBoundsChange).toHaveBeenCalled());
+	const [bounds] = onBoundsChange.mock.calls[0];
+	// Rows 100..500 px of the container, not its full 0..800: 33.9 to 33.5 degrees.
+	expect(bounds.north).toBeCloseTo(33.9);
+	expect(bounds.south).toBeCloseTo(33.5);
+	expect(bounds.west).toBe(-118.2);
+	expect(bounds.east).toBe(-117.4);
+	vi.restoreAllMocks();
 });

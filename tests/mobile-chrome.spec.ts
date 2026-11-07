@@ -303,3 +303,18 @@ test('320px Filters sheet applies a cuisine, then Show closes it so a result row
 	await row.click();
 	await expect(row).toHaveAttribute('aria-expanded', 'true');
 });
+
+test('the Filters sheet closes when the window grows to the desktop layout', async ({ page }, testInfo) => {
+	test.skip(!/Mobile Chrome|iPhone WebKit/.test(testInfo.project.name), 'Mobile viewport only');
+	test.setTimeout(60_000);
+	await page.setViewportSize({ width: 390, height: 844 });
+	await page.goto('/');
+	const sheet = await openFiltersSheet(page);
+	await expect(sheet).toBeVisible();
+
+	await page.setViewportSize({ width: 1280, height: 800 });
+	await expect(page.getByRole('dialog', { name: 'Filters' })).toBeHidden();
+	// The desktop dropdowns are back and the page is not stuck behind a modal.
+	await page.getByRole('button', { name: 'Cuisine', exact: true }).click();
+	await expect(page.getByRole('listbox', { name: 'Filter by cuisine' })).toBeVisible();
+});

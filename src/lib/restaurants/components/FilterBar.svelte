@@ -119,6 +119,18 @@
 	);
 	const isCustomRecency = $derived(appState.freshnessCutoff !== null && !isNewSinceVisit);
 
+	// The sheet is phone-only. If the window grows past the desktop breakpoint while it is open,
+	// close it: its trigger is gone and a modal dialog would otherwise block the desktop UI.
+	onMount(() => {
+		if (typeof window.matchMedia !== 'function') return;
+		const desktop = window.matchMedia('(min-width: 1024px)');
+		const closeOnDesktop = () => {
+			if (desktop.matches && filtersSheetOpen) closeFiltersSheet();
+		};
+		desktop.addEventListener('change', closeOnDesktop);
+		return () => desktop.removeEventListener('change', closeOnDesktop);
+	});
+
 	const activeFacetCount = $derived(
 		appState.activeCuisines.length +
 			appState.activeCities.length +
@@ -1522,7 +1534,8 @@
 	}
 
 	@media (min-width: 1024px) {
-		dialog.filters-sheet {
+		dialog.filters-sheet,
+		dialog.filters-sheet[open] {
 			display: none;
 		}
 	}
