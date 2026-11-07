@@ -13,6 +13,10 @@ export default defineConfig({
   },
   projects: [
     { name: "Mobile Chrome", use: { ...devices["Pixel 7"] } },
+    // Headless WebKit rasterizes in software; at the iPhone's 3x scale a single re-render
+    // takes 15+ seconds. Layout does not depend on pixel density, so test at 1x. Real-device
+    // behavior is checked in the iOS Simulator.
+    { name: "iPhone WebKit", use: { ...devices["iPhone 15"], deviceScaleFactor: 1 } },
     {
       name: "Desktop Chrome",
       use: {

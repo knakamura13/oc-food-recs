@@ -114,7 +114,7 @@ it('drops pending focus when filters remove its restaurant before the batch comp
 	});
 	await view.rerender({ restaurants: [first], mapExpanded: true });
 	flushSync(() => { appState.fitBoundsTarget = [{ lat: first.lat!, lng: first.lng! }]; });
-	expect(harness.map.fitBounds).toHaveBeenCalledWith([[first.lat, first.lng]],
+	expect(harness.map.fitBounds).toHaveBeenCalledWith([[first.lat, first.lng], [first.lat, first.lng]],
 		{ padding: [30, 30], maxZoom: 14, animate: true });
 	harness.map.setView.mockClear();
 	finishBatch();

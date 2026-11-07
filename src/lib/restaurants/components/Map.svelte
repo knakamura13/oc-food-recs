@@ -2,6 +2,7 @@
 	import { requestUserLocation } from '$lib/restaurants/location';
 	import { onMount, untrack } from 'svelte';
 	import { SEARCH_DEBOUNCE_MS, scheduleDebounced } from '$lib/debounce';
+	import { coordsForFitBounds, fitCorners } from '$lib/restaurants/explorer-bounds';
 	import type { Restaurant } from '$lib/restaurants/types';
 	import { appState, isUnmappedRestaurant } from '$lib/restaurants/stores.svelte';
 
@@ -422,7 +423,8 @@
 					if (focused?.lat != null && focused.lng != null) {
 						focusOnRestaurant(focused.slug, focused.lat, focused.lng);
 					} else if (mappedRestaurants.length && (expanded || !mobileViewportQuery?.matches)) {
-						leafletMap.fitBounds(L.latLngBounds(mappedRestaurants.map((r) => [r.lat, r.lng])),
+						const corners = fitCorners(coordsForFitBounds(mappedRestaurants));
+						if (corners) leafletMap.fitBounds(L.latLngBounds(corners),
 							{ padding: [30, 30], maxZoom: 14, animate: false });
 					}
 				});
@@ -466,9 +468,9 @@
 		const targets = appState.fitBoundsTarget;
 		if (targets && leafletMap && L) {
 			const mapped = targets.filter((r) => r.lat !== null && r.lng !== null);
-			if (mapped.length > 0) {
-				const bounds = L.latLngBounds(mapped.map((r) => [r.lat, r.lng]));
-				leafletMap.fitBounds(bounds, { padding: [30, 30], maxZoom: 14, animate: !reduceMotion() });
+			const corners = fitCorners(mapped.map((r) => ({ lat: r.lat as number, lng: r.lng as number })));
+			if (corners) {
+				leafletMap.fitBounds(L.latLngBounds(corners), { padding: [30, 30], maxZoom: 14, animate: !reduceMotion() });
 			}
 			appState.fitBoundsTarget = null;
 		}
@@ -834,7 +836,11 @@
 		font-size: 0.8rem;
 		padding: 6px 10px;
 		white-space: normal;
-		overflow-wrap: anywhere;
+		/* Absolutely positioned boxes shrink to the space left of their anchor, so a pin
+		   near the map edge squeezed this to one character per line. Size to content. */
+		width: max-content;
+		max-width: 240px;
+		overflow-wrap: break-word;
 		box-sizing: border-box;
 	}
 

@@ -4,6 +4,7 @@
 	import ExplorerApp from '$lib/restaurants/components/ExplorerApp.svelte';
 	import ExplorerSkeleton from '$lib/restaurants/components/ExplorerSkeleton.svelte';
 	import type { PageMeta } from '$lib/restaurants/page-meta';
+	import { decodeDataset } from '$lib/restaurants/wire';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -55,8 +56,9 @@
 {#await data.home}
 	<ExplorerSkeleton />
 {:then home}
+	{@const explorerData = { ...home, dataset: decodeDataset(home.dataset) }}
 	<ExplorerApp
-		data={home}
+		data={explorerData}
 		initialPageMeta={data.pageMeta}
 		onPageMetaChange={handlePageMetaChange}
 		{routerReady}

@@ -15,12 +15,15 @@ describe('curated public restaurant projection', () => {
 	});
 });
 
+import { decodeDataset } from '$lib/restaurants/wire';
+
 it('masks the streamed home dataset before serialization', async () => {
 	execute.mockResolvedValue({ rows: [] });
 	execute.mockResolvedValueOnce({ rows: [{ name: 'A’s', slug: 'a-s-burgers', location: 'Wrong', street: 'Wrong', cuisine: 'Burgers', lat: 33, lng: -117, aggregate_score: 7, mention_count: 1, mentions: [], source_threads: ['test-thread'] }] });
 	const { load } = await import('../../../routes/+page.server');
 	const result = await load({ url: new URL('https://example.test/'), setHeaders: vi.fn() } as never);
 	const home = await result!.home;
-	expect(home.dataset.restaurants[0]).toMatchObject({ location: null, street: null, lat: null, lng: null, location_scope: 'multiple_locations', aggregate_score: 7, mention_count: 1 });
-	expect(home.dataset.restaurants[0].reviewed_locations).toHaveLength(2);
+	const [restaurant] = decodeDataset(home.dataset).restaurants;
+	expect(restaurant).toMatchObject({ location: null, street: null, lat: null, lng: null, location_scope: 'multiple_locations', aggregate_score: 7, mention_count: 1 });
+	expect(restaurant.reviewed_locations).toHaveLength(2);
 });

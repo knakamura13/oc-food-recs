@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 test('390px chrome leaves room for restaurant results', async ({ page }, testInfo) => {
-	test.skip(testInfo.project.name !== 'Mobile Chrome', 'Mobile viewport only');
+	test.skip(!/Mobile Chrome|iPhone WebKit/.test(testInfo.project.name), 'Mobile viewport only');
 	await page.setViewportSize({ width: 390, height: 844 });
 	await page.goto('/');
 
@@ -39,8 +39,8 @@ test('390px chrome leaves room for restaurant results', async ({ page }, testInf
 	expect(metrics.mapRight).toBeLessThanOrEqual(metrics.vw + 1);
 });
 
-test('320px filter chips stay reachable without clipping City', async ({ page }, testInfo) => {
-	test.skip(testInfo.project.name !== 'Mobile Chrome', 'Mobile viewport only');
+test('320px toolbar is one scrolling row that signals more controls and keeps Map and the count in view', async ({ page }, testInfo) => {
+	test.skip(!/Mobile Chrome|iPhone WebKit/.test(testInfo.project.name), 'Mobile viewport only');
 	test.setTimeout(60_000);
 	await page.setViewportSize({ width: 320, height: 568 });
 	await page.goto('/');
@@ -48,47 +48,47 @@ test('320px filter chips stay reachable without clipping City', async ({ page },
 	await expect(page.locator('.row-toggle').first()).toBeVisible({ timeout: 30_000 });
 
 	const metrics = await page.evaluate(() => {
-		const controls = document.querySelector('.filter-controls');
-		const city = [...document.querySelectorAll('.filter-controls .dropdown-trigger')].find(
-			(el) => el.textContent?.trim().startsWith('City')
+		const row = document.querySelector('.filter-row');
+		const triggers = [...document.querySelectorAll('.filter-row .dropdown-trigger')].filter(
+			(el) => el.getClientRects().length > 0
 		);
-		const recency = [...document.querySelectorAll('.filter-controls .dropdown-trigger')].find(
-			(el) => el.textContent?.trim().startsWith('Recency')
-		);
+		const nearMe = triggers.find((el) => el.textContent?.trim().startsWith('Near me'));
 		const mapBtn = document.querySelector('.mobile-map-trigger');
 		const count = document.querySelector('.result-count');
-		if (!controls || !city || !recency || !mapBtn || !count) {
-			throw new Error('Missing filter chrome');
-		}
-		const cityBox = city.getBoundingClientRect();
-		const recencyBox = recency.getBoundingClientRect();
+		if (!row || !nearMe || !mapBtn || !count) throw new Error('Missing filter chrome');
+		const rowBox = row.getBoundingClientRect();
+		const nearBox = nearMe.getBoundingClientRect();
 		const mapBox = mapBtn.getBoundingClientRect();
 		const countBox = count.getBoundingClientRect();
-		const controlsBox = controls.getBoundingClientRect();
+		const tops = triggers.map((el) => Math.round(el.getBoundingClientRect().top));
 		return {
-			cityFullyVisible: cityBox.left >= controlsBox.left - 1 && cityBox.right <= controlsBox.right + 1,
-			recencyPeeked: recencyBox.left < window.innerWidth - 8,
-			overflowEnd: controls.classList.contains('overflow-end'),
-			hasOverflow: controls.scrollWidth > controls.clientWidth + 4,
+			firstControlFullyVisible: nearBox.left >= rowBox.left - 1 && nearBox.right <= rowBox.right + 1,
+			oneRow: Math.max(...tops) - Math.min(...tops) < 4,
+			// A control beyond the edge means the row scrolls; the fade must say so.
+			hasOverflow: row.scrollWidth > row.clientWidth + 4,
+			overflowEnd: row.classList.contains('overflow-end'),
 			mapWidth: Math.round(mapBox.width),
 			mapHeight: Math.round(mapBox.height),
 			mapName: mapBtn.getAttribute('aria-label'),
+			mapOnScreen: mapBox.left >= 0 && mapBox.right <= window.innerWidth,
 			countRight: Math.round(countBox.right),
 			vw: window.innerWidth
 		};
 	});
 
-	expect(metrics.cityFullyVisible).toBe(true);
-	expect(metrics.recencyPeeked).toBe(true);
-	expect(metrics.overflowEnd).toBe(metrics.hasOverflow);
+	expect(metrics.firstControlFullyVisible).toBe(true);
+	expect(metrics.oneRow).toBe(true);
+	expect(metrics.hasOverflow).toBe(true);
+	expect(metrics.overflowEnd).toBe(true);
 	expect(metrics.mapWidth).toBeGreaterThanOrEqual(44);
 	expect(metrics.mapHeight).toBeGreaterThanOrEqual(44);
 	expect(metrics.mapName).toBe('Open map');
+	expect(metrics.mapOnScreen).toBe(true);
 	expect(metrics.countRight).toBeLessThanOrEqual(metrics.vw + 1);
 });
 
 test('320px recency panel stays inside the viewport', async ({ page }, testInfo) => {
-	test.skip(testInfo.project.name !== 'Mobile Chrome', 'Mobile viewport only');
+	test.skip(!/Mobile Chrome|iPhone WebKit/.test(testInfo.project.name), 'Mobile viewport only');
 	test.setTimeout(60_000);
 	await page.setViewportSize({ width: 320, height: 568 });
 	await page.goto('/');
@@ -128,7 +128,7 @@ test('320px recency panel stays inside the viewport', async ({ page }, testInfo)
 });
 
 test('320px recency Reset stays visible inside the clamped panel', async ({ page }, testInfo) => {
-	test.skip(testInfo.project.name !== 'Mobile Chrome', 'Mobile viewport only');
+	test.skip(!/Mobile Chrome|iPhone WebKit/.test(testInfo.project.name), 'Mobile viewport only');
 	test.setTimeout(60_000);
 	await page.setViewportSize({ width: 320, height: 568 });
 	await page.goto('/');
@@ -179,7 +179,7 @@ test('320px recency Reset stays visible inside the clamped panel', async ({ page
 });
 
 test('320px cuisine list stays inside the viewport', async ({ page }, testInfo) => {
-	test.skip(testInfo.project.name !== 'Mobile Chrome', 'Mobile viewport only');
+	test.skip(!/Mobile Chrome|iPhone WebKit/.test(testInfo.project.name), 'Mobile viewport only');
 	test.setTimeout(60_000);
 	await page.setViewportSize({ width: 320, height: 568 });
 	await page.goto('/');
@@ -217,7 +217,7 @@ test('320px cuisine list stays inside the viewport', async ({ page }, testInfo) 
 });
 
 test('320px drawer actions stay visible above comments', async ({ page }, testInfo) => {
-	test.skip(testInfo.project.name !== 'Mobile Chrome', 'Mobile viewport only');
+	test.skip(!/Mobile Chrome|iPhone WebKit/.test(testInfo.project.name), 'Mobile viewport only');
 	test.setTimeout(60_000);
 	await page.setViewportSize({ width: 320, height: 568 });
 	await page.goto('/');
@@ -242,7 +242,10 @@ test('320px drawer actions stay visible above comments', async ({ page }, testIn
 		if (!actionRoot) throw new Error('Missing drawer actions');
 		const actionBox = actionRoot.getBoundingClientRect();
 		const commentBox = comment?.getBoundingClientRect();
-		const buttons = [...actionRoot.querySelectorAll<HTMLElement>('button, a')].map((el) => {
+		// Skip controls that are not shown (the closed report dialog's Cancel and Send).
+		const buttons = [...actionRoot.querySelectorAll<HTMLElement>('button, a')].filter(
+			(el) => el.getClientRects().length > 0
+		).map((el) => {
 			const box = el.getBoundingClientRect();
 			return {
 				text: el.textContent?.replace(/\s+/g, ' ').trim(),
@@ -268,7 +271,7 @@ test('320px drawer actions stay visible above comments', async ({ page }, testIn
 });
 
 test('320px search placeholder fits without clipping', async ({ page }, testInfo) => {
-	test.skip(testInfo.project.name !== 'Mobile Chrome', 'Mobile viewport only');
+	test.skip(!/Mobile Chrome|iPhone WebKit/.test(testInfo.project.name), 'Mobile viewport only');
 	test.setTimeout(60_000);
 	await page.setViewportSize({ width: 320, height: 568 });
 	await page.goto('/');
@@ -326,9 +329,9 @@ test('desktop drawer keeps actions above comments', async ({ page }, testInfo) =
 		if (!actionRoot || !comment) throw new Error('Missing drawer content');
 		const actionBox = actionRoot.getBoundingClientRect();
 		const commentBox = comment.getBoundingClientRect();
-		const buttons = [...actionRoot.querySelectorAll<HTMLElement>('button, a')].map((el) =>
-			Math.round(el.getBoundingClientRect().height)
-		);
+		const buttons = [...actionRoot.querySelectorAll<HTMLElement>('button, a')]
+			.filter((el) => el.getClientRects().length > 0)
+			.map((el) => Math.round(el.getBoundingClientRect().height));
 		return {
 			actionsAboveComments: actionBox.bottom <= commentBox.top + 1,
 			buttonHeights: buttons
@@ -344,7 +347,7 @@ test('desktop drawer keeps actions above comments', async ({ page }, testInfo) =
 test('320px cuisine selection closes the menu so a result row is tappable', async ({
 	page
 }, testInfo) => {
-	test.skip(testInfo.project.name !== 'Mobile Chrome', 'Mobile viewport only');
+	test.skip(!/Mobile Chrome|iPhone WebKit/.test(testInfo.project.name), 'Mobile viewport only');
 	test.setTimeout(60_000);
 	await page.setViewportSize({ width: 320, height: 568 });
 	await page.goto('/');

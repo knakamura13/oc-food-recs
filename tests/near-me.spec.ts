@@ -26,7 +26,10 @@ for (const width of [320, 390, 1280]) {
 		await expect(page.getByRole('button', { name: /sorted by distance, nearest first/i })).toBeVisible();
 		for (const control of [radius, page.getByRole('button', { name: 'Near me', exact: true })]) {
 			const box = await control.boundingBox();
-			expect(box!.height).toBeGreaterThanOrEqual(44);
+			// Phones need 44 pt touch targets. On desktop the control matches the other
+			// filter buttons (WCAG 2.2 minimum is 24 px) instead of standing out at 44.
+			expect(box!.height).toBeGreaterThanOrEqual(width < 1024 ? 44 : 24);
+			if (width >= 1024) expect(box!.height).toBeLessThanOrEqual(36);
 			expect(box!.x).toBeGreaterThanOrEqual(0);
 			expect(box!.x + box!.width).toBeLessThanOrEqual(width);
 		}
@@ -49,10 +52,11 @@ for (const width of [320, 390, 1280]) {
 
 test('the map shares and removes the session marker without enabling radius', async ({ page }, info) => {
 	await page.goto('/');
+	await expect(page.locator('.row-toggle').first()).toBeVisible({ timeout: 30_000 });
 	await page.getByRole('button', { name: 'Near me', exact: true }).click();
 	const radius = page.getByRole('combobox', { name: 'Distance radius' });
 	await expect(radius).toHaveValue('');
-	const mobile = info.project.name === 'Mobile Chrome';
+	const mobile = /Mobile Chrome|iPhone WebKit/.test(info.project.name);
 	if (mobile) await page.getByRole('button', { name: 'Open map', exact: true }).click();
 	await expect(page.locator('path[fill="#4285f4"]')).toHaveCount(1);
 	await page.getByRole('button', { name: 'Jump to my current location' }).click();

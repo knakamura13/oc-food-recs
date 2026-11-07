@@ -208,3 +208,20 @@ describe("snippet utility", () => {
     });
   });
 });
+
+describe('server pre-trimmed teasers', () => {
+	const samples: Array<[string, string]> = [
+		["Tacos Los Cholos", "I second Tacos Los Cholos. You'll have to uber or you can order from door dash. Their carne asada is the best in the county and the salsa bar is huge, honestly worth the drive from anywhere."],
+		["El Farolito", "I get the same damn thing every time. Mamas plate w a hard shell shredded beef taco, rice, beans. El Farolito has been there forever and the staff remembers you.\n\nAlso try the horchata."],
+		["Yigah Korean Cuisine", "Yigah for their galbi tang, BCD Tofu for that late night fried fish corvina or marinated raw crab craving) otherwise, gotta go to LA for better Korean food honestly."],
+		["Fuoco Pizzeria Napoletana", "Fuoco in DTF is excellent. The problem is that it's best eaten in house."],
+		["Pepper Lunch", "pepper lunch!"]
+	];
+
+	it.each(samples)('re-trimming the trimmed text for %s is a no-op', (name, body) => {
+		const once = getTrimmedSnippet(body, name, 150);
+		const twice = getTrimmedSnippet(once.text, name, 150);
+		expect(twice.text).toBe(once.text);
+		expect(twice.segments.map((s) => s.text).join('')).toBe(once.text);
+	});
+});

@@ -314,7 +314,7 @@ describe("FilterBar", () => {
       unmappedCount: 4,
     });
     const toggle = screen.getByRole("button", {
-      name: /include 4 unmapped restaurants in the list/i,
+      name: /unmapped 4, include in the list/i,
     });
     expect(toggle).toHaveTextContent("Unmapped");
     expect(toggle).not.toHaveTextContent("Include unmapped");
@@ -322,12 +322,12 @@ describe("FilterBar", () => {
     expect(appState.showUnmapped).toBe(true);
     expect(
       screen.getByRole("button", {
-        name: /stop including unmapped restaurants/i,
+        name: /unmapped 4, stop including in the list/i,
       }),
     ).toBeInTheDocument();
     await user.click(
       screen.getByRole("button", {
-        name: /stop including unmapped restaurants/i,
+        name: /unmapped 4, stop including in the list/i,
       }),
     );
     expect(appState.showUnmapped).toBe(false);
@@ -919,7 +919,9 @@ describe("FilterBar", () => {
     expect(filterBarSource).toContain("trackFilterOverflow");
     expect(filterBarSource).toContain("overflow-start");
     expect(filterBarSource).toContain("@media (max-width: 480px)");
-    expect(filterBarSource).toContain("box-shadow: -12px 0 10px -6px #faf7f2");
+    // Phones: every control shares one scrolling row (wrappers dissolve), with an edge fade.
+    expect(filterBarSource).toContain("display: contents");
+    expect(filterBarSource).toContain("mask-image: linear-gradient");
     expect(filterBarSource).toContain(
       ".dropdown-trigger:active:not(.mobile-map-trigger)",
     );

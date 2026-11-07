@@ -196,6 +196,9 @@
 	.site-footer a {
 		color: #7a6e63;
 		text-underline-offset: 2px;
+		display: inline-flex;
+		align-items: center;
+		min-height: 44px;
 	}
 
 	.site-footer a:hover,

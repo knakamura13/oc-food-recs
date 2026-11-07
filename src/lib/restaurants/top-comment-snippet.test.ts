@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getTrimmedSnippet } from "./snippet";
-import { pickTopCommentSnippet } from "./top-comment-snippet";
+import { pickTopCommentSnippet, TEASER_MAX_CHARS, trimmedTeaser } from "./top-comment-snippet";
 
 const dolansRoundup =
   "Middle Eastern- Forn Al Hara in Anaheim’s Little Arabia\n\nAfrican- Absynnia Restaurant(Ethiopian cuisine)in Anaheim\n\nPersian- Irvine Grill in Irvine(best is Raffis place in Glendale)\n\nMexican- shoot there’s so many haha\n\nUyghur- Dolans Cuisine in Irvine ( very very unique and the only Uyghur restaurant I know of in OC )";
@@ -59,4 +59,18 @@ describe("pickTopCommentSnippet", () => {
 
     expect(snippet).toBeNull();
   });
+});
+
+describe("trimmedTeaser", () => {
+	it("caps a long unpunctuated comment that starts with the restaurant name", () => {
+		const body = `Tacos Los Cholos ${"and more words without any punctuation ".repeat(200)}`;
+		const teaser = trimmedTeaser("Tacos Los Cholos", body);
+		expect(teaser).not.toBeNull();
+		expect(teaser!.length).toBeLessThanOrEqual(TEASER_MAX_CHARS);
+		expect(teaser!.startsWith("Tacos Los Cholos")).toBe(true);
+	});
+
+	it("returns null for an empty body", () => {
+		expect(trimmedTeaser("Tacos Los Cholos", null)).toBeNull();
+	});
 });

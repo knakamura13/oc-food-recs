@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { X } from 'lucide-svelte';
+	import { Map as MapIcon, X } from 'lucide-svelte';
 	import { onMount, tick, untrack } from 'svelte';
 	import { replaceState } from '$app/navigation';
 	import type { Restaurant, SortKey, ThreadSummary } from '$lib/restaurants/types';
@@ -719,8 +719,6 @@
 				restaurantsForHistogram={restaurantsBeforeFreshness}
 				{dateExtent}
 				unmappedCount={pageFilterResult.unmappedCount}
-				{mapExpanded}
-				onMapToggle={toggleMobileMap}
 			/>
 		</div>
 		<div class="content-area">
@@ -777,6 +775,21 @@
 	{#if !mapExpanded || !isMobileViewport()}
 		<BackToTop />
 	{/if}
+
+	<!-- Phones: one obvious, labeled way into the map. Lives outside .app-trap so the
+	     trap's backdrop-filter cannot become its containing block. Stays mounted while the
+	     modal map is open (the top layer covers it) so focus can return to it on close. -->
+	<button
+		type="button"
+		class="map-fab mobile-map-trigger"
+		aria-label={mapExpanded ? 'Close map' : 'Open map'}
+		aria-controls="restaurant-map-panel"
+		aria-expanded={mapExpanded}
+		onclick={(event) => toggleMobileMap(event.currentTarget)}
+	>
+		<MapIcon size={18} aria-hidden="true" />
+		<span aria-hidden="true">Map</span>
+	</button>
 </main>
 
 <style>
@@ -808,9 +821,7 @@
 		height: 100dvh;
 		display: flex;
 		flex-direction: column;
-		background: rgba(255, 255, 255, 0.85);
-		backdrop-filter: blur(12px);
-		-webkit-backdrop-filter: blur(12px);
+		background: #fff;
 		z-index: 1100;
 		box-shadow: 0 4px 24px -8px rgba(62, 44, 35, 0.1);
 	}
@@ -989,6 +1000,11 @@
 
 	/* ── Mobile: explicit control opens the map sheet (< 1024px) ───────── */
 	@media (max-width: 1023px) {
+		/* A blurred shadow on a full-height sticky panel repaints expensively on phones. */
+		.app-trap {
+			box-shadow: none;
+		}
+
 		:global(html.mobile-map-expanded-lock),
 		:global(html.mobile-map-expanded-lock body) {
 			overflow: hidden;
@@ -1088,14 +1104,45 @@
 			background: #ffe4d6;
 		}
 
-		/* The modal fills the viewport; remove the shell's containing backdrop filter. */
+		/* The modal fills the viewport; let it escape the shell's clipping. */
 		.app-trap:has(.map-pane.portal-expanded) {
 			overflow: visible;
-			backdrop-filter: none;
-			-webkit-backdrop-filter: none;
 		}
 		.app-trap:has(.map-pane.portal-expanded) .content-area {
 			overflow: visible;
+		}
+	}
+
+	.map-fab {
+		display: none;
+	}
+
+	@media (max-width: 1023px) {
+		.map-fab {
+			position: fixed;
+			left: 50%;
+			bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+			transform: translateX(-50%);
+			z-index: 1250;
+			display: inline-flex;
+			align-items: center;
+			gap: 0.4rem;
+			min-height: 48px;
+			padding: 0 1.25rem;
+			border: none;
+			border-radius: 999px;
+			background: #c43700;
+			color: #fffdf9;
+			font-family: inherit;
+			font-size: 0.95rem;
+			font-weight: 600;
+			box-shadow: 0 4px 16px rgba(62, 44, 35, 0.32);
+			cursor: pointer;
+		}
+
+		.map-fab:active {
+			background: #a82f00;
+			transform: translateX(-50%) scale(0.97);
 		}
 	}
 

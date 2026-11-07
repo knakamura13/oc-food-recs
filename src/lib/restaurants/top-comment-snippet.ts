@@ -1,4 +1,4 @@
-import { findRestaurantMatch } from "./snippet";
+import { findRestaurantMatch, getTrimmedSnippet } from "./snippet";
 
 const INELIGIBLE = new Set(["filler", "question"]);
 
@@ -94,4 +94,21 @@ export function pickTopCommentSnippet(
     if (candidate.score > winner.score) winner = candidate;
   }
   return winner.body;
+}
+
+/** The list shows at most this many characters of a teaser; never ship more. */
+export const TEASER_MAX_CHARS = 150;
+
+/**
+ * Pre-trim the winning comment to the fragment the list actually renders, so the
+ * page payload carries ~150 characters per restaurant instead of whole comments.
+ * The list re-runs getTrimmedSnippet on this text for highlighting; that is a no-op
+ * on already-trimmed text (see snippet.test.ts).
+ */
+export function trimmedTeaser(name: string, body: string | null): string | null {
+  if (!body) return null;
+  const text = getTrimmedSnippet(body, name, TEASER_MAX_CHARS).text;
+  if (!text) return null;
+  // getTrimmedSnippet keeps an oversized matched fragment whole; cap it here.
+  return text.length > TEASER_MAX_CHARS ? `${text.slice(0, TEASER_MAX_CHARS - 1).trimEnd()}…` : text;
 }

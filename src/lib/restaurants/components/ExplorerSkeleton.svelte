@@ -155,11 +155,8 @@
 		height: 100dvh;
 		display: flex;
 		flex-direction: column;
-		background: rgba(255, 255, 255, 0.85);
-		backdrop-filter: blur(12px);
-		-webkit-backdrop-filter: blur(12px);
+		background: #fff;
 		z-index: 1100;
-		box-shadow: 0 4px 24px -8px rgba(62, 44, 35, 0.1);
 	}
 
 	.controls-bar {
