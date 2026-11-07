@@ -23,7 +23,8 @@
 	const BOUNDS_EMIT_DELAY_MS = 150;
 	let boundsEmitTimer: ReturnType<typeof setTimeout> | null = null;
 	function scheduleBoundsEmit() {
-		if (!onBoundsChange) return;
+		// Only the phone sheet follows the map; desktop pans need no timer.
+		if (!onBoundsChange || !mapExpanded) return;
 		if (boundsEmitTimer) clearTimeout(boundsEmitTimer);
 		boundsEmitTimer = setTimeout(() => {
 			boundsEmitTimer = null;
