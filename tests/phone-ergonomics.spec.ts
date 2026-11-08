@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test';
+import { startOnList } from './list-view';
 
 test.beforeEach(async ({ page }) => {
+	await startOnList(page);
 	// QA interactions must not change live analytics or depend on geocode data.
 	await page.route('**/api/events', (route) => route.fulfill({ status: 204 }));
 });

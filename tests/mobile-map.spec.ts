@@ -6,6 +6,7 @@ import {
 	type Page,
 	type Route
 } from '@playwright/test';
+import { startOnList } from './list-view';
 
 const leafletSourceMarker = 'A JavaScript library for interactive maps';
 // Scripts only. A '**/*.js*' glob also caught SvelteKit's `__data.json` hover preloads (the
@@ -975,5 +976,6 @@ test.describe('Mobile map interaction', () => {
 
 // Keep read-only QA interactions out of deployment analytics.
 test.beforeEach(async ({ page }) => {
+	await startOnList(page);
 	await page.route('**/api/events', route => route.fulfill({ status: 204 }));
 });

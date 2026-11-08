@@ -1,4 +1,9 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
+import { startOnList } from './list-view';
+
+test.beforeEach(async ({ page }) => {
+	await startOnList(page);
+});
 
 async function firstRecommendationRow(page: Page): Promise<Locator> {
 	const row = page.locator('.row').filter({ has: page.locator('.dish-teaser') }).first();

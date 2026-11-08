@@ -1,8 +1,10 @@
 import { expect, test, type Page } from '@playwright/test';
+import { startOnList } from './list-view';
 
 // Phones: the open map sits behind a list sheet that snaps between peek, half and full.
-test.beforeEach(({}, testInfo) => {
+test.beforeEach(async ({ page }, testInfo) => {
 	test.skip(!/Mobile Chrome|iPhone WebKit/.test(testInfo.project.name), 'Phone viewport only');
+	await startOnList(page);
 });
 
 async function openMap(page: Page, size = { width: 390, height: 844 }) {
