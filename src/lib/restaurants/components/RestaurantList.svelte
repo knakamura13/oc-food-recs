@@ -15,6 +15,7 @@
 		elementScroll,
 		observeElementOffset,
 		observeElementRect,
+		observeWindowRect,
 		measureElement as measureVirtualElement,
 		type VirtualItem
 	} from '@tanstack/virtual-core';
@@ -56,6 +57,11 @@
 		 * row is then brought back into view if the change pushed it out.
 		 */
 		revealOpenRow?: number;
+		/**
+		 * True when the page scrolls instead of `.list-scroll` (short phones, map closed), so the
+		 * list's own box is as tall as all its rows and the virtualizer must follow the window.
+		 */
+		windowScroll?: boolean;
 	}
 
 	let {
@@ -65,7 +71,8 @@
 		threadsById = {},
 		commentQuotes = {},
 		emptyForMapArea = false,
-		revealOpenRow = 0
+		revealOpenRow = 0,
+		windowScroll = false
 	}: Props = $props();
 
 	let priorVisitMs = $state<number | null>(null);
@@ -177,16 +184,54 @@
 	}
 
 	let listScrollEl = $state<HTMLDivElement | undefined>();
-	let virtualizer = $state<Virtualizer<HTMLDivElement, HTMLDivElement> | null>(null);
+	type ListVirtualizer = Virtualizer<HTMLDivElement | Window, HTMLDivElement>;
+	type ListOptions = ListVirtualizer['options'];
+	let virtualizer = $state<ListVirtualizer | null>(null);
 	let virtualItems = $state<VirtualItem[]>([]);
 	let totalSize = $state(0);
 
-	function syncVirtualState(instance: Virtualizer<HTMLDivElement, HTMLDivElement>) {
+	function syncVirtualState(instance: ListVirtualizer) {
 		virtualItems = instance.getVirtualItems();
 		totalSize = instance.getTotalSize();
 	}
 
-	// Create the virtualizer exactly once per scroll element. `sortedRows` is read
+	/** Where the list's top edge sits in the document, for window scrolling. */
+	function listTopInDocument() {
+		return (listScrollEl?.getBoundingClientRect().top ?? 0) + window.scrollY;
+	}
+
+	// Window mode: the virtualizer's offset is the part of the list scrolled above the viewport
+	// top, so rows and scrollToIndex stay in list coordinates wherever the list sits on the page.
+	const observeListWindowOffset: ListOptions['observeElementOffset'] = (instance, cb) => {
+		const win = instance.targetWindow;
+		if (!win) return;
+		const read = () => Math.max(0, window.scrollY - listTopInDocument());
+		let settle: ReturnType<typeof setTimeout>;
+		const onScroll = () => {
+			cb(read(), true);
+			clearTimeout(settle);
+			settle = setTimeout(() => cb(read(), false), 100);
+		};
+		cb(read(), false);
+		win.addEventListener('scroll', onScroll, { passive: true });
+		return () => {
+			clearTimeout(settle);
+			win.removeEventListener('scroll', onScroll);
+		};
+	};
+
+	const scrollListWindowTo: ListOptions['scrollToFn'] = (
+		offset,
+		{ adjustments = 0, behavior }
+	) => {
+		window.scrollTo({
+			top: listTopInDocument() + offset + adjustments,
+			// `html` is scroll-behavior: smooth; measurement adjustments must not animate.
+			behavior: behavior === 'smooth' ? 'smooth' : 'instant'
+		});
+	};
+
+	// Create the virtualizer once per scroll element and scroll mode. `sortedRows` is read
 	// untracked here: if this effect depended on it, every sort/filter change would
 	// destroy and recreate the virtualizer, wiping its measured-size cache — mounted
 	// rows never re-measure (their attach only re-fires on index change), so rows
@@ -194,16 +239,21 @@
 	// viewports, where wrapped rows are 2-3x taller than the estimate).
 	$effect(() => {
 		if (!listScrollEl) return;
+		const followWindow = windowScroll;
 
 		const cleanup = untrack(() => {
-			const instance = new Virtualizer<HTMLDivElement, HTMLDivElement>({
+			const instance = new Virtualizer<HTMLDivElement | Window, HTMLDivElement>({
 				count: sortedRows.length,
-				getScrollElement: () => listScrollEl ?? null,
+				getScrollElement: () => (followWindow ? window : (listScrollEl ?? null)),
 				estimateSize: () => 72,
 				overscan: 8,
-				scrollToFn: elementScroll,
-				observeElementRect,
-				observeElementOffset,
+				scrollToFn: followWindow ? scrollListWindowTo : (elementScroll as ListOptions['scrollToFn']),
+				observeElementRect: followWindow
+					? (observeWindowRect as ListOptions['observeElementRect'])
+					: (observeElementRect as ListOptions['observeElementRect']),
+				observeElementOffset: followWindow
+					? observeListWindowOffset
+					: (observeElementOffset as ListOptions['observeElementOffset']),
 				measureElement: measureVirtualElement,
 				useAnimationFrameWithResizeObserver: true,
 				getItemKey: (index) => sortedRows[index]?.slug ?? index,
@@ -237,7 +287,7 @@
 			...virtualizer.options,
 			count: rows.length,
 			getItemKey: (index: number) => rows[index]?.slug ?? index
-		} as Parameters<Virtualizer<HTMLDivElement, HTMLDivElement>['setOptions']>[0]);
+		} as Parameters<ListVirtualizer['setOptions']>[0]);
 		// Note: no virtualizer.measure() here — it would clear the per-slug size cache
 		// and mounted rows wouldn't re-measure. Sizes are keyed by slug so they stay
 		// valid across sorts/filters; new rows measure on mount via bindRowElement attach.
