@@ -287,16 +287,25 @@
 	let skipNextMapFocus = false;
 	/** A visitor who chose the list stays on it for the tab's session, reloads included. */
 	const PHONE_VIEW_KEY = 'oc-phone-view';
+	/**
+	 * A tab opened from another tab starts with a copy of that tab's sessionStorage, so the stored
+	 * choice carries this tab's `window.name` id and only counts when the ids match. A reload keeps
+	 * `window.name`; a cloned tab does not, so it lands on the map.
+	 */
+	function phoneViewTabId() {
+		if (!window.name.startsWith('oc-tab-')) window.name = `oc-tab-${Math.random().toString(36).slice(2)}`;
+		return window.name;
+	}
 	function rememberPhoneView(view: 'map' | 'list') {
 		try {
-			sessionStorage.setItem(PHONE_VIEW_KEY, view);
+			sessionStorage.setItem(PHONE_VIEW_KEY, `${view}:${phoneViewTabId()}`);
 		} catch {
 			// Storage can be blocked; the choice then lasts until the next load.
 		}
 	}
 	function prefersListView() {
 		try {
-			return sessionStorage.getItem(PHONE_VIEW_KEY) === 'list';
+			return sessionStorage.getItem(PHONE_VIEW_KEY) === `list:${window.name}`;
 		} catch {
 			return false;
 		}

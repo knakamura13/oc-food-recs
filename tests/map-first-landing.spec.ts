@@ -82,6 +82,28 @@ test('the list view runs to the bottom of the screen and ends with the footer li
 	await expect(scroller.getByRole('link', { name: 'Browse cities and cuisines' })).toBeVisible();
 });
 
+test('a tab cloned from a list-view tab still lands on the map', async ({ page }, info) => {
+	test.skip(!isPhone(info.project.name), 'Phone viewport only');
+	// A new tab opened from another tab inherits its sessionStorage but not its window.name.
+	await page.addInitScript(() => sessionStorage.setItem('oc-phone-view', 'list:oc-tab-someone-else'));
+	await landOn(page);
+});
+
+test('returning to phone width after a breakpoint round trip reopens the map', async ({ page }, info) => {
+	test.skip(!isPhone(info.project.name), 'Phone viewport only');
+	await landOn(page, '/', { width: 768, height: 1000 });
+	await page.setViewportSize({ width: 1024, height: 768 });
+	await expect(page.locator('.list-pane.sheet')).toHaveCount(0);
+	await page.setViewportSize({ width: 768, height: 1000 });
+	await expect(page.locator('.list-pane.sheet')).toBeVisible();
+
+	// A visitor who chose the list is not pulled back to the map by the same round trip.
+	await page.getByRole('button', { name: 'Full list' }).click();
+	await page.setViewportSize({ width: 1024, height: 768 });
+	await page.setViewportSize({ width: 768, height: 1000 });
+	await expect(page.locator('.list-pane.sheet')).toHaveCount(0);
+});
+
 test('Escape and Close map both reach a list view that can reopen the map', async ({ page }, info) => {
 	test.skip(!isPhone(info.project.name), 'Phone viewport only');
 	await landOn(page);
