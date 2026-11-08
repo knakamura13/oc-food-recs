@@ -124,6 +124,32 @@ test('dragging the grabber follows the pointer and snaps', async ({ page }) => {
 	await expect.poll(() => sheetHeight(page)).toBe(peek);
 });
 
+test('dragging a row at peek moves the sheet without opening the row; a tap still opens it', async ({ page }) => {
+	await openMap(page);
+	const peek = await sheetHeight(page);
+	const row = page.locator('.list-pane.sheet .row-toggle').first();
+	const box = (await row.boundingBox())!;
+	const x = box.x + box.width / 2;
+	const y = box.y + box.height / 2;
+	await page.mouse.move(x, y);
+	await page.mouse.down();
+	for (let i = 1; i <= 10; i += 1) {
+		await page.mouse.move(x, y - i * 17);
+		await page.waitForTimeout(30);
+	}
+	await page.mouse.up();
+	expect(await settledSheetHeight(page)).toBeGreaterThan(peek + 100);
+	await expect(row).toHaveAttribute('aria-expanded', 'false');
+	await expect(page.locator('.row.expanded')).toHaveCount(0);
+
+	// A plain tap on a row is not a drag: the row opens.
+	await page.locator('.sheet-grabber').click();
+	await page.locator('.sheet-grabber').click();
+	await expect.poll(() => sheetHeight(page)).toBe(peek);
+	await page.locator('.list-pane.sheet .row-toggle').first().click();
+	await expect(page.locator('.row.expanded')).toHaveCount(1);
+});
+
 test('a fast drag that comes to rest before release snaps to the nearest stop, not a fling', async ({ page }) => {
 	await openMap(page);
 	const peek = await sheetHeight(page);
@@ -159,7 +185,8 @@ test('peek does not scroll the list, half and full do', async ({ page }) => {
 for (const size of [
 	{ width: 320, height: 568 },
 	{ width: 390, height: 844 },
-	{ width: 430, height: 932 }
+	{ width: 430, height: 932 },
+	{ width: 844, height: 390 }
 ]) {
 	test(`at full height the map chrome stays reachable at ${size.width}x${size.height}`, async ({ page }) => {
 		await openMap(page, size);
