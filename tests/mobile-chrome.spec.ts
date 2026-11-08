@@ -1,4 +1,9 @@
 import { expect, test } from '@playwright/test';
+import { startOnList } from './list-view';
+
+test.beforeEach(async ({ page }) => {
+	await startOnList(page);
+});
 
 test('390px chrome leaves room for restaurant results', async ({ page }, testInfo) => {
 	test.skip(!/Mobile Chrome|iPhone WebKit/.test(testInfo.project.name), 'Mobile viewport only');

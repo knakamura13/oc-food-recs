@@ -35,6 +35,7 @@
 	import FilterBar from '$lib/restaurants/components/FilterBar.svelte';
 	import Map from '$lib/restaurants/components/Map.svelte';
 	import RestaurantList from '$lib/restaurants/components/RestaurantList.svelte';
+	import SiteFooter from '$lib/components/SiteFooter.svelte';
 	import BackToTop from '$lib/restaurants/components/BackToTop.svelte';
 	import type { ExplorerPageData } from '$lib/restaurants/explorer-page-data';
 	import { trackEvent } from '$lib/events';
@@ -267,6 +268,8 @@
 
 	function openMobileMap(opener: HTMLButtonElement) {
 		if (!isMobileViewport()) return;
+		skipNextMapFocus = false;
+		rememberPhoneView('map');
 		trackEvent('map_opened');
 		mapOpener = opener;
 		snapMobileShellToTop();
@@ -276,9 +279,42 @@
 		mapExpanded = true;
 	}
 
+	/**
+	 * Phones land on the map with the list in its sheet. Closing the map (Close map, Full list,
+	 * Escape) is the list-only state; the floating Map button brings the map back. A fresh load
+	 * opens the map again, and nothing is focused so the page does not announce itself.
+	 */
+	let skipNextMapFocus = false;
+	/** A visitor who chose the list stays on it for the tab's session, reloads included. */
+	const PHONE_VIEW_KEY = 'oc-phone-view';
+	function rememberPhoneView(view: 'map' | 'list') {
+		try {
+			sessionStorage.setItem(PHONE_VIEW_KEY, view);
+		} catch {
+			// Storage can be blocked; the choice then lasts until the next load.
+		}
+	}
+	function prefersListView() {
+		try {
+			return sessionStorage.getItem(PHONE_VIEW_KEY) === 'list';
+		} catch {
+			return false;
+		}
+	}
+	function openMapOnLanding() {
+		if (!isMobileViewport() || prefersListView()) return;
+		skipNextMapFocus = true;
+		sheetState = appState.selectedRestaurantSlug ? 'half' : 'peek';
+		sheetDragPx = null;
+		mapBounds = null;
+		mapExpanded = true;
+	}
+
 	function closeMobileMap({ focusDesktopMap = false }: { focusDesktopMap?: boolean } = {}) {
 		if (!mapExpanded && !mapPaneEl?.open) return;
-		const opener = mapOpener;
+		// A map opened on landing has no opener; land on the Map button so focus is not dropped.
+		const opener = mapOpener ?? document.querySelector<HTMLButtonElement>('.mobile-map-trigger');
+		if (!focusDesktopMap) rememberPhoneView('list');
 		mapExpanded = false;
 		mapBounds = null;
 		mapOpener = null;
@@ -530,13 +566,20 @@
 			if (wantModal) {
 				if (!dialog.open) {
 					dialog.show();
-					void tick().then(() => mapCloseButton?.focus());
+					if (skipNextMapFocus) {
+						skipNextMapFocus = false;
+						// show() runs the dialog focusing steps, which would land on Close map.
+						if (document.activeElement instanceof HTMLElement && dialog.contains(document.activeElement)) {
+							document.activeElement.blur();
+						}
+					} else void tick().then(() => mapCloseButton?.focus());
 				}
 			} else if (dialog.open) {
 				dialog.close();
 			}
 		} catch {
 			// jsdom and older engines may not implement HTMLDialogElement.show.
+			skipNextMapFocus = false;
 		}
 	});
 
@@ -767,6 +810,7 @@
 		const onShortPhoneChange = () => (shortPhone = shortPhoneQuery.matches);
 		onShortPhoneChange();
 		shortPhoneQuery.addEventListener('change', onShortPhoneChange);
+		openMapOnLanding();
 		let wasMobileViewport = window.innerWidth <= MOBILE_MAX_PX;
 		const onVisChange = () => {
 			if (document.visibilityState === 'hidden') setLastVisitNow();
@@ -777,12 +821,14 @@
 			const nextWidth = window.innerWidth;
 			const nextIsMobile = nextWidth <= MOBILE_MAX_PX;
 			const crossedToDesktop = wasMobileViewport && !nextIsMobile;
+			const wasMobileBefore = wasMobileViewport;
 			wasMobileViewport = nextIsMobile;
 			viewportWidth = nextWidth;
 			viewportHeight = window.innerHeight;
 			if (crossedToDesktop && mapExpanded) {
 				closeMobileMap({ focusDesktopMap: true });
 			}
+			if (!wasMobileBefore && nextIsMobile && !mapExpanded && !prefersListView()) openMapOnLanding();
 			if (nextIsMobile) {
 				collapseDesktopMap();
 			}
@@ -838,6 +884,10 @@
 </script>
 
 <svelte:window onkeydown={handleDesktopMapEscape} />
+
+{#snippet pageFooter()}
+	<SiteFooter />
+{/snippet}
 
 <main>
 	<section class="hero-section">
@@ -929,7 +979,10 @@
 					</button>
 				{/if}
 				{#if mapExpanded}
-					<p class="sheet-summary" aria-live="polite">{listRestaurants.length.toLocaleString('en-US')} {listRestaurants.length === 1 ? 'place' : 'places'} in this area</p>
+					<div class="sheet-header">
+						<p class="sheet-summary" aria-live="polite">{listRestaurants.length.toLocaleString('en-US')} {listRestaurants.length === 1 ? 'place' : 'places'} in this area</p>
+						<button type="button" class="sheet-full-list" onclick={() => closeMobileMap()}>Full list</button>
+					</div>
 				{/if}
 				<RestaurantList
 					restaurants={listRestaurants}
@@ -940,6 +993,7 @@
 					onShowOnMap={openMobileMap}
 					threadsById={threadsById}
 					{commentQuotes}
+					footer={isMobileViewport() && !mapExpanded ? pageFooter : undefined}
 				/>
 			</div>
 		</div>
@@ -1192,6 +1246,12 @@
 			visibility: hidden;
 		}
 
+		/* On phones the footer links are the last item of the scrolling list, so the list runs to
+		   the bottom of the screen instead of ending above a separate band. */
+		:global(main:has(.app-trap) ~ .site-footer) {
+			display: none;
+		}
+
 		.map-pane {
 			display: none;
 		}
@@ -1323,14 +1383,37 @@
 			touch-action: none;
 		}
 
-		.sheet-summary {
+		.sheet-header {
 			flex: none;
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 8px;
+			margin-top: -8px;
+			padding: 0 8px 2px 20px;
+		}
+
+		.sheet-summary {
+			margin: 0;
 			touch-action: none;
-			margin: -8px 0 0;
-			padding: 0 20px 10px;
 			font-size: 0.85rem;
 			font-weight: 600;
 			color: #5d4e37;
+		}
+
+		/* Reaches the whole list, the hero and the footer; closing the map is how a phone leaves
+		   the map-first landing. */
+		.sheet-full-list {
+			flex: none;
+			min-height: 44px;
+			padding: 0 12px;
+			border: none;
+			background: none;
+			font: inherit;
+			font-size: 0.85rem;
+			font-weight: 600;
+			color: #c43700;
+			cursor: pointer;
 		}
 
 		.sheet-handle {

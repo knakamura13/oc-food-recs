@@ -1,10 +1,12 @@
 import { expect, test } from '@playwright/test';
+import { startOnList } from './list-view';
 
 // Layout and load budgets. These guard the problems unit and behavior tests miss:
 // clipped toolbars, wrapped control rows, a list pushed below the fold, and a
 // page payload that is too large to hydrate quickly on a phone.
 
 test.beforeEach(async ({ page }) => {
+	await startOnList(page);
 	await page.route('**/api/events', (route) => route.fulfill({ status: 204 }));
 });
 

@@ -6,6 +6,7 @@ import {
 	type Page,
 	type Route
 } from '@playwright/test';
+import { startOnList } from './list-view';
 
 const leafletSourceMarker = 'A JavaScript library for interactive maps';
 // Scripts only. A '**/*.js*' glob also caught SvelteKit's `__data.json` hover preloads (the
@@ -723,6 +724,11 @@ test.describe('Mobile map interaction', () => {
 
 		await page.setViewportSize({ width: 390, height: 844 });
 
+		// The visitor last chose the map, so returning to a phone width reopens it as the landing does.
+		await expect(page.locator('.list-pane.sheet')).toBeVisible();
+		await expect(mapTrigger).toHaveAttribute('aria-expanded', 'true');
+		await expect(page.locator('html')).toHaveClass(/mobile-map-expanded-lock/);
+		await page.getByRole('button', { name: 'Close map', exact: true }).click();
 		await expect(mapTrigger).toBeVisible();
 		await expect(mapTrigger).toHaveAccessibleName('Open map');
 		await expect(mapTrigger).toHaveAttribute('aria-expanded', 'false');
@@ -975,5 +981,6 @@ test.describe('Mobile map interaction', () => {
 
 // Keep read-only QA interactions out of deployment analytics.
 test.beforeEach(async ({ page }) => {
+	await startOnList(page);
 	await page.route('**/api/events', route => route.fulfill({ status: 204 }));
 });

@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test';
+import { startOnList } from './list-view';
 
 test.beforeEach(async ({ page }) => {
+	await startOnList(page);
 	await page.route('**/api/events', route => route.fulfill({ status: 204 }));
 	await page.addInitScript(() => {
 		(window as any).locationRequests = 0;
