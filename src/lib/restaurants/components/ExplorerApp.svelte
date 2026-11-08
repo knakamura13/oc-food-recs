@@ -297,9 +297,11 @@
 		const vh = viewportHeight || (typeof window !== 'undefined' ? window.innerHeight : 800);
 		// The chips are fixed over the map, so their bottom edge already includes the safe area.
 		const chipsBottom = controlsBarEl?.getBoundingClientRect().bottom || controlsHeight + 20;
-		const full = Math.max(vh - chipsBottom - SHEET_FULL_GAP_PX, 260);
-		const half = Math.round(Math.min(vh * 0.55, full - 60));
-		const peek = Math.round(Math.min(Math.max(vh * 0.32, 200), 300, half - 60));
+		// The floor is low on purpose: a landscape phone has little room, and a taller sheet
+		// would cover Close map and locate at full.
+		const full = Math.max(vh - chipsBottom - SHEET_FULL_GAP_PX, 150);
+		const half = Math.round(Math.min(vh * 0.55, Math.max(full - 60, 110)));
+		const peek = Math.round(Math.min(Math.max(vh * 0.32, 200), 300, Math.max(half - 60, 80)));
 		return { peek, half, full };
 	}
 
@@ -333,10 +335,16 @@
 	/** A fling only counts if the finger was still moving this recently before release. */
 	const SHEET_FLING_MAX_IDLE_MS = 100;
 
+	/**
+	 * The pane starts a drag from its header, and from anywhere on it while collapsed (the rows
+	 * do not scroll then). Move and release are tracked on the window instead of capturing the
+	 * pointer, so a tap on a row still reaches the row and a fast mouse drag that leaves the
+	 * pane keeps working.
+	 */
 	function handleSheetPointerDown(event: PointerEvent) {
-		if (event.button > 0) return;
+		if (event.button > 0 || !(event.target instanceof Element)) return;
 		sheetSuppressClick = false;
-		if (event.currentTarget instanceof HTMLElement) event.currentTarget.setPointerCapture(event.pointerId);
+		if (sheetState !== 'peek' && !event.target.closest('.sheet-grabber, .sheet-summary')) return;
 		sheetDrag = {
 			startY: event.clientY,
 			startHeight: sheetHeightPx,
@@ -346,13 +354,18 @@
 			lastT: event.timeStamp,
 			velocity: 0
 		};
+		window.addEventListener('pointermove', handleSheetPointerMove);
+		window.addEventListener('pointerup', handleSheetPointerEnd);
+		window.addEventListener('pointercancel', handleSheetPointerEnd);
 	}
 
 	function handleSheetPointerMove(event: PointerEvent) {
 		if (!sheetDrag) return;
 		const delta = sheetDrag.startY - event.clientY;
-		if (!sheetDrag.moved && Math.abs(delta) < 6) return;
-		sheetDrag.moved = true;
+		if (!sheetDrag.moved) {
+			if (Math.abs(delta) < 6) return;
+			sheetDrag.moved = true;
+		}
 		const dt = event.timeStamp - sheetDrag.lastT;
 		if (dt > 0) sheetDrag.velocity = (sheetDrag.lastY - event.clientY) / dt;
 		sheetDrag.lastY = event.clientY;
@@ -364,9 +377,13 @@
 	function handleSheetPointerEnd(event: PointerEvent) {
 		const drag = sheetDrag;
 		sheetDrag = null;
+		window.removeEventListener('pointermove', handleSheetPointerMove);
+		window.removeEventListener('pointerup', handleSheetPointerEnd);
+		window.removeEventListener('pointercancel', handleSheetPointerEnd);
 		if (!drag || !drag.moved) return;
-		// A drag can still end in a click on the grabber (on touch, sometimes a task later);
-		// swallow that one click so release does not also cycle. The next press clears it.
+		// A drag can still end in a click on what was pressed (on touch, sometimes a task later);
+		// swallow that one click so release does not also cycle the sheet or open a row. The
+		// next press clears it.
 		sheetSuppressClick = true;
 		if (event.type === 'pointercancel') {
 			setSheetState(sheetState);
@@ -384,11 +401,15 @@
 		setSheetState(best);
 	}
 
-	function handleSheetClick(event: MouseEvent) {
+	function handleSheetClickCapture(event: MouseEvent) {
 		// Keyboard activation (detail 0) never follows a drag.
-		const suppress = sheetSuppressClick && event.detail !== 0;
+		if (!sheetSuppressClick || event.detail === 0) return;
 		sheetSuppressClick = false;
-		if (suppress) return;
+		event.preventDefault();
+		event.stopPropagation();
+	}
+
+	function handleSheetClick() {
 		if (sheetState === 'full') setSheetState('peek');
 		else stepSheet(1);
 	}
@@ -874,12 +895,16 @@
 					</button>
 				{/if}
 			</dialog>
+			<!-- svelte-ignore a11y_no_static_element_interactions -- pointer shortcut; the grabber button below is the keyboard and screen-reader path -->
 			<div
 				class="list-pane"
 				class:sheet={mapExpanded}
 				class:sheet-peek={mapExpanded && sheetState === 'peek' && sheetDragPx === null}
 				class:sheet-dragging={sheetDragPx !== null}
 				style:height={mapExpanded ? `${sheetHeightPx}px` : undefined}
+				onpointerdown={mapExpanded ? handleSheetPointerDown : undefined}
+				ondragstart={(event) => event.preventDefault()}
+				onclickcapture={mapExpanded ? handleSheetClickCapture : undefined}
 			>
 				{#if mapExpanded}
 					<!-- The name says what a tap does (peek and half expand, full collapses). No
@@ -889,10 +914,6 @@
 						type="button"
 						class="sheet-grabber"
 						aria-label={sheetState === 'full' ? 'Collapse list' : 'Expand list'}
-						onpointerdown={handleSheetPointerDown}
-						onpointermove={handleSheetPointerMove}
-						onpointerup={handleSheetPointerEnd}
-						onpointercancel={handleSheetPointerEnd}
 						onclick={handleSheetClick}
 						onkeydown={handleSheetKeydown}
 					>
@@ -1236,6 +1257,11 @@
 			overflow-y: hidden;
 		}
 
+		/* Rows drag the sheet at peek, so the browser must not claim the vertical gesture. */
+		.list-pane.sheet-peek {
+			touch-action: none;
+		}
+
 		.list-pane.sheet-peek :global(.sort-bar) {
 			display: none;
 		}
@@ -1290,6 +1316,7 @@
 
 		.sheet-summary {
 			flex: none;
+			touch-action: none;
 			margin: -8px 0 0;
 			padding: 0 20px 10px;
 			font-size: 0.85rem;

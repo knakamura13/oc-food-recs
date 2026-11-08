@@ -37,7 +37,6 @@
 	},
 	"dependencies": {
 		"@tanstack/virtual-core": "^3.13.12",
-		"@vincjo/datatables": "^2.8.1",
 		"dotenv": "^17.4.2",
 		"drizzle-kit": "^0.31.10",
 		"drizzle-orm": "^0.45.2",

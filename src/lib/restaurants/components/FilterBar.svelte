@@ -1441,6 +1441,11 @@
 		background: rgba(62, 44, 35, 0.45);
 	}
 
+	/* A modal dialog does not stop the page behind its backdrop from scrolling. */
+	:global(body:has(dialog.filters-sheet[open])) {
+		overflow: hidden;
+	}
+
 	.filters-sheet-header {
 		flex: none;
 		display: flex;
