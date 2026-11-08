@@ -106,6 +106,9 @@
 	let prevRadius = $state('');
 
 	let mapExpanded = $state(false);
+	// Mirrors the short-phone @media block below: there the page scrolls, not `.list-scroll`.
+	const SHORT_PHONE_QUERY = '(max-width: 1023px) and (max-height: 720px)';
+	let shortPhone = $state(typeof window !== 'undefined' && window.matchMedia(SHORT_PHONE_QUERY).matches);
 	// Phones: the open map sits behind a draggable list sheet that snaps to three heights.
 	type SheetState = 'peek' | 'half' | 'full';
 	const SHEET_ORDER: SheetState[] = ['peek', 'half', 'full'];
@@ -739,6 +742,10 @@
 		initSavedState();
 		viewportWidth = window.innerWidth;
 		viewportHeight = window.innerHeight;
+		const shortPhoneQuery = window.matchMedia(SHORT_PHONE_QUERY);
+		const onShortPhoneChange = () => (shortPhone = shortPhoneQuery.matches);
+		onShortPhoneChange();
+		shortPhoneQuery.addEventListener('change', onShortPhoneChange);
 		let wasMobileViewport = window.innerWidth <= MOBILE_MAX_PX;
 		const onVisChange = () => {
 			if (document.visibilityState === 'hidden') setLastVisitNow();
@@ -768,6 +775,7 @@
 		};
 		window.addEventListener('resize', onResize, { passive: true });
 		return () => {
+			shortPhoneQuery.removeEventListener('change', onShortPhoneChange);
 			window.removeEventListener('resize', onResize);
 			window.removeEventListener('beforeunload', setLastVisitNow);
 			document.removeEventListener('visibilitychange', onVisChange);
@@ -906,6 +914,7 @@
 					restaurants={listRestaurants}
 					emptyForMapArea={areaScoped && filteredRestaurants.length > 0}
 					revealOpenRow={revealOpenRowRequest}
+					windowScroll={shortPhone && !mapExpanded}
 					totalCount={allRestaurants.length}
 					onShowOnMap={openMobileMap}
 					threadsById={threadsById}
