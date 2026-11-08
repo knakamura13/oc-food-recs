@@ -35,6 +35,7 @@
 	import FilterBar from '$lib/restaurants/components/FilterBar.svelte';
 	import Map from '$lib/restaurants/components/Map.svelte';
 	import RestaurantList from '$lib/restaurants/components/RestaurantList.svelte';
+	import SiteFooter from '$lib/components/SiteFooter.svelte';
 	import BackToTop from '$lib/restaurants/components/BackToTop.svelte';
 	import type { ExplorerPageData } from '$lib/restaurants/explorer-page-data';
 	import { trackEvent } from '$lib/events';
@@ -267,6 +268,7 @@
 
 	function openMobileMap(opener: HTMLButtonElement) {
 		if (!isMobileViewport()) return;
+		skipNextMapFocus = false;
 		rememberPhoneView('map');
 		trackEvent('map_opened');
 		mapOpener = opener;
@@ -310,7 +312,8 @@
 
 	function closeMobileMap({ focusDesktopMap = false }: { focusDesktopMap?: boolean } = {}) {
 		if (!mapExpanded && !mapPaneEl?.open) return;
-		const opener = mapOpener;
+		// A map opened on landing has no opener; land on the Map button so focus is not dropped.
+		const opener = mapOpener ?? document.querySelector<HTMLButtonElement>('.mobile-map-trigger');
 		if (!focusDesktopMap) rememberPhoneView('list');
 		mapExpanded = false;
 		mapBounds = null;
@@ -576,6 +579,7 @@
 			}
 		} catch {
 			// jsdom and older engines may not implement HTMLDialogElement.show.
+			skipNextMapFocus = false;
 		}
 	});
 
@@ -817,12 +821,14 @@
 			const nextWidth = window.innerWidth;
 			const nextIsMobile = nextWidth <= MOBILE_MAX_PX;
 			const crossedToDesktop = wasMobileViewport && !nextIsMobile;
+			const wasMobileBefore = wasMobileViewport;
 			wasMobileViewport = nextIsMobile;
 			viewportWidth = nextWidth;
 			viewportHeight = window.innerHeight;
 			if (crossedToDesktop && mapExpanded) {
 				closeMobileMap({ focusDesktopMap: true });
 			}
+			if (!wasMobileBefore && nextIsMobile && !mapExpanded && !prefersListView()) openMapOnLanding();
 			if (nextIsMobile) {
 				collapseDesktopMap();
 			}
@@ -878,6 +884,10 @@
 </script>
 
 <svelte:window onkeydown={handleDesktopMapEscape} />
+
+{#snippet pageFooter()}
+	<SiteFooter />
+{/snippet}
 
 <main>
 	<section class="hero-section">
@@ -983,6 +993,7 @@
 					onShowOnMap={openMobileMap}
 					threadsById={threadsById}
 					{commentQuotes}
+					footer={isMobileViewport() && !mapExpanded ? pageFooter : undefined}
 				/>
 			</div>
 		</div>
@@ -1233,6 +1244,12 @@
 		:global(html.mobile-map-expanded-lock .site-footer),
 		:global(html.mobile-map-expanded-lock) .hero-section {
 			visibility: hidden;
+		}
+
+		/* On phones the footer links are the last item of the scrolling list, so the list runs to
+		   the bottom of the screen instead of ending above a separate band. */
+		:global(main:has(.app-trap) ~ .site-footer) {
+			display: none;
 		}
 
 		.map-pane {

@@ -724,6 +724,11 @@ test.describe('Mobile map interaction', () => {
 
 		await page.setViewportSize({ width: 390, height: 844 });
 
+		// The visitor last chose the map, so returning to a phone width reopens it as the landing does.
+		await expect(page.locator('.list-pane.sheet')).toBeVisible();
+		await expect(mapTrigger).toHaveAttribute('aria-expanded', 'true');
+		await expect(page.locator('html')).toHaveClass(/mobile-map-expanded-lock/);
+		await page.getByRole('button', { name: 'Close map', exact: true }).click();
 		await expect(mapTrigger).toBeVisible();
 		await expect(mapTrigger).toHaveAccessibleName('Open map');
 		await expect(mapTrigger).toHaveAttribute('aria-expanded', 'false');

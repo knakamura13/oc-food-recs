@@ -39,7 +39,7 @@
 	import { isSaved, toggleSaved } from '$lib/restaurants/saved-restaurants.svelte';
 	import { getLastVisitMs, hasNewMentionsSince } from '$lib/restaurants/visit-tracker';
 	import { consumeSkipToList } from '$lib/restaurants/skip-to-list';
-	import { onMount } from 'svelte';
+	import { onMount, type Snippet } from 'svelte';
 	import { toast } from '$lib/toast';
 
 	interface Props {
@@ -62,6 +62,8 @@
 		 * list's own box is as tall as all its rows and the virtualizer must follow the window.
 		 */
 		windowScroll?: boolean;
+		/** Rendered after the last row, inside the scroller, so it scrolls with the list. */
+		footer?: Snippet;
 	}
 
 	let {
@@ -72,7 +74,8 @@
 		commentQuotes = {},
 		emptyForMapArea = false,
 		revealOpenRow = 0,
-		windowScroll = false
+		windowScroll = false,
+		footer
 	}: Props = $props();
 
 	let priorVisitMs = $state<number | null>(null);
@@ -1019,6 +1022,7 @@
 				{/each}
 			</div>
 		{/if}
+		{@render footer?.()}
 	</div>
 </div>
 

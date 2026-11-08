@@ -43,7 +43,7 @@ test('Full list leaves the map for the whole list, hero and footer, and the choi
 	await expect(page.locator('h1')).toBeVisible();
 	await expect(page.locator('.row[id^="restaurant-"]').first()).toBeVisible();
 	await expect(page.locator('.map-fab')).toBeVisible();
-	await expect(page.locator('footer')).toBeAttached();
+	await expect(page.locator('.list-scroll .site-footer')).toBeAttached();
 
 	// The visitor chose the list, so a reload keeps it.
 	await page.reload();
@@ -55,6 +55,31 @@ test('Full list leaves the map for the whole list, hero and footer, and the choi
 	await expect(page.locator('.list-pane.sheet')).toBeVisible();
 	await page.reload();
 	await expect(page.locator('.list-pane.sheet')).toBeVisible({ timeout: 30_000 });
+});
+
+test('the list view runs to the bottom of the screen and ends with the footer links', async ({ page }, info) => {
+	test.skip(!isPhone(info.project.name), 'Phone viewport only');
+	await landOn(page);
+	await page.getByRole('button', { name: 'Full list' }).click();
+	const scroller = page.locator('.list-scroll');
+	await expect(scroller).toBeVisible();
+
+	// No separate beige band: the page's own footer is hidden and the scroller reaches the bottom edge.
+	await expect(page.locator('main ~ .site-footer')).toBeHidden();
+	const viewportHeight = await page.evaluate(() => window.innerHeight);
+	await scroller.evaluate((el) => el.scrollTo(0, el.scrollHeight));
+	await page.evaluate(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' }));
+	await page.waitForTimeout(300);
+	const box = (await scroller.boundingBox())!;
+	expect(Math.round(box.y + box.height)).toBe(viewportHeight);
+
+	// The footer links are reachable at the end of the list, clear of the floating Map button.
+	const about = scroller.getByRole('link', { name: /About, sources and removal requests/ });
+	await expect(about).toBeVisible();
+	const aboutBox = (await about.boundingBox())!;
+	const fab = (await page.locator('.map-fab').boundingBox())!;
+	expect(aboutBox.y + aboutBox.height).toBeLessThanOrEqual(fab.y);
+	await expect(scroller.getByRole('link', { name: 'Browse cities and cuisines' })).toBeVisible();
 });
 
 test('Escape and Close map both reach a list view that can reopen the map', async ({ page }, info) => {
