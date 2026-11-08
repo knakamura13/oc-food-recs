@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { coordsForFitBounds } from "./explorer-bounds";
+import { coordsForFitBounds, restaurantsInBounds } from "./explorer-bounds";
 
 describe("coordsForFitBounds", () => {
   it("uses the visible/filtered set, not hidden likely_chain rows", () => {
@@ -55,5 +55,26 @@ describe("fitCorners", () => {
     expect(north).toBeLessThanOrEqual(33.8);
     expect(west).toBeGreaterThanOrEqual(-117.9);
     expect(east).toBeLessThanOrEqual(-117.8);
+  });
+});
+
+describe("restaurantsInBounds", () => {
+  const bounds = { south: 33.6, west: -118, north: 33.9, east: -117.7 };
+  const inside = { slug: "in", lat: 33.7, lng: -117.8 };
+  const outside = { slug: "out", lat: 34.2, lng: -117.8 };
+  const unmapped = { slug: "none", lat: null, lng: null };
+
+  it("keeps restaurants inside the area and drops the rest", () => {
+    expect(restaurantsInBounds([inside, outside], bounds)).toEqual([inside]);
+  });
+
+  it("treats the edges as inside", () => {
+    const edge = { slug: "edge", lat: 33.6, lng: -117.7 };
+    expect(restaurantsInBounds([edge], bounds)).toEqual([edge]);
+  });
+
+  it("drops unmapped restaurants unless asked to keep them", () => {
+    expect(restaurantsInBounds([inside, unmapped], bounds)).toEqual([inside]);
+    expect(restaurantsInBounds([inside, unmapped], bounds, { keepUnmapped: true })).toEqual([inside, unmapped]);
   });
 });

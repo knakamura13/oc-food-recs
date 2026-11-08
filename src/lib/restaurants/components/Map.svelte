@@ -2,7 +2,7 @@
 	import { requestUserLocation } from '$lib/restaurants/location';
 	import { onMount, untrack } from 'svelte';
 	import { SEARCH_DEBOUNCE_MS, scheduleDebounced } from '$lib/debounce';
-	import { coordsForFitBounds, fitCorners } from '$lib/restaurants/explorer-bounds';
+	import { coordsForFitBounds, fitCorners, type MapViewBounds } from '$lib/restaurants/explorer-bounds';
 	import type { Restaurant } from '$lib/restaurants/types';
 	import { appState, isUnmappedRestaurant } from '$lib/restaurants/stores.svelte';
 
@@ -12,9 +12,92 @@
 	interface Props {
 		restaurants: Restaurant[];
 		mapExpanded: boolean;
+		/**
+		 * Called (debounced) with the visible area each time the map settles, while expanded.
+		 * `selectionMoved` is true when the map itself moved for a selection (focusing it, or
+		 * panning its label into view) rather than the visitor panning or a filter refitting.
+		 */
+		onBoundsChange?: (bounds: MapViewBounds, detail: { selectionMoved: boolean }) => void;
+		/** Space covered by floating chrome; fits keep pins out from under it. */
+		insets?: { top: number; bottom: number };
+		/**
+		 * The strip of the viewport (y coordinates, in px) that is never covered by chrome. The
+		 * emitted bounds are limited to it so places hidden under the chips or the list sheet
+		 * are not counted as "in this area".
+		 */
+		visibleBand?: { top: number; bottom: number };
 	}
 
-	let { restaurants, mapExpanded = false }: Props = $props();
+	let { restaurants, mapExpanded = false, onBoundsChange, insets, visibleBand }: Props = $props();
+
+	const BOUNDS_EMIT_DELAY_MS = 150;
+	let boundsEmitTimer: ReturnType<typeof setTimeout> | null = null;
+	/** Set just before a move made for a selection; its moveend hands it to the next emit. */
+	let selectionMoveInFlight = false;
+	let boundsAfterSelectionMove = false;
+
+	function handleMoveEnd() {
+		if (selectionMoveInFlight) {
+			selectionMoveInFlight = false;
+			boundsAfterSelectionMove = true;
+		}
+		scheduleBoundsEmit();
+	}
+
+	function scheduleBoundsEmit() {
+		// Only the phone sheet follows the map; desktop pans need no timer.
+		if (!onBoundsChange || !mapExpanded) {
+			boundsAfterSelectionMove = false;
+			return;
+		}
+		if (boundsEmitTimer) clearTimeout(boundsEmitTimer);
+		boundsEmitTimer = setTimeout(() => {
+			boundsEmitTimer = null;
+			const selectionMoved = boundsAfterSelectionMove;
+			boundsAfterSelectionMove = false;
+			if (destroyed || !leafletMap || !mapExpanded) return;
+			const view = leafletMap.getBounds();
+			let north = view.getNorth();
+			let south = view.getSouth();
+			if (visibleBand && mapContainer) {
+				// Latitude is not linear in pixels (Web Mercator), so convert the band's edges.
+				const rect = mapContainer.getBoundingClientRect();
+				const top = Math.min(Math.max(visibleBand.top - rect.top, 0), rect.height);
+				const bottom = Math.min(Math.max(visibleBand.bottom - rect.top, 0), rect.height);
+				if (bottom > top) {
+					north = leafletMap.containerPointToLatLng([0, top]).lat;
+					south = leafletMap.containerPointToLatLng([rect.width, bottom]).lat;
+				}
+			}
+			onBoundsChange?.(
+				{ south, west: view.getWest(), north, east: view.getEast() },
+				{ selectionMoved }
+			);
+		}, BOUNDS_EMIT_DELAY_MS);
+	}
+
+	/** fitBounds padding: the usual margin, or margins that clear the chips and list sheet. */
+	function fitPadding() {
+		return insets
+			? { paddingTopLeft: [30, 30 + insets.top], paddingBottomRight: [30, 30 + insets.bottom] }
+			: { padding: [30, 30] };
+	}
+
+	/**
+	 * Under the phone list sheet, focusing a restaurant zooms to street level rather than the
+	 * maximum: the list follows the visible area, and at max zoom it shrank to one or two rows.
+	 */
+	const SHEET_FOCUS_ZOOM = 15;
+
+	/** Center and zoom that put a restaurant in view; under the sheet, between chips and sheet. */
+	function focusView(lat: number, lng: number): { center: any; zoom: number } {
+		const maxZoom = leafletMap.getMaxZoom();
+		if (!insets) return { center: [lat, lng], zoom: maxZoom };
+		const zoom = Math.min(Math.max(leafletMap.getZoom(), SHEET_FOCUS_ZOOM), maxZoom);
+		// Shift the map center south so the pin lands mid-way down the uncovered band.
+		const point = leafletMap.project([lat, lng], zoom).add([0, (insets.bottom - insets.top) / 2]);
+		return { center: leafletMap.unproject(point, zoom), zoom };
+	}
 
 	let mapContainer: HTMLDivElement | undefined = $state();
 	let leafletMap: any = $state();
@@ -64,8 +147,10 @@
 		pendingFocus = null;
 		const token = ++focusToken;
 		const marker = markers.get(slug);
+		const view = focusView(lat, lng);
+		selectionMoveInFlight = true;
 		if (!marker || !clusterGroupRef) {
-			leafletMap.setView([lat, lng], leafletMap.getMaxZoom(), { animate: !reduceMotion() });
+			leafletMap.setView(view.center, view.zoom, { animate: !reduceMotion() });
 			return;
 		}
 
@@ -88,7 +173,7 @@
 		// Register before setView: a large zoom jump fires 'moveend' synchronously inside
 		// setView, so a listener attached afterward would miss it.
 		leafletMap.once('moveend', () => setTimeout(reveal, 0));
-		leafletMap.setView([lat, lng], leafletMap.getMaxZoom(), { animate: !reduceMotion() });
+		leafletMap.setView(view.center, view.zoom, { animate: !reduceMotion() });
 	}
 
 	// Highlight the hovered (preferred) or selected restaurant's pin. This is the
@@ -124,6 +209,10 @@
 
 	function disposeMap() {
 		pendingFocus = null;
+		if (boundsEmitTimer) clearTimeout(boundsEmitTimer);
+		boundsEmitTimer = null;
+		selectionMoveInFlight = false;
+		boundsAfterSelectionMove = false;
 		if (locationMarker && leafletMap) leafletMap.removeLayer(locationMarker);
 		locationMarker = null;
 		// markercluster does not cancel its internal chunk timer on removal.
@@ -185,6 +274,7 @@
 			leafletMap.on('click', () => {
 				appState.selectedRestaurantSlug = null;
 			});
+			leafletMap.on('moveend', handleMoveEnd);
 
 			updateMarkers();
 			mapInitialized = true;
@@ -425,8 +515,9 @@
 					} else if (mappedRestaurants.length && (expanded || !mobileViewportQuery?.matches)) {
 						const corners = fitCorners(coordsForFitBounds(mappedRestaurants));
 						if (corners) leafletMap.fitBounds(L.latLngBounds(corners),
-							{ padding: [30, 30], maxZoom: 14, animate: false });
+							{ ...fitPadding(), maxZoom: 14, animate: false });
 					}
+					if (expanded) scheduleBoundsEmit();
 				});
 			});
 		});
@@ -437,19 +528,31 @@
 	});
 
 	// Leaflet Tooltip has no Popup autoPan option: measure its actual overflow.
-	function panTooltipIntoView(tooltip: any) {
+	// `forSelection`: the label belongs to the selected restaurant, so a pan counts as a move
+	// made for the selection (the list then keeps that restaurant's open row in view).
+	function panTooltipIntoView(tooltip: any, forSelection = false) {
 		if (tooltipPanFrame !== null) cancelAnimationFrame(tooltipPanFrame);
 		tooltipPanFrame = requestAnimationFrame(() => {
 			tooltipPanFrame = null;
 			const element = tooltip?.getElement();
 			if (destroyed || !leafletMap || !mapContainer || !element?.isConnected) return;
 			const viewport = mapContainer.getBoundingClientRect();
+			// Under the phone list sheet only the band between the chips and the sheet is visible.
+			const top = viewport.top + (insets?.top ?? 0);
+			const bottom = viewport.bottom - (insets?.bottom ?? 0);
 			const gutter = 12;
 			element.style.maxWidth = `${Math.max(0, viewport.width - gutter * 2)}px`;
 			const tip = element.getBoundingClientRect();
+			// Keep the pin in view with its label: a pin tapped low on the map ends up under the
+			// sheet once the sheet lifts to show its row.
+			const pin = tooltip?._source?.getElement?.()?.getBoundingClientRect();
+			const tipTop = Math.min(tip.top, pin?.top ?? tip.top);
+			const tipBottom = Math.max(tip.bottom, pin?.bottom ?? tip.bottom);
 			const dx = Math.max(0, tip.right - viewport.right + gutter) + Math.min(0, tip.left - viewport.left - gutter);
-			const dy = Math.max(0, tip.bottom - viewport.bottom + gutter) + Math.min(0, tip.top - viewport.top - gutter);
-			if (dx || dy) leafletMap.panBy([dx, dy], { animate: !reduceMotion() });
+			const dy = Math.max(0, tipBottom - bottom + gutter) + Math.min(0, tipTop - top - gutter);
+			if (!dx && !dy) return;
+			if (forSelection) selectionMoveInFlight = true;
+			leafletMap.panBy([dx, dy], { animate: !reduceMotion() });
 		});
 	}
 
@@ -470,7 +573,7 @@
 			const mapped = targets.filter((r) => r.lat !== null && r.lng !== null);
 			const corners = fitCorners(mapped.map((r) => ({ lat: r.lat as number, lng: r.lng as number })));
 			if (corners) {
-				leafletMap.fitBounds(L.latLngBounds(corners), { padding: [30, 30], maxZoom: 14, animate: !reduceMotion() });
+				leafletMap.fitBounds(L.latLngBounds(corners), { ...fitPadding(), maxZoom: 14, animate: !reduceMotion() });
 			}
 			appState.fitBoundsTarget = null;
 		}
@@ -592,7 +695,7 @@
 				opacity: 1
 			})
 			.openTooltip();
-		panTooltipIntoView(next.getTooltip());
+		panTooltipIntoView(next.getTooltip(), active === appState.selectedRestaurantSlug);
 		appliedSlug = active;
 	}
 </script>

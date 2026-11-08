@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Bookmark, ChevronDown, Map as MapIcon, Share2, LocateFixed } from 'lucide-svelte';
+	import { Bookmark, ChevronDown, Map as MapIcon, Share2, LocateFixed, SlidersHorizontal, X } from 'lucide-svelte';
 	import type { Restaurant } from '$lib/restaurants/types';
 	import {
 		appState,
@@ -37,6 +37,8 @@
 		dateExtent: { min: number; max: number };
 		/** Unmapped restaurants that match the current filters/search (whether or not they are included). */
 		unmappedCount?: number;
+		/** Places the current filters return, for the Filters sheet's apply button. */
+		resultCount?: number;
 		mapExpanded?: boolean;
 		onMapToggle?: (opener: HTMLButtonElement) => void;
 	}
@@ -50,9 +52,45 @@
 		restaurantsForHistogram,
 		dateExtent,
 		unmappedCount = 0,
+		resultCount,
 		mapExpanded = false,
 		onMapToggle
 	}: Props = $props();
+
+	// Phones: one Filters sheet replaces the four facet dropdowns.
+	let filtersSheetEl = $state<HTMLDialogElement | undefined>(undefined);
+	let filtersSheetOpen = $state(false);
+	let filtersSheetTrigger: HTMLButtonElement | null = null;
+
+	function openFiltersSheet(event: MouseEvent & { currentTarget: HTMLButtonElement }) {
+		filtersSheetTrigger = event.currentTarget;
+		dismissOpenFilter();
+		filtersSheetOpen = true;
+		try {
+			filtersSheetEl?.showModal();
+		} catch {
+			// jsdom and older engines may not implement HTMLDialogElement.showModal.
+			filtersSheetEl?.setAttribute('open', '');
+		}
+	}
+
+	function closeFiltersSheet() {
+		const dialog = filtersSheetEl;
+		if (dialog?.open && typeof dialog.close === 'function') {
+			dialog.close();
+			return;
+		}
+		// No native close (jsdom): close the sheet ourselves.
+		dialog?.removeAttribute('open');
+		handleFiltersSheetClosed();
+	}
+
+	function handleFiltersSheetClosed() {
+		filtersSheetOpen = false;
+		const opener = filtersSheetTrigger;
+		filtersSheetTrigger = null;
+		if (opener?.isConnected) opener.focus();
+	}
 
 	let showCuisineDropdown = $state(false);
 	let showCityDropdown = $state(false);
@@ -80,6 +118,25 @@
 			appState.freshnessCutoff === lastVisitMs
 	);
 	const isCustomRecency = $derived(appState.freshnessCutoff !== null && !isNewSinceVisit);
+
+	// The sheet is phone-only. If the window grows past the desktop breakpoint while it is open,
+	// close it: its trigger is gone and a modal dialog would otherwise block the desktop UI.
+	onMount(() => {
+		if (typeof window.matchMedia !== 'function') return;
+		const desktop = window.matchMedia('(min-width: 1024px)');
+		const closeOnDesktop = () => {
+			if (desktop.matches && filtersSheetOpen) closeFiltersSheet();
+		};
+		desktop.addEventListener('change', closeOnDesktop);
+		return () => desktop.removeEventListener('change', closeOnDesktop);
+	});
+
+	const activeFacetCount = $derived(
+		appState.activeCuisines.length +
+			appState.activeCities.length +
+			appState.activeSubreddits.length +
+			(isCustomRecency ? 1 : 0)
+	);
 
 	function trackFilterApplied(kind: EventProps<'filter_applied'>['kind']) {
 		trackEvent('filter_applied', { kind });
@@ -235,7 +292,6 @@
 			trackFilterApplied('cuisine');
 			appState.activeCuisines = [...appState.activeCuisines, cuisine];
 		}
-		if (isCompactFilterViewport()) dismissOpenFilter();
 	}
 
 	function toggleCity(city: string) {
@@ -246,7 +302,6 @@
 			trackFilterApplied('city');
 			appState.activeCities = [...appState.activeCities, city];
 		}
-		if (isCompactFilterViewport()) dismissOpenFilter();
 	}
 
 	function toggleSubreddit(subreddit: string) {
@@ -257,7 +312,6 @@
 			trackFilterApplied('subreddit');
 			appState.activeSubreddits = [...appState.activeSubreddits, subreddit];
 		}
-		if (isCompactFilterViewport()) dismissOpenFilter();
 	}
 
 	function clearAllFilters() {
@@ -442,6 +496,55 @@
 	</button>
 {/snippet}
 
+{#snippet cuisineOptionList()}
+	{#each primaryCuisines as item (item.name)}
+		{@render facetOption(item, appState.activeCuisines.includes(item.name), item.name, () =>
+			toggleCuisine(item.name)
+		)}
+	{/each}
+	{#if moreCuisines.length > 0}
+		<button
+			type="button"
+			class="dropdown-item more-toggle"
+			aria-expanded={showMoreCuisines}
+			onclick={() => (showMoreCuisines = !showMoreCuisines)}
+		>
+			<span class="item-name">
+				{showMoreCuisines ? 'Fewer cuisines' : `More cuisines (${moreCuisines.length})`}
+			</span>
+			<span class="arrow" aria-hidden="true" class:open={showMoreCuisines}>
+				<ChevronDown size={14} aria-hidden="true" />
+			</span>
+		</button>
+		{#if showMoreCuisines}
+			{#each moreCuisines as item (item.name)}
+				{@render facetOption(item, appState.activeCuisines.includes(item.name), item.name, () =>
+					toggleCuisine(item.name)
+				)}
+			{/each}
+		{/if}
+	{/if}
+{/snippet}
+
+{#snippet cityOptionList()}
+	{#each cityCounts as item (item.name)}
+		{@render facetOption(item, appState.activeCities.includes(item.name), item.name, () =>
+			toggleCity(item.name)
+		)}
+	{/each}
+{/snippet}
+
+{#snippet subredditOptionList()}
+	{#each subredditCounts as item (item.name)}
+		{@render facetOption(
+			item,
+			appState.activeSubreddits.includes(item.name),
+			`r/${item.name}`,
+			() => toggleSubreddit(item.name)
+		)}
+	{/each}
+{/snippet}
+
 <nav class="filter-bar" aria-label="Restaurant filters">
 	<div
 		class="filter-row"
@@ -456,6 +559,22 @@
 		}}
 	>
 	<div class="filter-controls">
+		<!-- Phones: one button opens every facet in a sheet; the dropdowns below are desktop-only. -->
+		<button
+			type="button"
+			class="dropdown-trigger filters-sheet-trigger"
+			class:has-active={activeFacetCount > 0}
+			aria-haspopup="dialog"
+			aria-expanded={filtersSheetOpen}
+			onclick={openFiltersSheet}
+		>
+			<SlidersHorizontal size={16} aria-hidden="true" />
+			Filters
+			{#if activeFacetCount > 0}
+				<span class="badge">{activeFacetCount}</span>
+			{/if}
+		</button>
+
 		<!-- Cuisine dropdown -->
 		<div class="dropdown-wrapper" onfocusout={handleDropdownFocusOut}>
 			<button
@@ -483,33 +602,7 @@
 					aria-label="Filter by cuisine"
 					{@attach pinDropdownPanel}
 				>
-					{#each primaryCuisines as item (item.name)}
-						{@render facetOption(item, appState.activeCuisines.includes(item.name), item.name, () =>
-							toggleCuisine(item.name)
-						)}
-					{/each}
-					{#if moreCuisines.length > 0}
-						<button
-							type="button"
-							class="dropdown-item more-toggle"
-							aria-expanded={showMoreCuisines}
-							onclick={() => (showMoreCuisines = !showMoreCuisines)}
-						>
-							<span class="item-name">
-								{showMoreCuisines ? 'Fewer cuisines' : `More cuisines (${moreCuisines.length})`}
-							</span>
-							<span class="arrow" aria-hidden="true" class:open={showMoreCuisines}>
-								<ChevronDown size={14} aria-hidden="true" />
-							</span>
-						</button>
-						{#if showMoreCuisines}
-							{#each moreCuisines as item (item.name)}
-								{@render facetOption(item, appState.activeCuisines.includes(item.name), item.name, () =>
-									toggleCuisine(item.name)
-								)}
-							{/each}
-						{/if}
-					{/if}
+					{@render cuisineOptionList()}
 				</div>
 			{/if}
 		</div>
@@ -541,11 +634,7 @@
 					aria-label="Filter by city"
 					{@attach pinDropdownPanel}
 				>
-					{#each cityCounts as item (item.name)}
-						{@render facetOption(item, appState.activeCities.includes(item.name), item.name, () =>
-							toggleCity(item.name)
-						)}
-					{/each}
+					{@render cityOptionList()}
 				</div>
 			{/if}
 		</div>
@@ -607,14 +696,7 @@
 						aria-label="Filter by subreddit"
 						{@attach pinDropdownPanel}
 					>
-						{#each subredditCounts as item (item.name)}
-							{@render facetOption(
-								item,
-								appState.activeSubreddits.includes(item.name),
-								`r/${item.name}`,
-								() => toggleSubreddit(item.name)
-							)}
-						{/each}
+						{@render subredditOptionList()}
 					</div>
 				{/if}
 			</div>
@@ -800,6 +882,58 @@
 			<button class="clear-filters" onclick={clearAllFilters}>Clear all</button>
 		</div>
 	{/if}
+	<dialog
+		class="filters-sheet"
+		bind:this={filtersSheetEl}
+		aria-labelledby="filters-sheet-title"
+		onclose={handleFiltersSheetClosed}
+		onclick={(event) => {
+			if (event.target === filtersSheetEl) closeFiltersSheet();
+		}}
+	>
+		{#if filtersSheetOpen}
+			<header class="filters-sheet-header">
+				<h2 id="filters-sheet-title">Filters</h2>
+				{#if activeFacetCount > 0}
+					<button type="button" class="filters-sheet-reset" onclick={clearAllFilters}>Reset</button>
+				{/if}
+				<button type="button" class="filters-sheet-close" aria-label="Close filters" onclick={closeFiltersSheet}>
+					<X size={20} aria-hidden="true" />
+				</button>
+			</header>
+			<div class="filters-sheet-body">
+				<section aria-labelledby="sheet-cuisine-title">
+					<h3 id="sheet-cuisine-title">Cuisine</h3>
+					<div class="sheet-options" role="listbox" aria-multiselectable="true" aria-label="Filter by cuisine">
+						{@render cuisineOptionList()}
+					</div>
+				</section>
+				<section aria-labelledby="sheet-city-title">
+					<h3 id="sheet-city-title">City</h3>
+					<div class="sheet-options" role="listbox" aria-multiselectable="true" aria-label="Filter by city">
+						{@render cityOptionList()}
+					</div>
+				</section>
+				<section aria-labelledby="sheet-recency-title">
+					<h3 id="sheet-recency-title">Recency</h3>
+					<RecencyHistogram mentions={histogramMentions} extent={dateExtent} onDone={() => {}} />
+				</section>
+				{#if showSubredditFilter}
+					<section aria-labelledby="sheet-subreddit-title">
+						<h3 id="sheet-subreddit-title">Subreddit</h3>
+						<div class="sheet-options" role="listbox" aria-multiselectable="true" aria-label="Filter by subreddit">
+							{@render subredditOptionList()}
+						</div>
+					</section>
+				{/if}
+			</div>
+			<footer class="filters-sheet-footer">
+				<button type="button" class="filters-sheet-apply" onclick={closeFiltersSheet}>
+					{#if resultCount === undefined}Show results{:else}Show {resultCount.toLocaleString('en-US')} {resultCount === 1 ? 'place' : 'places'}{/if}
+				</button>
+			</footer>
+		{/if}
+	</dialog>
 </nav>
 
 <!-- Click-away & keyboard listeners -->
@@ -1269,6 +1403,140 @@
 		.filter-actions .dropdown-trigger:not(.saved-toggle):not(.unmapped-toggle):not(.near-me):not(.radius-control) :global(svg) {
 			width: 18px;
 			height: 18px;
+		}
+	}
+
+	/* ── Filters sheet (phones): one sheet replaces the Cuisine/City/Recency/Subreddit dropdowns ── */
+	.filters-sheet-trigger {
+		display: none;
+	}
+
+	dialog.filters-sheet {
+		position: fixed;
+		inset: auto 0 0 0;
+		margin: 0;
+		width: 100%;
+		max-width: none;
+		max-height: min(88dvh, 720px);
+		padding: 0;
+		border: none;
+		border-radius: 20px 20px 0 0;
+		background: #fffcf8;
+		color: #3e2c23;
+		box-shadow: 0 -8px 32px rgba(62, 44, 35, 0.3);
+		flex-direction: column;
+		overflow: hidden;
+	}
+
+	dialog.filters-sheet[open] {
+		display: flex;
+	}
+
+	dialog.filters-sheet:focus,
+	dialog.filters-sheet:focus-visible {
+		outline: none;
+	}
+
+	dialog.filters-sheet::backdrop {
+		background: rgba(62, 44, 35, 0.45);
+	}
+
+	.filters-sheet-header {
+		flex: none;
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.5rem 0.5rem 0.5rem 1.25rem;
+		border-bottom: 1px solid #ede6dc;
+	}
+
+	.filters-sheet-header h2 {
+		flex: 1;
+		margin: 0;
+		font-size: 1.15rem;
+	}
+
+	.filters-sheet-reset,
+	.filters-sheet-close {
+		min-width: 44px;
+		min-height: 44px;
+		padding: 0 0.75rem;
+		border: none;
+		background: transparent;
+		color: #c43700;
+		font: inherit;
+		font-weight: 600;
+		cursor: pointer;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.filters-sheet-close {
+		color: #3e2c23;
+		padding: 0;
+	}
+
+	.filters-sheet-body {
+		flex: 1;
+		min-height: 0;
+		overflow-y: auto;
+		overscroll-behavior: contain;
+		padding: 0.5rem 1.25rem 1rem;
+	}
+
+	.filters-sheet-body section {
+		padding: 0.75rem 0;
+		border-bottom: 1px solid #ede6dc;
+	}
+
+	.filters-sheet-body h3 {
+		margin: 0 0 0.35rem;
+		font-size: 0.8rem;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+		color: #5d4e37;
+	}
+
+	.sheet-options .dropdown-item {
+		min-height: 44px;
+	}
+
+	.filters-sheet-footer {
+		flex: none;
+		padding: 0.75rem 1.25rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
+		border-top: 1px solid #ede6dc;
+		background: #fffcf8;
+	}
+
+	.filters-sheet-apply {
+		width: 100%;
+		min-height: 50px;
+		border: none;
+		border-radius: 14px;
+		background: #c43700;
+		color: #fffdf9;
+		font: inherit;
+		font-size: 1rem;
+		font-weight: 700;
+		cursor: pointer;
+	}
+
+	@media (max-width: 1023px) {
+		.filters-sheet-trigger {
+			display: inline-flex;
+			order: -3;
+		}
+
+		.filter-controls > .dropdown-wrapper {
+			display: none;
+		}
+	}
+
+	@media (min-width: 1024px) {
+		dialog.filters-sheet,
+		dialog.filters-sheet[open] {
+			display: none;
 		}
 	}
 </style>

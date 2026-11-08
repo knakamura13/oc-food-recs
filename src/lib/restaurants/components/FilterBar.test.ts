@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { render, screen, waitFor } from "@testing-library/svelte";
+import { render, screen, waitFor, within } from "@testing-library/svelte";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import FilterBar from "./FilterBar.svelte";
@@ -125,6 +125,53 @@ describe("FilterBar", () => {
     ).toBeInTheDocument();
   });
 
+  describe("Filters sheet", () => {
+    const renderBar = (extra: Record<string, unknown> = {}) =>
+      render(FilterBar, {
+        restaurants: broadRoster,
+        threadSubreddit,
+        restaurantsForHistogram: broadRoster,
+        dateExtent,
+        ...extra,
+      });
+
+    it("opens a dialog holding every facet and closes it with the apply button", async () => {
+      const user = userEvent.setup();
+      renderBar({ resultCount: 6 });
+      await user.click(screen.getByRole("button", { name: /^filters/i }));
+      const sheet = screen.getByRole("dialog", { name: "Filters" });
+      expect(sheet).toBeInTheDocument();
+      for (const name of [/filter by cuisine/i, /filter by city/i]) {
+        expect(within(sheet).getByRole("listbox", { name })).toBeInTheDocument();
+      }
+      expect(within(sheet).getByRole("heading", { name: "Recency" })).toBeInTheDocument();
+      await user.click(within(sheet).getByRole("button", { name: "Show 6 places" }));
+      expect(screen.queryByRole("dialog", { name: "Filters" })).not.toBeInTheDocument();
+    });
+
+    it("applies a cuisine live and counts active filters on the trigger", async () => {
+      const user = userEvent.setup();
+      renderBar();
+      const trigger = screen.getByRole("button", { name: /^filters/i });
+      await user.click(trigger);
+      const sheet = screen.getByRole("dialog", { name: "Filters" });
+      await user.click(within(sheet).getByRole("option", { name: /mexican/i }));
+      expect(appState.activeCuisines).toEqual(["Mexican"]);
+      expect(trigger).toHaveTextContent("1");
+      await user.click(within(sheet).getByRole("button", { name: "Reset" }));
+      expect(appState.activeCuisines).toEqual([]);
+    });
+
+    it("returns focus to the Filters button when it closes", async () => {
+      const user = userEvent.setup();
+      renderBar();
+      const trigger = screen.getByRole("button", { name: /^filters/i });
+      await user.click(trigger);
+      await user.click(screen.getByRole("button", { name: "Close filters" }));
+      expect(trigger).toHaveFocus();
+    });
+  });
+
   it("greys out zero-count options, keeps them visible, and ignores clicks on them", async () => {
     const user = userEvent.setup();
     render(FilterBar, {
@@ -176,32 +223,6 @@ describe("FilterBar", () => {
     expect(screen.getByRole("option", { name: /mexican/i })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: /japanese/i })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /more cuisines/i })).toBeNull();
-  });
-
-  it("closes the cuisine menu after a selection on compact viewports", async () => {
-    const user = userEvent.setup();
-    Object.defineProperty(window, "innerWidth", {
-      configurable: true,
-      writable: true,
-      value: 390,
-    });
-    render(FilterBar, {
-      restaurants: broadRoster,
-      threadSubreddit,
-      restaurantsForHistogram: broadRoster,
-      dateExtent,
-    });
-    const trigger = screen.getByRole("button", { name: /^cuisine$/i });
-    await user.click(trigger);
-    await user.click(screen.getByRole("option", { name: /mexican/i }));
-    expect(appState.activeCuisines).toEqual(["Mexican"]);
-    expect(
-      screen.queryByRole("listbox", { name: /filter by cuisine/i }),
-    ).not.toBeInTheDocument();
-    expect(trigger).toHaveFocus();
-    expect(
-      screen.getByRole("button", { name: /remove mexican filter/i }),
-    ).toBeInTheDocument();
   });
 
   it("clears all active filters", async () => {

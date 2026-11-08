@@ -18,7 +18,7 @@
 		filterPageFacetPopulations,
 		filterPageRestaurantsWithSearch
 	} from '$lib/restaurants/filter-page-restaurants';
-	import { coordsForFitBounds } from '$lib/restaurants/explorer-bounds';
+	import { coordsForFitBounds, restaurantsInBounds, type MapViewBounds } from '$lib/restaurants/explorer-bounds';
 	import {
 		buildPageTitle,
 		buildPageDescription,
@@ -56,23 +56,6 @@
 		onPageMetaChange?: (pageMeta: PageMeta) => void;
 		routerReady?: boolean;
 	} = $props();
-
-	const FOCUSABLE_SELECTOR = [
-		'a[href]',
-		'button:not([disabled])',
-		'input:not([disabled])',
-		'select:not([disabled])',
-		'textarea:not([disabled])',
-		'[tabindex]:not([tabindex="-1"])'
-	].join(', ');
-
-	function getFocusableElements(container: HTMLElement): HTMLElement[] {
-		return [...container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)].filter((el) => {
-			if (el.closest('[inert]')) return false;
-			if (el.closest('[aria-hidden="true"]')) return false;
-			return el.getClientRects().length > 0;
-		});
-	}
 
 	const allRestaurants: Restaurant[] = $derived.by(() =>
 		(data.dataset.restaurants as Restaurant[]).map((r) => ({
@@ -123,6 +106,28 @@
 	let prevRadius = $state('');
 
 	let mapExpanded = $state(false);
+	// Phones: the open map sits behind a draggable list sheet that snaps to three heights.
+	type SheetState = 'peek' | 'half' | 'full';
+	const SHEET_ORDER: SheetState[] = ['peek', 'half', 'full'];
+	/** A full sheet stops this far below the chips, leaving room for Close map and locate. */
+	const SHEET_FULL_GAP_PX = 76;
+	let sheetState = $state<SheetState>('peek');
+	let sheetDragPx = $state<number | null>(null);
+	/** What the open map shows right now; the list follows it instead of a Search this area button. */
+	let mapBounds = $state<MapViewBounds | null>(null);
+	/**
+	 * Bumped when the list re-scopes because the map moved for a selection (pin tap, row tap,
+	 * Show on map). Only then does the list bring the open row back into view; a visitor who
+	 * scrolled away from it and pans keeps their scroll position.
+	 */
+	let revealOpenRowRequest = $state(0);
+
+	function handleMapBoundsChange(bounds: MapViewBounds, { selectionMoved }: { selectionMoved: boolean }) {
+		mapBounds = bounds;
+		if (selectionMoved) revealOpenRowRequest += 1;
+	}
+	let viewportHeight = $state(0);
+	let controlsHeight = $state(0);
 	let mapDesktopHovered = $state(false);
 	let mapOpener = $state<HTMLButtonElement | null>(null);
 	let mapCloseButton = $state<HTMLButtonElement | undefined>(undefined);
@@ -262,6 +267,9 @@
 		trackEvent('map_opened');
 		mapOpener = opener;
 		snapMobileShellToTop();
+		sheetState = appState.selectedRestaurantSlug ? 'half' : 'peek';
+		sheetDragPx = null;
+		mapBounds = null;
 		mapExpanded = true;
 	}
 
@@ -269,6 +277,7 @@
 		if (!mapExpanded && !mapPaneEl?.open) return;
 		const opener = mapOpener;
 		mapExpanded = false;
+		mapBounds = null;
 		mapOpener = null;
 		if (mapPaneEl?.open) {
 			mapPaneEl.close();
@@ -284,51 +293,125 @@
 		restoreMapFocus(opener, false);
 	}
 
-	let outsideMapPointer = false;
-	function isOutsideMap(event: PointerEvent) {
-		if (event.target !== mapPaneEl || !mapPaneEl) return false;
-		const rect = mapPaneEl.getBoundingClientRect();
-		return event.clientX < rect.left || event.clientX > rect.right ||
-			event.clientY < rect.top || event.clientY > rect.bottom;
+	function sheetHeights() {
+		const vh = viewportHeight || (typeof window !== 'undefined' ? window.innerHeight : 800);
+		// The chips are fixed over the map, so their bottom edge already includes the safe area.
+		const chipsBottom = controlsBarEl?.getBoundingClientRect().bottom || controlsHeight + 20;
+		const full = Math.max(vh - chipsBottom - SHEET_FULL_GAP_PX, 260);
+		const half = Math.round(Math.min(vh * 0.55, full - 60));
+		const peek = Math.round(Math.min(Math.max(vh * 0.32, 200), 300, half - 60));
+		return { peek, half, full };
 	}
 
-	function isMapDialogTabTrapActive() {
-		// Desktop reuses this <dialog> in-flow while it stays closed (`open` is false).
-		// Only wrap Tab when the sheet is actually modal so sequential focus can leave
-		// the map for the sort bar and rows (WCAG 2.1.2).
-		return Boolean(mapPaneEl?.open) || (mapExpanded && isMobileViewport());
+	const sheetHeightPx = $derived.by(() => {
+		void viewportHeight;
+		void controlsHeight;
+		return sheetDragPx ?? sheetHeights()[sheetState];
+	});
+
+	function setSheetState(next: SheetState) {
+		sheetState = next;
+		sheetDragPx = null;
 	}
 
-	function handleMapDialogKeydown(event: KeyboardEvent) {
-		// Native <dialog> handles Escape; Chrome still needs a Tab wrap while
-		// `showModal()` is up, or focus jumps to <body> from the last sheet control.
-		if (event.key !== 'Tab' || !mapPaneEl) return;
-		if (!isMapDialogTabTrapActive()) return;
+	function stepSheet(direction: 1 | -1) {
+		const index = SHEET_ORDER.indexOf(sheetState) + direction;
+		setSheetState(SHEET_ORDER[Math.min(Math.max(index, 0), SHEET_ORDER.length - 1)]);
+	}
 
-		const focusables = getFocusableElements(mapPaneEl);
-		if (focusables.length === 0) {
-			event.preventDefault();
+	let sheetDrag: {
+		startY: number;
+		startHeight: number;
+		/** Snap stops measured once per drag, so moves do not re-read layout. */
+		heights: Record<SheetState, number>;
+		moved: boolean;
+		lastY: number;
+		lastT: number;
+		velocity: number;
+	} | null = null;
+	let sheetSuppressClick = false;
+	/** A fling only counts if the finger was still moving this recently before release. */
+	const SHEET_FLING_MAX_IDLE_MS = 100;
+
+	function handleSheetPointerDown(event: PointerEvent) {
+		if (event.button > 0) return;
+		sheetSuppressClick = false;
+		if (event.currentTarget instanceof HTMLElement) event.currentTarget.setPointerCapture(event.pointerId);
+		sheetDrag = {
+			startY: event.clientY,
+			startHeight: sheetHeightPx,
+			heights: sheetHeights(),
+			moved: false,
+			lastY: event.clientY,
+			lastT: event.timeStamp,
+			velocity: 0
+		};
+	}
+
+	function handleSheetPointerMove(event: PointerEvent) {
+		if (!sheetDrag) return;
+		const delta = sheetDrag.startY - event.clientY;
+		if (!sheetDrag.moved && Math.abs(delta) < 6) return;
+		sheetDrag.moved = true;
+		const dt = event.timeStamp - sheetDrag.lastT;
+		if (dt > 0) sheetDrag.velocity = (sheetDrag.lastY - event.clientY) / dt;
+		sheetDrag.lastY = event.clientY;
+		sheetDrag.lastT = event.timeStamp;
+		const { peek, full } = sheetDrag.heights;
+		sheetDragPx = Math.min(Math.max(sheetDrag.startHeight + delta, peek), full);
+	}
+
+	function handleSheetPointerEnd(event: PointerEvent) {
+		const drag = sheetDrag;
+		sheetDrag = null;
+		if (!drag || !drag.moved) return;
+		// A drag can still end in a click on the grabber (on touch, sometimes a task later);
+		// swallow that one click so release does not also cycle. The next press clears it.
+		sheetSuppressClick = true;
+		if (event.type === 'pointercancel') {
+			setSheetState(sheetState);
 			return;
 		}
-
-		const first = focusables[0];
-		const last = focusables[focusables.length - 1];
-		const active = document.activeElement;
-		const activeInside = active instanceof HTMLElement && mapPaneEl.contains(active);
-
-		if (event.shiftKey) {
-			if (!activeInside || active === first) {
-				event.preventDefault();
-				last.focus();
-			}
-			return;
+		const heights = drag.heights;
+		// Project forward a little so a flick lands on the next stop; a press that came to
+		// rest before release is not a flick.
+		const velocity = event.timeStamp - drag.lastT > SHEET_FLING_MAX_IDLE_MS ? 0 : drag.velocity;
+		const projected = (sheetDragPx ?? drag.startHeight) + velocity * 180;
+		let best: SheetState = 'peek';
+		for (const state of SHEET_ORDER) {
+			if (Math.abs(heights[state] - projected) < Math.abs(heights[best] - projected)) best = state;
 		}
+		setSheetState(best);
+	}
 
-		if (!activeInside || active === last) {
+	function handleSheetClick(event: MouseEvent) {
+		// Keyboard activation (detail 0) never follows a drag.
+		const suppress = sheetSuppressClick && event.detail !== 0;
+		sheetSuppressClick = false;
+		if (suppress) return;
+		if (sheetState === 'full') setSheetState('peek');
+		else stepSheet(1);
+	}
+
+	function handleSheetKeydown(event: KeyboardEvent) {
+		if (event.key === 'ArrowUp') {
 			event.preventDefault();
-			first.focus();
+			stepSheet(1);
+		} else if (event.key === 'ArrowDown') {
+			event.preventDefault();
+			stepSheet(-1);
 		}
 	}
+
+	// Tapping a pin selects its row; lift a collapsed sheet so the row is readable.
+	let lastSelectedSlug: string | null = null;
+	$effect(() => {
+		const slug = appState.selectedRestaurantSlug;
+		const expanded = mapExpanded;
+		const changed = slug !== lastSelectedSlug;
+		lastSelectedSlug = slug;
+		if (changed && slug && expanded && untrack(() => sheetState) === 'peek') setSheetState('half');
+	});
 
 	function toggleMobileMap(opener: HTMLButtonElement) {
 		if (mapExpanded) {
@@ -390,7 +473,16 @@
 
 	function handleDesktopMapEscape(event: KeyboardEvent) {
 		if (event.key !== 'Escape') return;
-		if (isMobileViewport()) return;
+		if (isMobileViewport()) {
+			// The map is no longer a modal dialog, so Escape no longer closes it natively.
+			if (!mapExpanded) return;
+			const target = event.target;
+			if (target instanceof HTMLElement && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
+			if (document.querySelector('.dropdown-trigger[aria-expanded="true"]')) return;
+			event.preventDefault();
+			closeMobileMap();
+			return;
+		}
 		if (!mapDesktopHovered) return;
 		const target = event.target;
 		if (target instanceof HTMLElement) {
@@ -403,8 +495,8 @@
 		collapseDesktopMap();
 	}
 
-	// Keep the native <dialog> modal state in sync with mapExpanded + viewport.
-	// showModal() provides the focus trap and Escape-to-close; close() tears it down.
+	// Keep the native <dialog> open state in sync with mapExpanded + viewport. On phones
+	// it opens non-modal (show()) so the list sheet and filter chips stay usable over it.
 	$effect(() => {
 		const dialog = mapPaneEl;
 		if (!dialog) return;
@@ -413,14 +505,14 @@
 		try {
 			if (wantModal) {
 				if (!dialog.open) {
-					dialog.showModal();
+					dialog.show();
 					void tick().then(() => mapCloseButton?.focus());
 				}
 			} else if (dialog.open) {
 				dialog.close();
 			}
 		} catch {
-			// jsdom and older engines may not implement HTMLDialogElement.showModal.
+			// jsdom and older engines may not implement HTMLDialogElement.show.
 		}
 	});
 
@@ -551,6 +643,22 @@
 
 	const restaurantsBeforeFreshness = $derived(pageFilterResult.beforeFreshness);
 	const filteredRestaurants = $derived(pageFilterResult.filtered);
+	// Map open on a phone: the list shows only what is in the visible map area. The map keeps
+	// every filtered pin and fits to the full filtered set, so the two never chase each other.
+	const listRestaurants = $derived(
+		mapExpanded && mapBounds
+			? restaurantsInBounds(filteredRestaurants, mapBounds, { keepUnmapped: appState.showUnmapped })
+			: filteredRestaurants
+	);
+	// The list counts what shows above the sheet at its lowest stop. Using the live sheet height
+	// instead would make the list shrink whenever the visitor pulls the sheet up to read it.
+	const mapVisibleBand = $derived.by(() => {
+		void controlsHeight;
+		void viewportHeight;
+		const chipsBottom = controlsBarEl?.getBoundingClientRect().bottom ?? controlsHeight;
+		return { top: chipsBottom, bottom: (viewportHeight || window.innerHeight) - sheetHeights().peek };
+	});
+	const areaScoped = $derived(mapExpanded && mapBounds !== null);
 	// Only body-only matches get the second-tier label; existing Fuse matches retain precedence.
 	const visibleCommentMatches = $derived.by(() => {
 		const nameRanks = searchRankBySlug(allRestaurants, debouncedSearchQuery);
@@ -630,6 +738,7 @@
 	onMount(() => {
 		initSavedState();
 		viewportWidth = window.innerWidth;
+		viewportHeight = window.innerHeight;
 		let wasMobileViewport = window.innerWidth <= MOBILE_MAX_PX;
 		const onVisChange = () => {
 			if (document.visibilityState === 'hidden') setLastVisitNow();
@@ -642,6 +751,7 @@
 			const crossedToDesktop = wasMobileViewport && !nextIsMobile;
 			wasMobileViewport = nextIsMobile;
 			viewportWidth = nextWidth;
+			viewportHeight = window.innerHeight;
 			if (crossedToDesktop && mapExpanded) {
 				closeMobileMap({ focusDesktopMap: true });
 			}
@@ -706,7 +816,7 @@
 	</section>
 
 	<div class="app-trap" bind:this={appTrapEl}>
-		<div class="controls-bar" bind:this={controlsBarEl}>
+		<div class="controls-bar" class:over-map={mapExpanded} bind:this={controlsBarEl} bind:clientHeight={controlsHeight}>
 			<SearchBar restaurants={allRestaurants} {cuisineNames} {cityNames}
 				commentMatches={visibleCommentMatches} commentQuery={appState.searchQuery.trim()}
 				{commentSearchStatus} commentLimitReached={commentMatches.length >= 100} />
@@ -719,6 +829,7 @@
 				restaurantsForHistogram={restaurantsBeforeFreshness}
 				{dateExtent}
 				unmappedCount={pageFilterResult.unmappedCount}
+				resultCount={filteredRestaurants.length}
 			/>
 		</div>
 		<div class="content-area">
@@ -727,29 +838,32 @@
 				class:portal-expanded={mapExpanded}
 				class:desktop-expanded={mapDesktopHovered}
 				class:no-map-transition={suppressMapTransition}
+				class:sheet-dragging={sheetDragPx !== null}
 				id="restaurant-map-panel"
 				bind:this={mapPaneEl}
-				aria-modal={mapExpanded && isMobileViewport() ? 'true' : undefined}
+				style:--controls-h={mapExpanded ? `${controlsHeight}px` : undefined}
+				style:--sheet-h={mapExpanded ? `${sheetHeightPx}px` : undefined}
 				aria-label={mapExpanded && isMobileViewport() ? 'Restaurant map' : undefined}
 				aria-hidden={isMobileViewport() && !mapExpanded ? 'true' : undefined}
 				inert={isMobileViewport() && !mapExpanded ? true : undefined}
 				onclose={handleMapDialogClose}
-				onkeydown={handleMapDialogKeydown}
-				onpointerdown={(event) => { outsideMapPointer = isOutsideMap(event); }}
-				onpointerup={(event) => {
-					if (outsideMapPointer && isOutsideMap(event)) closeMobileMap();
-					outsideMapPointer = false;
-				}}
 				onpointerenter={handleDesktopMapPointerEnter}
 				onpointerleave={handleDesktopMapPointerLeave}
 			>
 				<div class="map-interactive-layer">
-					<Map restaurants={filteredRestaurants} {mapExpanded} />
+					<Map
+						restaurants={filteredRestaurants}
+						{mapExpanded}
+						onBoundsChange={handleMapBoundsChange}
+						insets={mapExpanded ? { top: controlsHeight, bottom: sheetHeightPx } : undefined}
+						visibleBand={mapExpanded ? mapVisibleBand : undefined}
+					/>
 				</div>
 				{#if mapExpanded}
 					<button
 						class="map-close-btn"
 						bind:this={mapCloseButton}
+						style:top="calc(env(safe-area-inset-top, 0px) + {controlsHeight + 10}px)"
 						onclick={(event) => {
 							event.stopPropagation();
 							closeMobileMap();
@@ -760,9 +874,38 @@
 					</button>
 				{/if}
 			</dialog>
-			<div class="list-pane" inert={mapExpanded && isMobileViewport() ? true : undefined}>
+			<div
+				class="list-pane"
+				class:sheet={mapExpanded}
+				class:sheet-peek={mapExpanded && sheetState === 'peek' && sheetDragPx === null}
+				class:sheet-dragging={sheetDragPx !== null}
+				style:height={mapExpanded ? `${sheetHeightPx}px` : undefined}
+			>
+				{#if mapExpanded}
+					<!-- The name says what a tap does (peek and half expand, full collapses). No
+					     aria-expanded: three stops do not fit its yes/no, and at half it read
+					     "Expand list, expanded". -->
+					<button
+						type="button"
+						class="sheet-grabber"
+						aria-label={sheetState === 'full' ? 'Collapse list' : 'Expand list'}
+						onpointerdown={handleSheetPointerDown}
+						onpointermove={handleSheetPointerMove}
+						onpointerup={handleSheetPointerEnd}
+						onpointercancel={handleSheetPointerEnd}
+						onclick={handleSheetClick}
+						onkeydown={handleSheetKeydown}
+					>
+						<span class="sheet-handle" aria-hidden="true"></span>
+					</button>
+				{/if}
+				{#if mapExpanded}
+					<p class="sheet-summary" aria-live="polite">{listRestaurants.length.toLocaleString('en-US')} {listRestaurants.length === 1 ? 'place' : 'places'} in this area</p>
+				{/if}
 				<RestaurantList
-					restaurants={filteredRestaurants}
+					restaurants={listRestaurants}
+					emptyForMapArea={areaScoped && filteredRestaurants.length > 0}
+					revealOpenRow={revealOpenRowRequest}
 					totalCount={allRestaurants.length}
 					onShowOnMap={openMobileMap}
 					threadsById={threadsById}
@@ -782,6 +925,7 @@
 	<button
 		type="button"
 		class="map-fab mobile-map-trigger"
+		class:map-fab-hidden={mapExpanded}
 		aria-label={mapExpanded ? 'Close map' : 'Open map'}
 		aria-controls="restaurant-map-panel"
 		aria-expanded={mapExpanded}
@@ -1011,6 +1155,13 @@
 			height: 100%;
 		}
 
+		/* The map is non-modal, so nothing else is inert: Tab out of the sheet reached the site
+		   footer's links behind the map, and screen readers could read the hidden hero. */
+		:global(html.mobile-map-expanded-lock .site-footer),
+		:global(html.mobile-map-expanded-lock) .hero-section {
+			visibility: hidden;
+		}
+
 		.map-pane {
 			display: none;
 		}
@@ -1026,15 +1177,9 @@
 			height: auto;
 			border-radius: 0;
 			border: none;
-			box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
-			z-index: 1400;
+			z-index: 1;
 			overflow: hidden;
 			overscroll-behavior: contain;
-		}
-
-		dialog.map-pane::backdrop {
-			background: rgba(0, 0, 0, 0.45);
-			pointer-events: auto;
 		}
 
 		.map-pane.portal-expanded .map-interactive-layer {
@@ -1048,18 +1193,130 @@
 			min-height: 0;
 		}
 
-		/* Block manual scroll / interaction on the list while the map sheet is open */
-		.app-trap:has(.map-pane.portal-expanded) .list-pane {
-			overflow: hidden !important;
-			overscroll-behavior: none;
-			touch-action: none;
-			pointer-events: none;
+		/* Map open: the list becomes a bottom sheet over the map. Its height is set inline
+		   (peek, half, full or mid-drag); the map keeps receiving touches above it. */
+		.list-pane.sheet {
+			position: fixed;
+			left: 0;
+			right: 0;
+			bottom: 0;
+			z-index: 3;
+			background: #fff;
+			border-radius: 20px 20px 0 0;
+			box-shadow: 0 -4px 24px rgba(62, 44, 35, 0.22);
+			overflow: hidden;
+			padding-bottom: env(safe-area-inset-bottom, 0px);
+			box-sizing: border-box;
+			transition: height 0.25s ease;
 		}
 
-		.app-trap:has(.map-pane.portal-expanded) .list-pane :global(.list-scroll) {
-			overflow: hidden !important;
-			overscroll-behavior: none;
+		.list-pane.sheet.sheet-dragging {
+			transition: none;
+		}
+
+		.list-pane.sheet :global(.restaurant-list) {
+			flex: 1;
+			height: auto;
+		}
+
+		/* The sheet header already counts the places in view; a second "N of 2,725 results"
+		   beside the sort buttons repeated it and announced every pan twice. The bottom
+		   padding that clears the floating Map button is moot while that button is hidden. */
+		.list-pane.sheet :global(.result-count) {
+			display: none;
+		}
+
+		.list-pane.sheet :global(.list-scroll) {
+			padding-bottom: 16px;
+		}
+
+		/* A collapsed sheet shows rows but does not scroll, so a swipe on it never fights the map.
+		   Sorting waits for half height so the first result fits. */
+		.list-pane.sheet-peek :global(.list-scroll) {
+			overflow-y: hidden;
+		}
+
+		.list-pane.sheet-peek :global(.sort-bar) {
+			display: none;
+		}
+
+		/* Leaflet chrome stays reachable: zoom drops below the floating chips and the
+		   attribution (required by OpenStreetMap) rides on top of the sheet. */
+		.map-pane.portal-expanded :global(.leaflet-top) {
+			top: calc(var(--controls-h, 0px) + 10px);
+		}
+
+		/* Locate sits left of Close map on the same row, with its error underneath. */
+		.map-pane.portal-expanded :global(.locate-me-btn) {
+			top: calc(var(--controls-h, 0px) + 10px);
+		}
+
+		.map-pane.portal-expanded :global(.location-error) {
+			top: calc(var(--controls-h, 0px) + 62px);
+		}
+
+		/* The map layer is already inset by the bottom safe area, which the sheet's height
+		   includes; without subtracting it the attribution floated that far above the sheet.
+		   It follows the sheet's snap animation instead of jumping ahead of it. */
+		.map-pane.portal-expanded :global(.leaflet-bottom) {
+			bottom: calc(var(--sheet-h, 0px) - env(safe-area-inset-bottom, 0px));
+			transition: bottom 0.25s ease;
+		}
+
+		.map-pane.portal-expanded.sheet-dragging :global(.leaflet-bottom) {
+			transition: none;
+		}
+
+		@media (prefers-reduced-motion: reduce) {
+			.list-pane.sheet,
+			.map-pane.portal-expanded :global(.leaflet-bottom) {
+				transition: none;
+			}
+		}
+
+		.sheet-grabber {
+			flex: none;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			width: 100%;
+			height: 44px;
+			padding: 0;
+			border: none;
+			background: transparent;
+			cursor: grab;
 			touch-action: none;
+		}
+
+		.sheet-summary {
+			flex: none;
+			margin: -8px 0 0;
+			padding: 0 20px 10px;
+			font-size: 0.85rem;
+			font-weight: 600;
+			color: #5d4e37;
+		}
+
+		.sheet-handle {
+			width: 36px;
+			height: 5px;
+			border-radius: 3px;
+			background: #b9ad9e;
+		}
+
+		.sheet-grabber:focus-visible {
+			outline: 2px solid #c43700;
+			outline-offset: -4px;
+			border-radius: 20px 20px 0 0;
+		}
+
+		/* Search and filter chips float over the map instead of sitting in a bar above it. */
+		.controls-bar.over-map {
+			position: fixed;
+			top: env(safe-area-inset-top, 0px);
+			left: 0;
+			right: 0;
+			background: linear-gradient(to bottom, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0));
 		}
 
 		.map-interactive-layer {
@@ -1138,6 +1395,12 @@
 			font-weight: 600;
 			box-shadow: 0 4px 16px rgba(62, 44, 35, 0.32);
 			cursor: pointer;
+		}
+
+		/* display, not visibility: a visibility transition leaves the opener unfocusable for a
+		   few frames after close, which broke returning focus to it. */
+		.map-fab.map-fab-hidden {
+			display: none;
 		}
 
 		.map-fab:active {

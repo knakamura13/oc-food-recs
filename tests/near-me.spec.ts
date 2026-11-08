@@ -25,6 +25,8 @@ for (const width of [320, 390, 1280]) {
 		await expect(radius).toHaveValue('');
 		await expect(page.getByRole('button', { name: /sorted by distance, nearest first/i })).toBeVisible();
 		for (const control of [radius, page.getByRole('button', { name: 'Near me', exact: true })]) {
+			// The toolbar scrolls sideways on the narrowest phones; reaching a control by scrolling counts.
+			await control.scrollIntoViewIfNeeded();
 			const box = await control.boundingBox();
 			// Phones need 44 pt touch targets. On desktop the control matches the other
 			// filter buttons (WCAG 2.2 minimum is 24 px) instead of standing out at 44.
