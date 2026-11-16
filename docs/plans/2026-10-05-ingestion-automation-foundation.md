@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python unittest, JSON state files in ignored output, existing PostgreSQL/SQLite SQL regression patterns, GitHub CI.
 
-Approved design: Kyle's October5 automation/fact-checking proposal, approved by "Proceed with next steps". Continue through focused PRs, reviews and merges under existing authorization. Live Reddit acquisition waits for approved API/OAuth access; large inference/geocoding waits for measured calibration and workload approval.
+Approved design: Kyle's October5 automation/fact-checking proposal, approved by "Proceed with next steps". Continue through focused PRs, reviews and merges under existing authorization. Kyle subsequently confirmed official Reddit API access is unavailable and supplied the working browser expander/exporter; reuse one normal browser tab for acquisition, with resumable capture state and completeness checks. large inference/geocoding waits for measured calibration and workload approval.
 
 ## Task 1: Publication preservation
 
@@ -28,7 +28,7 @@ Owner: root. Files scripts/ingest_queue.py, tests/test_ingest_queue.py, docs/ING
 2. Implement local JSON queue import from audit snapshot and URL lists. Keep capture metadata distinct from actual ingestion; a captured file never proves published state.
 3. Write failing tests for attempt/state transitions, crash recovery, failure retry, terminal-state protection and atomic concurrent-update behavior. Implement small explicit queued/running/failed/complete/skipped/rejected lifecycle with lock and per-record attempts/results; expired/dead local claims recover explicitly.
 4. CLI import/status/claim/finish/fail/recover; no downloader/DB/model calls, secrets or source text in queue. Save state under ignored output. Ensure no automatic publication from queue states.
-5. Verify using synthetic data, import the213-item private audit and seven newly discovered URL candidates without printing source content. Correct unsupported ingest --thread documentation, describe remaining API/access and safe-preview limits.
+5. Verify using synthetic data, import the213-item private audit and seven newly discovered URL candidates without printing source content. Correct unsupported ingest --thread documentation, describe browser acquisition and safe-preview limits.
 
 ## Task 3: Chain benchmark groundwork
 

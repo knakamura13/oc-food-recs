@@ -328,11 +328,20 @@ def parse_reddit_json(reddit_json: list[dict[str, Any]]) -> dict[str, Any]:
     def parse_comment(
         comment_data: dict[str, Any], depth: int = 0
     ) -> dict[str, Any] | None:
+        if comment_data.get("kind") == "more":
+            raise ValueError(
+                "Incomplete Reddit JSON: unresolved more-comments placeholder"
+            )
         if comment_data.get("kind") != "t1":
             return None
 
         data = comment_data["data"]
-        comment_id = data.get("id", "")
+        raw_id = data.get("id", "")
+        if not isinstance(raw_id, str) or not re.fullmatch(r"(?:t1_)?[a-z0-9]+", raw_id):
+            raise ValueError("Invalid Reddit comment id")
+        comment_id = raw_id if raw_id.startswith("t1_") else f"t1_{raw_id}"
+        if "name" in data and data["name"] != comment_id:
+            raise ValueError("Inconsistent Reddit comment id/name identity")
         author = data.get("author", "[deleted]")
         body = normalize_text(data.get("body", ""))
         score = data.get("score", 0)
@@ -401,6 +410,15 @@ def _get_max_depth(nodes: list[dict[str, Any]]) -> int:
 def parse_saved_reddit_html(html_path: Path) -> dict[str, Any]:
     raw_html = html_path.read_text(encoding="utf-8")
     soup = BeautifulSoup(raw_html, "lxml")
+
+    # Explicit markers prove incompleteness; their absence cannot prove that an
+    # operator exported every comment. Do not treat ordinary link text as a marker.
+    if soup.select_one(
+        "shreddit-comment-tree-more, shreddit-comment-tree-more-replies, .morecomments"
+    ):
+        raise ValueError(
+            "Incomplete Reddit HTML: expand load-more comments before saving"
+        )
 
     title_el = soup.find("h1", id=re.compile(r"^post-title-"))
     post_title = text_of(title_el)
@@ -892,21 +910,35 @@ def normalize_extractor_result(result: Any) -> tuple[list[dict[str, Any]], str |
     if isinstance(entities, dict):
         if not raw and isinstance(entities.get("raw"), str):
             raw = entities.get("raw")
-        for key in _WRAPPER_KEYS:
-            if isinstance(entities.get(key), list):
-                entities = entities[key]
-                break
+        wrapper_keys = [key for key in _WRAPPER_KEYS if key in entities]
+        if len(wrapper_keys) > 1:
+            raise ValueError("Invalid extraction schema: ambiguous entity lists")
+        if wrapper_keys:
+            entities = entities[wrapper_keys[0]]
+        elif "name" in entities:
+            entities = [entities]
         else:
-            entities = [entities] if entities.get("name") else []
+            raise ValueError(
+                "Invalid extraction schema: expected an entity list or named entity"
+            )
 
     if not isinstance(entities, list):
-        return [], raw
+        raise ValueError("Invalid extraction schema: expected an entity list")
 
     cleaned: list[dict[str, Any]] = []
     for entity in entities:
-        if not isinstance(entity, dict):
-            continue
-        name = normalize_text(str(entity.get("name", "")))
+        if not isinstance(entity, dict) or not isinstance(entity.get("name"), str):
+            raise ValueError(
+                "Invalid extraction schema: each entity must have a string name"
+            )
+        for field in ("location", "street", "cuisine"):
+            if entity.get(field) is not None and not isinstance(entity[field], str):
+                raise ValueError(
+                    f"Invalid extraction schema: {field} must be a string or null"
+                )
+        if "chain_suspect" in entity and not isinstance(entity["chain_suspect"], bool):
+            raise ValueError("Invalid extraction schema: chain_suspect must be a boolean")
+        name = normalize_text(entity["name"])
         low = name.strip().lower()
         # Drop sentinel non-names ("None", "N/A") and generic descriptions
         # ("a wine tasting place") the model sometimes emits as if they were names.
@@ -969,7 +1001,15 @@ def default_extract_entities(
             f"Unable to reach Ollama at {OLLAMA_URL}. Start the server or set OC_FOOD_RECS_OLLAMA_URL/OC_FOOD_RECS_OLLAMA_MODEL. {exc}"
         ) from exc
 
-    raw = body.get("message", {}).get("content", "").strip()
+    if (
+        not isinstance(body, dict)
+        or not isinstance(body.get("message"), dict)
+        or not isinstance(body["message"].get("content"), str)
+    ):
+        raise ValueError(
+            "Invalid Ollama extraction response: expected message.content text"
+        )
+    raw = body["message"]["content"].strip()
     cleaned = raw
     if "```" in cleaned:
         match = re.search(r"```(?:json)?\s*(.*?)```", cleaned, re.DOTALL)
@@ -978,8 +1018,10 @@ def default_extract_entities(
 
     try:
         parsed = json.loads(cleaned)
-    except json.JSONDecodeError:
-        return [], raw
+    except json.JSONDecodeError as exc:
+        raise ValueError(
+            "Invalid Ollama extraction JSON; refusing to publish partial results"
+        ) from exc
 
     entities, _ = normalize_extractor_result(parsed)
     return entities, raw
@@ -2742,7 +2784,8 @@ def write_to_db(
                 cur, thread_id, curated_records
             )
             inserted_mention_ids.extend(protected_ids)
-            # 1. Threads — upsert from manifest
+            # 1. Threads — initialize publication from the manifest on insert;
+            # replay updates metadata but preserves the operator's publication flag.
             cur.execute(
                 """
                 INSERT INTO threads (id, subreddit, post_id, url, title, comment_count, max_depth, included_in_publish)
@@ -2753,8 +2796,7 @@ def write_to_db(
                     url = EXCLUDED.url,
                     title = EXCLUDED.title,
                     comment_count = EXCLUDED.comment_count,
-                    max_depth = EXCLUDED.max_depth,
-                    included_in_publish = EXCLUDED.included_in_publish
+                    max_depth = EXCLUDED.max_depth
                 """,
                 (
                     thread_id,
@@ -3035,6 +3077,16 @@ def _emit_progress(event: dict[str, Any]) -> None:
     tqdm.tqdm.write(json.dumps(event), file=sys.stdout)
 
 
+def _validate_ingest_limit(limit: int | None, dry_run: bool) -> None:
+    if limit is not None:
+        if not dry_run:
+            raise ValueError(
+                "--limit requires --dry-run; limited publication can remove existing mentions"
+            )
+        if limit <= 0:
+            raise ValueError("--limit must be a positive integer")
+
+
 def ingest(
     html_path: Path,
     *,
@@ -3047,11 +3099,13 @@ def ingest(
 ) -> dict[str, Any]:
     """Parse a saved Reddit thread HTML export -> extract -> geocode -> DB write.
 
-    No network access. The operator exports the thread as HTML from a browser
-    (expanding "load more comments" first for full coverage) and points the CLI
-    at the file. ``limit`` truncates extraction to the first N top-level comments
-    (handy for a quick test run before processing the whole thread).
+    Source acquisition is manual: the operator saves HTML after expanding known
+    load-more placeholders. Extraction and geocoding may call network services;
+    geocoding can update its cache even during a diagnostic dry-run. ``limit``
+    truncates extraction to the first N top-level comments and requires dry-run
+    so a partial pass cannot prune published mentions.
     """
+    _validate_ingest_limit(limit, dry_run)
     html_path = Path(html_path)
     _emit_progress(
         {"stage": "parse", "progress": 0.0, "message": f"parsing {html_path.name}..."}
@@ -3197,6 +3251,7 @@ def ingest_batch(
     On a per-file error the file is left in place and the loop continues to the
     next file. Returns a non-zero exit code if any file failed.
     """
+    _validate_ingest_limit(limit, dry_run)
     files = sorted(UNINGESTED_ROOT.glob("*.html"))
     if not files:
         print(f"No .html files found in {UNINGESTED_ROOT}")
@@ -3235,6 +3290,7 @@ def reingest_all(
 
     Requires ``confirmed=True`` (``--yes``) to modify the database.
     """
+    _validate_ingest_limit(limit, dry_run)
     import db_backup as b  # local import — db_backup is a sibling script, not a package dep
 
     # Discover files: prefer threads/, fall back to uningested-threads/.
@@ -3348,7 +3404,7 @@ def main(argv: list[str] | None = None) -> int:
         "--limit",
         type=int,
         default=None,
-        help="Process only the first N top-level comments (useful for testing)",
+        help="Process only the first N top-level comments (requires --dry-run)",
     )
     ingest_parser.add_argument(
         "--dry-run",
@@ -3382,7 +3438,7 @@ def main(argv: list[str] | None = None) -> int:
         "--limit",
         type=int,
         default=None,
-        help="Process only the first N top-level comments per thread (useful for testing)",
+        help="Limit per-thread processing (requires --dry-run; reingest dry-run only lists files)",
     )
     reingest_parser.add_argument(
         "--dry-run",

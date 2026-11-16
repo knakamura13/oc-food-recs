@@ -22,6 +22,7 @@ jobs:
       - run: pip install -e '.[chain-scorer]'
       - run: npm run check
       - run: npm test
+      - run: npm run test:browser-capture
       - run: npm run test:pipeline
 
   e2e:

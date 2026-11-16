@@ -12,7 +12,7 @@
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"test:e2e": "playwright test",
-		"test:pipeline": "python3 -m unittest tests/test_reddit_pipeline.py tests/test_dedupe_logic.py tests/test_geocode_normalization.py tests/test_exclusions.py tests/test_reingest_all_threads.py tests/test_backfill_streets.py tests/test_chain_scorer.py tests/test_chain_audit.py tests/test_chain_retrieval.py tests/test_restaurant_curation.py",
+		"test:pipeline": "python3 -m unittest tests/test_reddit_pipeline.py tests/test_dedupe_logic.py tests/test_geocode_normalization.py tests/test_exclusions.py tests/test_reingest_all_threads.py tests/test_backfill_streets.py tests/test_chain_scorer.py tests/test_chain_audit.py tests/test_chain_retrieval.py tests/test_restaurant_curation.py tests/test_ingestion_safety.py tests/test_ingest_queue.py",
 		"test:all": "npm test && npm run test:pipeline",
 		"test:e2e:ci": "playwright test",
 		"pipeline:geocode-health": "python3 scripts/geocode_health.py",
@@ -32,8 +32,11 @@
 		"pipeline:dedupe-restaurants:apply": "python3 scripts/dedupe_restaurants.py --apply",
 		"pipeline:find-duplicate-candidates": "python3 scripts/find_duplicate_candidates.py",
 		"pipeline:ingest-batch": "python3 scripts/reddit_pipeline.py ingest",
+		"pipeline:capture-bookmarklet": "node scripts/browser/capture-bookmarklet.js",
+		"pipeline:file-captures": "node scripts/browser/file-reddit-captures.js",
 		"test": "vitest run",
-		"test:watch": "vitest"
+		"test:watch": "vitest",
+		"test:browser-capture": "vitest run --config scripts/browser/vitest.config.js"
 	},
 	"dependencies": {
 		"@tanstack/virtual-core": "^3.13.12",

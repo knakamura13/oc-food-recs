@@ -84,8 +84,14 @@ Ingestion is **CLI-only** via [`scripts/reddit_pipeline.py`](scripts/reddit_pipe
 ```sh
 python3 scripts/reddit_pipeline.py init-thread --html path/to/thread.html
 python3 scripts/reddit_pipeline.py build-thread --thread <thread-id>
-python3 scripts/reddit_pipeline.py ingest --thread <thread-id>
+python3 scripts/reddit_pipeline.py ingest --html path/to/thread.html --dry-run
+# After reviewing extraction/geocoding, publish the complete source:
+python3 scripts/reddit_pipeline.py ingest --html path/to/thread.html
 ```
+
+`init-thread` / `build-thread` create local review artifacts. `ingest --html` runs extraction and geocoding again, then publishes; it does not consume the built artifacts. A diagnostic `--dry-run` skips Postgres but may call models/geocoding and update the local geocode cache. `--limit` is allowed only with `--dry-run`.
+
+The resumable local queue is documented in the [ingest tracking guide](docs/INGEST_TRACKING.md). Capture presence, extraction success and verified publication are separate states. Official Reddit API access is unavailable for this project; browser capture is the acquisition path.
 
 ## Maintenance scripts
 
